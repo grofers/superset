@@ -232,6 +232,9 @@
                         "redis_port": {
                             "type": "string"
                         },
+                        "redis_db": {
+                            "type": "string"
+                        },
                         "db_host": {
                             "type": "string"
                         },
@@ -251,6 +254,7 @@
                     "required": [
                         "redis_host",
                         "redis_port",
+                        "redis_db",
                         "db_host",
                         "db_port",
                         "db_user",
