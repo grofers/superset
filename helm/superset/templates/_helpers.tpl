@@ -63,6 +63,9 @@ Create chart name and version as used by the chart label.
 {{- define "superset-config" }}
 import os
 from cachelib.redis import RedisCache
+from datetime import date, timedelta
+from celery.schedules import crontab
+from typing import Dict
 
 def env(key, default=None):
     return os.getenv(key, default)
@@ -92,15 +95,35 @@ WTF_CSRF_EXEMPT_LIST = []
 # A CSRF token that expires in 1 year
 WTF_CSRF_TIME_LIMIT = 60 * 60 * 24 * 365
 class CeleryConfig(object):
-  CELERY_IMPORTS = ('superset.sql_lab', )
-  CELERY_ANNOTATIONS = {'tasks.add': {'rate_limit': '10/s'}}
 {{- if .Values.supersetNode.connections.redis_password }}
-  BROKER_URL = f"redis://:{env('REDIS_PASSWORD')}@{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
-  CELERY_RESULT_BACKEND = f"redis://:{env('REDIS_PASSWORD')}@{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
+    BROKER_URL = f"redis://:{env('REDIS_PASSWORD')}@{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
+    CELERY_RESULT_BACKEND = f"redis://:{env('REDIS_PASSWORD')}@{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
 {{- else }}
-  BROKER_URL = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
-  CELERY_RESULT_BACKEND = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
+    BROKER_URL = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
+    CELERY_RESULT_BACKEND = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
 {{- end }}
+    CELERY_IMPORTS = (
+        'superset.sql_lab',
+        'superset.tasks',
+    )
+    CELERY_ANNOTATIONS = {
+        'sql_lab.get_sql_results': {
+            'rate_limit': '100/s',
+        },
+        'email_reports.send': {
+            'rate_limit': '1/s',
+            'time_limit': 120,
+            'soft_time_limit': 150,
+            'ignore_result': True,
+        },
+    }
+    CELERY_TASK_PROTOCOL = 1
+    CELERYBEAT_SCHEDULE = {
+        'email_reports.schedule_hourly': {
+            'task': 'email_reports.schedule_hourly',
+            'schedule': crontab(minute='1', hour='*'),
+        },
+    }
 
 CELERY_CONFIG = CeleryConfig
 RESULTS_BACKEND = RedisCache(
@@ -112,6 +135,30 @@ RESULTS_BACKEND = RedisCache(
       db=env('REDIS_DB'),
       key_prefix='superset_results'
 )
+
+FEATURE_FLAGS: Dict[str, bool] = {
+    "GLOBAL_ASYNC_QUERIES": False,
+}
+
+# Global async query config options.
+# Requires GLOBAL_ASYNC_QUERIES feature flag to be enabled.
+GLOBAL_ASYNC_QUERIES_REDIS_CONFIG = {
+    "port": env('REDIS_PORT'),
+    "host": env('REDIS_HOST'),
+    "db": env('REDIS_DB'),
+    "ssl": False,
+}
+GLOBAL_ASYNC_QUERIES_REDIS_STREAM_PREFIX = "async-events-"
+GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT = 1000
+GLOBAL_ASYNC_QUERIES_JWT_COOKIE_NAME = "async-token"
+GLOBAL_ASYNC_QUERIES_JWT_COOKIE_SECURE = False
+GLOBAL_ASYNC_QUERIES_JWT_COOKIE_DOMAIN = None
+GLOBAL_ASYNC_QUERIES_JWT_SECRET = "super-secret"
+GLOBAL_ASYNC_QUERIES_TRANSPORT = "polling"
+GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(
+    timedelta(milliseconds=500).total_seconds() * 1000
+)
+GLOBAL_ASYNC_QUERIES_WEBSOCKET_URL = "ws://127.0.0.1:8080/"
 
 {{ if .Values.configOverrides }}
 # Overrides
