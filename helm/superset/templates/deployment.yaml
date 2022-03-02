@@ -80,6 +80,12 @@ spec:
             - name: superset-extra-config
               mountPath: /etc/nginx/conf.d/default.conf
               subPath: nginx.conf
+        - name: websocket
+          image: registry.grofer.io/data/superset-websocket-test
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: websocket
+              containerPort: 8080
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
