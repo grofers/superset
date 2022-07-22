@@ -79,6 +79,9 @@ CACHE_CONFIG = {
 }
 DATA_CACHE_CONFIG = CACHE_CONFIG
 
+ENABLE_PROXY_FIX = True
+PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_port": 0, "x_prefix": 1}
+
 SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{env('DB_USER')}:{env('DB_PASS')}@{env('DB_HOST')}:{env('DB_PORT')}/{env('DB_NAME')}"
 SQLALCHEMY_TRACK_MODIFICATIONS = True
 SECRET_KEY = env('SECRET_KEY', 'thisISaSECRET_1234')
@@ -93,11 +96,11 @@ class CeleryConfig(object):
   CELERY_IMPORTS = ('superset.sql_lab', )
   CELERY_ANNOTATIONS = {'tasks.add': {'rate_limit': '10/s'}}
 {{- if .Values.supersetNode.connections.redis_password }}
-  BROKER_URL = f"redis://:{env('REDIS_PASSWORD')}@{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
-  CELERY_RESULT_BACKEND = f"redis://:{env('REDIS_PASSWORD')}@{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
+  BROKER_URL = f"redis://:{env('REDIS_PASSWORD')}@{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
+  CELERY_RESULT_BACKEND = f"redis://:{env('REDIS_PASSWORD')}@{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
 {{- else }}
-  BROKER_URL = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
-  CELERY_RESULT_BACKEND = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
+  BROKER_URL = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
+  CELERY_RESULT_BACKEND = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/{env('REDIS_DB')}"
 {{- end }}
 
 CELERY_CONFIG = CeleryConfig
@@ -107,6 +110,7 @@ RESULTS_BACKEND = RedisCache(
       password=env('REDIS_PASSWORD'),
 {{- end }}
       port=env('REDIS_PORT'),
+      db=env('REDIS_DB'),
       key_prefix='superset_results'
 )
 
