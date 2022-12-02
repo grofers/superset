@@ -23,7 +23,6 @@ import pytest
 
 import numpy as np
 import pandas as pd
-import sqlalchemy as sa
 from flask import Flask
 from pytest_mock import MockFixture
 from sqlalchemy.sql import text
@@ -34,7 +33,7 @@ from superset.connectors.sqla.models import SqlaTable, TableColumn, SqlMetric
 from superset.constants import EMPTY_STRING, NULL_STRING
 from superset.db_engine_specs.bigquery import BigQueryEngineSpec
 from superset.db_engine_specs.druid import DruidEngineSpec
-from superset.exceptions import QueryObjectValidationError
+from superset.exceptions import QueryObjectValidationError, SupersetSecurityException
 from superset.models.core import Database
 from superset.utils.core import (
     AdhocMetricExpressionType,
@@ -50,12 +49,12 @@ from tests.integration_tests.fixtures.birth_names_dashboard import (
 from tests.integration_tests.test_app import app
 
 from .base_tests import SupersetTestCase
-
+from .conftest import only_postgresql
 
 VIRTUAL_TABLE_INT_TYPES: Dict[str, Pattern[str]] = {
     "hive": re.compile(r"^INT_TYPE$"),
     "mysql": re.compile("^LONGLONG$"),
-    "postgresql": re.compile(r"^INT$"),
+    "postgresql": re.compile(r"^INTEGER$"),
     "presto": re.compile(r"^INTEGER$"),
     "sqlite": re.compile(r"^INT$"),
 }
@@ -70,6 +69,7 @@ VIRTUAL_TABLE_STRING_TYPES: Dict[str, Pattern[str]] = {
 
 
 class FilterTestCase(NamedTuple):
+    column: str
     operator: str
     value: Union[float, int, List[Any], str]
     expected: Union[str, List[str]]
@@ -238,22 +238,54 @@ class TestDatabaseModel(SupersetTestCase):
         db.session.delete(table)
         db.session.commit()
 
+    def test_adhoc_metrics_and_calc_columns(self):
+        base_query_obj = {
+            "granularity": None,
+            "from_dttm": None,
+            "to_dttm": None,
+            "groupby": ["user", "expr"],
+            "metrics": [
+                {
+                    "expressionType": AdhocMetricExpressionType.SQL,
+                    "sqlExpression": "(SELECT (SELECT * from birth_names) "
+                    "from test_validate_adhoc_sql)",
+                    "label": "adhoc_metrics",
+                }
+            ],
+            "is_timeseries": False,
+            "filter": [],
+        }
+
+        table = SqlaTable(
+            table_name="test_validate_adhoc_sql", database=get_example_database()
+        )
+        db.session.commit()
+
+        with pytest.raises(QueryObjectValidationError):
+            table.get_sqla_query(**base_query_obj)
+        # Cleanup
+        db.session.delete(table)
+        db.session.commit()
+
     @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
     def test_where_operators(self):
         filters: Tuple[FilterTestCase, ...] = (
-            FilterTestCase(FilterOperator.IS_NULL, "", "IS NULL"),
-            FilterTestCase(FilterOperator.IS_NOT_NULL, "", "IS NOT NULL"),
+            FilterTestCase("num", FilterOperator.IS_NULL, "", "IS NULL"),
+            FilterTestCase("num", FilterOperator.IS_NOT_NULL, "", "IS NOT NULL"),
             # Some db backends translate true/false to 1/0
-            FilterTestCase(FilterOperator.IS_TRUE, "", ["IS 1", "IS true"]),
-            FilterTestCase(FilterOperator.IS_FALSE, "", ["IS 0", "IS false"]),
-            FilterTestCase(FilterOperator.GREATER_THAN, 0, "> 0"),
-            FilterTestCase(FilterOperator.GREATER_THAN_OR_EQUALS, 0, ">= 0"),
-            FilterTestCase(FilterOperator.LESS_THAN, 0, "< 0"),
-            FilterTestCase(FilterOperator.LESS_THAN_OR_EQUALS, 0, "<= 0"),
-            FilterTestCase(FilterOperator.EQUALS, 0, "= 0"),
-            FilterTestCase(FilterOperator.NOT_EQUALS, 0, "!= 0"),
-            FilterTestCase(FilterOperator.IN, ["1", "2"], "IN (1, 2)"),
-            FilterTestCase(FilterOperator.NOT_IN, ["1", "2"], "NOT IN (1, 2)"),
+            FilterTestCase("num", FilterOperator.IS_TRUE, "", ["IS 1", "IS true"]),
+            FilterTestCase("num", FilterOperator.IS_FALSE, "", ["IS 0", "IS false"]),
+            FilterTestCase("num", FilterOperator.GREATER_THAN, 0, "> 0"),
+            FilterTestCase("num", FilterOperator.GREATER_THAN_OR_EQUALS, 0, ">= 0"),
+            FilterTestCase("num", FilterOperator.LESS_THAN, 0, "< 0"),
+            FilterTestCase("num", FilterOperator.LESS_THAN_OR_EQUALS, 0, "<= 0"),
+            FilterTestCase("num", FilterOperator.EQUALS, 0, "= 0"),
+            FilterTestCase("num", FilterOperator.NOT_EQUALS, 0, "!= 0"),
+            FilterTestCase("num", FilterOperator.IN, ["1", "2"], "IN (1, 2)"),
+            FilterTestCase("num", FilterOperator.NOT_IN, ["1", "2"], "NOT IN (1, 2)"),
+            FilterTestCase(
+                "ds", FilterOperator.TEMPORAL_RANGE, "2020 : 2021", "2020-01-01"
+            ),
         )
         table = self.get_table(name="birth_names")
         for filter_ in filters:
@@ -265,7 +297,11 @@ class TestDatabaseModel(SupersetTestCase):
                 "metrics": ["count"],
                 "is_timeseries": False,
                 "filter": [
-                    {"col": "num", "op": filter_.operator, "val": filter_.value}
+                    {
+                        "col": filter_.column,
+                        "op": filter_.operator,
+                        "val": filter_.value,
+                    }
                 ],
                 "extras": {},
             }
@@ -350,9 +386,8 @@ class TestDatabaseModel(SupersetTestCase):
             "extras": {},
         }
 
-        # Table with Jinja callable.
         table = SqlaTable(
-            table_name="test_table",
+            table_name="another_test_table",
             sql="SELECT * from test_table;",
             database=get_example_database(),
         )
@@ -425,7 +460,9 @@ class TestDatabaseModel(SupersetTestCase):
 
         # make sure the columns have been mapped properly
         assert len(table.columns) == 4
-        table.fetch_metadata()
+        with db.session.no_autoflush:
+            table.fetch_metadata(commit=False)
+
         # assert that the removed column has been dropped and
         # the physical and calculated columns are present
         assert {col.column_name for col in table.columns} == {
@@ -436,7 +473,7 @@ class TestDatabaseModel(SupersetTestCase):
         }
         cols: Dict[str, TableColumn] = {col.column_name: col for col in table.columns}
         # assert that the type for intcol has been updated (asserting CI types)
-        backend = get_example_database().backend
+        backend = table.database.backend
         assert VIRTUAL_TABLE_INT_TYPES[backend].match(cols["intcol"].type)
         # assert that the expression has been replaced with the new physical column
         assert cols["mycase"].expression == ""
@@ -568,7 +605,13 @@ def test_filter_on_text_column(text_column_table):
     result_object = table.query(
         {
             "metrics": ["count"],
-            "filter": [{"col": "foo", "val": ['"text in double quotes"'], "op": "IN",}],
+            "filter": [
+                {
+                    "col": "foo",
+                    "val": ['"text in double quotes"'],
+                    "op": "IN",
+                }
+            ],
             "is_timeseries": False,
         }
     )
@@ -578,7 +621,13 @@ def test_filter_on_text_column(text_column_table):
     result_object = table.query(
         {
             "metrics": ["count"],
-            "filter": [{"col": "foo", "val": ["'text in single quotes'"], "op": "IN",}],
+            "filter": [
+                {
+                    "col": "foo",
+                    "val": ["'text in single quotes'"],
+                    "op": "IN",
+                }
+            ],
             "is_timeseries": False,
         }
     )
@@ -588,7 +637,13 @@ def test_filter_on_text_column(text_column_table):
     result_object = table.query(
         {
             "metrics": ["count"],
-            "filter": [{"col": "foo", "val": ['double quotes " in text'], "op": "IN",}],
+            "filter": [
+                {
+                    "col": "foo",
+                    "val": ['double quotes " in text'],
+                    "op": "IN",
+                }
+            ],
             "is_timeseries": False,
         }
     )
@@ -598,11 +653,103 @@ def test_filter_on_text_column(text_column_table):
     result_object = table.query(
         {
             "metrics": ["count"],
-            "filter": [{"col": "foo", "val": ["single quotes ' in text"], "op": "IN",}],
+            "filter": [
+                {
+                    "col": "foo",
+                    "val": ["single quotes ' in text"],
+                    "op": "IN",
+                }
+            ],
             "is_timeseries": False,
         }
     )
     assert result_object.df["count"][0] == 1
+
+
+@only_postgresql
+def test_should_generate_closed_and_open_time_filter_range(login_as_admin):
+    table = SqlaTable(
+        table_name="temporal_column_table",
+        sql=(
+            "SELECT '2021-12-31'::timestamp as datetime_col "
+            "UNION SELECT '2022-01-01'::timestamp "
+            "UNION SELECT '2022-03-10'::timestamp "
+            "UNION SELECT '2023-01-01'::timestamp "
+            "UNION SELECT '2023-03-10'::timestamp "
+        ),
+        database=get_example_database(),
+    )
+    TableColumn(
+        column_name="datetime_col",
+        type="TIMESTAMP",
+        table=table,
+        is_dttm=True,
+    )
+    SqlMetric(metric_name="count", expression="count(*)", table=table)
+    result_object = table.query(
+        {
+            "metrics": ["count"],
+            "is_timeseries": False,
+            "filter": [],
+            "from_dttm": datetime(2022, 1, 1),
+            "to_dttm": datetime(2023, 1, 1),
+            "granularity": "datetime_col",
+        }
+    )
+    """ >>> result_object.query
+            SELECT count(*) AS count
+            FROM
+              (SELECT '2021-12-31'::timestamp as datetime_col
+               UNION SELECT '2022-01-01'::timestamp
+               UNION SELECT '2022-03-10'::timestamp
+               UNION SELECT '2023-01-01'::timestamp
+               UNION SELECT '2023-03-10'::timestamp) AS virtual_table
+            WHERE datetime_col >= TO_TIMESTAMP('2022-01-01 00:00:00.000000', 'YYYY-MM-DD HH24:MI:SS.US')
+              AND datetime_col < TO_TIMESTAMP('2023-01-01 00:00:00.000000', 'YYYY-MM-DD HH24:MI:SS.US')
+    """
+    assert result_object.df.iloc[0]["count"] == 2
+
+
+def test_none_operand_in_filter(login_as_admin, physical_dataset):
+    expected_results = [
+        {
+            "operator": FilterOperator.EQUALS.value,
+            "count": 10,
+            "sql_should_contain": "COL4 IS NULL",
+        },
+        {
+            "operator": FilterOperator.NOT_EQUALS.value,
+            "count": 0,
+            "sql_should_contain": "COL4 IS NOT NULL",
+        },
+    ]
+    for expected in expected_results:
+        result = physical_dataset.query(
+            {
+                "metrics": ["count"],
+                "filter": [{"col": "col4", "val": None, "op": expected["operator"]}],
+                "is_timeseries": False,
+            }
+        )
+        assert result.df["count"][0] == expected["count"]
+        assert expected["sql_should_contain"] in result.query.upper()
+
+    with pytest.raises(QueryObjectValidationError):
+        for flt in [
+            FilterOperator.GREATER_THAN,
+            FilterOperator.LESS_THAN,
+            FilterOperator.GREATER_THAN_OR_EQUALS,
+            FilterOperator.LESS_THAN_OR_EQUALS,
+            FilterOperator.LIKE,
+            FilterOperator.ILIKE,
+        ]:
+            physical_dataset.query(
+                {
+                    "metrics": ["count"],
+                    "filter": [{"col": "col4", "val": None, "op": flt.value}],
+                    "is_timeseries": False,
+                }
+            )
 
 
 @pytest.mark.parametrize(
@@ -645,26 +792,48 @@ def test__normalize_prequery_result_type(
 
     columns_by_name = {
         "foo": TableColumn(
-            column_name="foo", is_dttm=False, table=table, type="STRING",
+            column_name="foo",
+            is_dttm=False,
+            table=table,
+            type="STRING",
         ),
         "bar": TableColumn(
-            column_name="bar", is_dttm=False, table=table, type="BOOLEAN",
+            column_name="bar",
+            is_dttm=False,
+            table=table,
+            type="BOOLEAN",
         ),
         "baz": TableColumn(
-            column_name="baz", is_dttm=False, table=table, type="INTEGER",
+            column_name="baz",
+            is_dttm=False,
+            table=table,
+            type="INTEGER",
         ),
         "qux": TableColumn(
-            column_name="qux", is_dttm=False, table=table, type="FLOAT",
+            column_name="qux",
+            is_dttm=False,
+            table=table,
+            type="FLOAT",
         ),
         "quux": TableColumn(
-            column_name="quuz", is_dttm=True, table=table, type="STRING",
+            column_name="quuz",
+            is_dttm=True,
+            table=table,
+            type="STRING",
         ),
         "quuz": TableColumn(
-            column_name="quux", is_dttm=True, table=table, type="TIMESTAMP",
+            column_name="quux",
+            is_dttm=True,
+            table=table,
+            type="TIMESTAMP",
         ),
     }
 
-    normalized = table._normalize_prequery_result_type(row, dimension, columns_by_name,)
+    normalized = table._normalize_prequery_result_type(
+        row,
+        dimension,
+        columns_by_name,
+    )
 
     assert type(normalized) == type(result)
 
@@ -672,3 +841,26 @@ def test__normalize_prequery_result_type(
         assert str(normalized) == str(result)
     else:
         assert normalized == result
+
+
+def test__temporal_range_operator_in_adhoc_filter(app_context, physical_dataset):
+    result = physical_dataset.query(
+        {
+            "columns": ["col1", "col2"],
+            "filter": [
+                {
+                    "col": "col5",
+                    "val": "2000-01-05 : 2000-01-06",
+                    "op": FilterOperator.TEMPORAL_RANGE.value,
+                },
+                {
+                    "col": "col6",
+                    "val": "2002-05-11 : 2002-05-12",
+                    "op": FilterOperator.TEMPORAL_RANGE.value,
+                },
+            ],
+            "is_timeseries": False,
+        }
+    )
+    df = pd.DataFrame(index=[0], data={"col1": 4, "col2": "e"})
+    assert df.equals(result.df)

@@ -16,20 +16,28 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { styled, TimeRangeEndpoint } from '@superset-ui/core';
+import { styled, NO_TIME_RANGE } from '@superset-ui/core';
 import React, { useCallback, useEffect } from 'react';
 import DateFilterControl from 'src/explore/components/controls/DateFilterControl';
-import { NO_TIME_RANGE } from 'src/explore/constants';
 import { PluginFilterTimeProps } from './types';
 import { FilterPluginStyle } from '../common';
 
 const TimeFilterStyles = styled(FilterPluginStyle)`
+  display: flex;
+  align-items: center;
   overflow-x: auto;
+
+  & .ant-tag {
+    margin-right: 0;
+  }
 `;
 
 const ControlContainer = styled.div<{
   validateStatus?: 'error' | 'warning' | 'info';
 }>`
+  display: flex;
+  height: 100%;
+  max-width: 100%;
   padding: 2px;
   & > span,
   & > span:hover {
@@ -55,20 +63,16 @@ const ControlContainer = styled.div<{
   }
 `;
 
-const endpoints = ['inclusive', 'exclusive'] as [
-  TimeRangeEndpoint,
-  TimeRangeEndpoint,
-];
-
 export default function TimeFilterPlugin(props: PluginFilterTimeProps) {
   const {
     setDataMask,
     setFocusedFilter,
     unsetFocusedFilter,
+    setFilterActive,
     width,
     height,
     filterState,
-    formData: { inputRef },
+    inputRef,
   } = props;
 
   const handleTimeRangeChange = useCallback(
@@ -93,7 +97,6 @@ export default function TimeFilterPlugin(props: PluginFilterTimeProps) {
   }, [filterState.value]);
 
   return props.formData?.inView ? (
-    // @ts-ignore
     <TimeFilterStyles width={width} height={height}>
       <ControlContainer
         tabIndex={-1}
@@ -105,11 +108,11 @@ export default function TimeFilterPlugin(props: PluginFilterTimeProps) {
         onMouseLeave={unsetFocusedFilter}
       >
         <DateFilterControl
-          endpoints={endpoints}
           value={filterState.value || NO_TIME_RANGE}
           name="time_range"
           onChange={handleTimeRangeChange}
-          type={filterState.validateStatus}
+          onOpenPopover={() => setFilterActive(true)}
+          onClosePopover={() => setFilterActive(false)}
         />
       </ControlContainer>
     </TimeFilterStyles>

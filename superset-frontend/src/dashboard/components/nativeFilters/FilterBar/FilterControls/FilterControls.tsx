@@ -17,35 +17,34 @@
  * under the License.
  */
 import React, { FC, useCallback, useMemo, useState } from 'react';
-import { css } from '@emotion/react';
 import {
   DataMask,
   DataMaskStateWithId,
   Filter,
-  NativeFilterType,
-  styled,
+  Divider,
+  css,
+  SupersetTheme,
   t,
+  isNativeFilter,
+  isFeatureEnabled,
+  FeatureFlag,
 } from '@superset-ui/core';
 import {
   createHtmlPortalNode,
   InPortal,
   OutPortal,
 } from 'react-reverse-portal';
-import { Collapse } from 'src/common/components';
+import { useSelector } from 'react-redux';
 import {
   useDashboardHasTabs,
   useSelectFiltersInScope,
 } from 'src/dashboard/components/nativeFilters/state';
-import CascadePopover from '../CascadeFilters/CascadePopover';
-import { useFilters } from '../state';
-import { buildCascadeFiltersTree } from './utils';
-
-const Wrapper = styled.div`
-  padding: ${({ theme }) => theme.gridUnit * 4}px;
-  &:hover {
-    cursor: pointer;
-  }
-`;
+import { FilterBarOrientation, RootState } from 'src/dashboard/types';
+import DropdownContainer from 'src/components/DropdownContainer';
+import Icons from 'src/components/Icons';
+import { FiltersOutOfScopeCollapsible } from '../FiltersOutOfScopeCollapsible';
+import { useFilterControlFactory } from '../useFilterControlFactory';
+import { FiltersDropdownContent } from '../FiltersDropdownContent';
 
 type FilterControlsProps = {
   directPathToChild?: string[];
@@ -58,117 +57,178 @@ const FilterControls: FC<FilterControlsProps> = ({
   dataMaskSelected,
   onFilterSelectionChange,
 }) => {
-  const [visiblePopoverId, setVisiblePopoverId] = useState<string | null>(null);
-  const filters = useFilters();
-  const filterValues = useMemo(() => Object.values<Filter>(filters), [filters]);
+  const filterBarOrientation = useSelector<RootState, FilterBarOrientation>(
+    ({ dashboardInfo }) =>
+      isFeatureEnabled(FeatureFlag.HORIZONTAL_FILTER_BAR)
+        ? dashboardInfo.filterBarOrientation
+        : FilterBarOrientation.VERTICAL,
+  );
+
+  const [overflowedIds, setOverflowedIds] = useState<string[]>([]);
+
+  const { filterControlFactory, filtersWithValues } = useFilterControlFactory(
+    dataMaskSelected,
+    directPathToChild,
+    onFilterSelectionChange,
+  );
   const portalNodes = useMemo(() => {
-    const nodes = new Array(filterValues.length);
-    for (let i = 0; i < filterValues.length; i += 1) {
+    const nodes = new Array(filtersWithValues.length);
+    for (let i = 0; i < filtersWithValues.length; i += 1) {
       nodes[i] = createHtmlPortalNode();
     }
     return nodes;
-  }, [filterValues.length]);
+  }, [filtersWithValues.length]);
 
-  const cascadeFilters = useMemo(() => {
-    const filtersWithValue = filterValues.map(filter => ({
-      ...filter,
-      dataMask: dataMaskSelected[filter.id],
-    }));
-    return buildCascadeFiltersTree(filtersWithValue);
-  }, [filterValues, dataMaskSelected]);
-  const cascadeFilterIds = new Set(cascadeFilters.map(item => item.id));
+  const filterIds = new Set(filtersWithValues.map(item => item.id));
 
   const [filtersInScope, filtersOutOfScope] =
-    useSelectFiltersInScope(cascadeFilters);
-  const dashboardHasTabs = useDashboardHasTabs();
-  const showCollapsePanel = dashboardHasTabs && cascadeFilters.length > 0;
+    useSelectFiltersInScope(filtersWithValues);
 
-  const cascadePopoverFactory = useCallback(
-    index => {
-      const filter = cascadeFilters[index];
-      if (filter.type === NativeFilterType.DIVIDER) {
-        return (
-          <div>
-            <h3>{filter.title}</h3>
-            <p>{filter.description}</p>
-          </div>
-        );
-      }
+  const dashboardHasTabs = useDashboardHasTabs();
+  const showCollapsePanel = dashboardHasTabs && filtersWithValues.length > 0;
+
+  const renderer = useCallback(
+    ({ id }: Filter | Divider) => {
+      const index = filtersWithValues.findIndex(f => f.id === id);
       return (
-        <CascadePopover
-          data-test="cascade-filters-control"
-          key={filter.id}
-          dataMaskSelected={dataMaskSelected}
-          visible={visiblePopoverId === filter.id}
-          onVisibleChange={visible =>
-            setVisiblePopoverId(visible ? filter.id : null)
-          }
-          filter={filter}
-          onFilterSelectionChange={onFilterSelectionChange}
-          directPathToChild={directPathToChild}
-          inView={false}
-        />
+        // Empty text node is to ensure there's always an element preceding
+        // the OutPortal, otherwise react-reverse-portal crashes
+        <React.Fragment key={id}>
+          {'' /* eslint-disable-line react/jsx-curly-brace-presence */}
+          <OutPortal node={portalNodes[index]} inView />
+        </React.Fragment>
       );
     },
-    [
-      cascadeFilters,
-      JSON.stringify(dataMaskSelected),
-      directPathToChild,
-      onFilterSelectionChange,
-      visiblePopoverId,
-    ],
+    [filtersWithValues, portalNodes],
   );
-  return (
-    <Wrapper>
-      {portalNodes
-        .filter((node, index) => cascadeFilterIds.has(filterValues[index].id))
-        .map((node, index) => (
-          <InPortal node={node}>{cascadePopoverFactory(index)}</InPortal>
-        ))}
-      {filtersInScope.map(filter => {
-        const index = filterValues.findIndex(f => f.id === filter.id);
-        return <OutPortal node={portalNodes[index]} inView />;
-      })}
+
+  const renderVerticalContent = () => (
+    <>
+      {filtersInScope.map(renderer)}
       {showCollapsePanel && (
-        <Collapse
-          ghost
-          bordered
-          expandIconPosition="right"
-          collapsible={filtersOutOfScope.length === 0 ? 'disabled' : undefined}
-          css={theme => css`
-            &.ant-collapse {
-              margin-top: ${filtersInScope.length > 0
-                ? theme.gridUnit * 6
-                : 0}px;
-              & > .ant-collapse-item {
-                & > .ant-collapse-header {
-                  padding-left: 0;
-                  padding-bottom: ${theme.gridUnit * 2}px;
-
-                  & > .ant-collapse-arrow {
-                    right: ${theme.gridUnit}px;
-                  }
-                }
-
-                & .ant-collapse-content-box {
-                  padding: ${theme.gridUnit * 4}px 0 0;
-                }
-              }
-            }
-          `}
-        >
-          <Collapse.Panel
-            header={t('Filters out of scope (%d)', filtersOutOfScope.length)}
-            key="1"
-          >
-            {filtersOutOfScope.map(filter => {
-              const index = cascadeFilters.findIndex(f => f.id === filter.id);
-              return <OutPortal node={portalNodes[index]} inView />;
-            })}
-          </Collapse.Panel>
-        </Collapse>
+        <FiltersOutOfScopeCollapsible
+          filtersOutOfScope={filtersOutOfScope}
+          hasTopMargin={filtersInScope.length > 0}
+          renderer={renderer}
+        />
       )}
-    </Wrapper>
+    </>
+  );
+
+  const items = useMemo(
+    () =>
+      filtersInScope.map(filter => ({
+        id: filter.id,
+        element: (
+          <div
+            className="filter-item-wrapper"
+            css={css`
+              flex-shrink: 0;
+            `}
+          >
+            {renderer(filter)}
+          </div>
+        ),
+      })),
+    [filtersInScope, renderer],
+  );
+
+  const overflowedFiltersInScope = useMemo(
+    () => filtersInScope.filter(({ id }) => overflowedIds?.includes(id)),
+    [filtersInScope, overflowedIds],
+  );
+
+  const activeOverflowedFiltersInScope = useMemo(
+    () =>
+      overflowedFiltersInScope.filter(
+        filter => isNativeFilter(filter) && filter.dataMask?.filterState?.value,
+      ).length,
+    [overflowedFiltersInScope],
+  );
+
+  const renderHorizontalContent = () => (
+    <div
+      css={(theme: SupersetTheme) =>
+        css`
+          padding-left: ${theme.gridUnit * 4}px;
+          min-width: 0;
+          flex: 1;
+        `
+      }
+    >
+      <DropdownContainer
+        items={items}
+        dropdownTriggerIcon={
+          <Icons.FilterSmall
+            css={css`
+              && {
+                margin-right: -4px;
+                display: flex;
+              }
+            `}
+          />
+        }
+        dropdownTriggerText={t('More filters')}
+        dropdownTriggerCount={activeOverflowedFiltersInScope}
+        dropdownContent={
+          overflowedFiltersInScope.length ||
+          (filtersOutOfScope.length && showCollapsePanel)
+            ? () => (
+                <FiltersDropdownContent
+                  filtersInScope={overflowedFiltersInScope}
+                  filtersOutOfScope={filtersOutOfScope}
+                  renderer={renderer}
+                  showCollapsePanel={showCollapsePanel}
+                />
+              )
+            : undefined
+        }
+        onOverflowingStateChange={({ overflowed: nextOverflowedIds }) => {
+          if (
+            nextOverflowedIds.length !== overflowedIds.length ||
+            overflowedIds.reduce(
+              (a, b, i) => a || b !== nextOverflowedIds[i],
+              false,
+            )
+          ) {
+            setOverflowedIds(nextOverflowedIds);
+          }
+        }}
+      />
+    </div>
+  );
+
+  const overflowedByIndex = useMemo(() => {
+    const filtersOutOfScopeIds = new Set(filtersOutOfScope.map(({ id }) => id));
+    const overflowedFiltersInScopeIds = new Set(
+      overflowedFiltersInScope.map(({ id }) => id),
+    );
+
+    return filtersWithValues.map(
+      filter =>
+        filtersOutOfScopeIds.has(filter.id) ||
+        overflowedFiltersInScopeIds.has(filter.id),
+    );
+  }, [filtersOutOfScope, filtersWithValues, overflowedFiltersInScope]);
+
+  return (
+    <>
+      {portalNodes
+        .filter((node, index) => filterIds.has(filtersWithValues[index].id))
+        .map((node, index) => (
+          <InPortal node={node} key={filtersWithValues[index].id}>
+            {filterControlFactory(
+              index,
+              filterBarOrientation,
+              overflowedByIndex[index],
+            )}
+          </InPortal>
+        ))}
+      {filterBarOrientation === FilterBarOrientation.VERTICAL &&
+        renderVerticalContent()}
+      {filterBarOrientation === FilterBarOrientation.HORIZONTAL &&
+        renderHorizontalContent()}
+    </>
   );
 };
 

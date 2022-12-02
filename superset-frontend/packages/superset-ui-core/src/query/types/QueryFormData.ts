@@ -30,7 +30,7 @@ import {
   QueryObjectExtras,
   QueryObjectFilterClause,
 } from './Query';
-import { TimeRange, TimeRangeEndpoints } from './Time';
+import { TimeRange } from './Time';
 import { TimeGranularity } from '../../time-format';
 import { JsonObject } from '../../connection';
 import { AdhocColumn, PhysicalColumn } from './Column';
@@ -50,7 +50,9 @@ export type QueryFormColumn = PhysicalColumn | AdhocColumn;
  * Order query results by columns.
  * Format: [metric/column, is_ascending].
  */
-export type QueryFormOrderBy = [QueryFormColumn | QueryFormMetric, boolean];
+export type QueryFormOrderBy =
+  | [QueryFormColumn | QueryFormMetric | {}, boolean]
+  | [];
 
 export interface FormDataResidual {
   [key: string]: any;
@@ -120,18 +122,14 @@ export type ExtraFormDataAppend = {
  * filter clauses can't be overridden */
 export type ExtraFormDataOverrideExtras = Pick<
   QueryObjectExtras,
-  | 'druid_time_origin'
-  | 'relative_start'
-  | 'relative_end'
-  | 'time_grain_sqla'
-  | 'time_range_endpoints'
+  'relative_start' | 'relative_end' | 'time_grain_sqla'
 >;
 
 /** These parameters override those already present in the form data/query object */
 export type ExtraFormDataOverrideRegular = Partial<
   Pick<SqlaFormData, 'granularity_sqla'>
 > &
-  Partial<Pick<DruidFormData, 'granularity'>> &
+  Partial<Pick<SqlaFormData, 'granularity'>> &
   Partial<Pick<BaseFormData, 'time_range'>> &
   Partial<Pick<QueryObject, 'time_column' | 'time_grain'>>;
 
@@ -168,26 +166,27 @@ export interface BaseFormData extends TimeRange, FormDataResidual {
   extra_form_data?: ExtraFormData;
   /** order descending */
   order_desc?: boolean;
-  /** limit number of time series */
+  /** limit number of time series
+   *  deprecated - use series_limit instead */
   limit?: number;
   /** limit number of row in the results */
   row_limit?: string | number | null;
   /** row offset for server side pagination */
   row_offset?: string | number | null;
-  /** The metric used to order timeseries for limiting */
+  /** The metric used to order timeseries for limiting
+   *  deprecated - use series_limit_metric instead */
   timeseries_limit_metric?: QueryFormMetric;
   /** Force refresh */
   force?: boolean;
   result_format?: string;
   result_type?: string;
-  time_range_endpoints?: TimeRangeEndpoints;
   annotation_layers?: AnnotationLayer[];
   url_params?: Record<string, string>;
   custom_params?: Record<string, string>;
   /** limit number of series */
   series_columns?: QueryFormColumn[];
   series_limit?: number;
-  series_limit_metric?: QueryFormColumn;
+  series_limit_metric?: QueryFormMetric;
 }
 
 /**
@@ -197,34 +196,16 @@ export interface SqlaFormData extends BaseFormData {
   /**
    * Name of the Time Column. Time column is optional.
    */
+  granularity?: string;
   granularity_sqla?: string;
   time_grain_sqla?: TimeGranularity;
   having?: string;
 }
 
-/**
- * Form data for Druid datasources.
- */
-export interface DruidFormData extends BaseFormData {
-  granularity: string;
-  having_druid?: string;
-  druid_time_origin?: string;
-}
-
-export type QueryFormData = DruidFormData | SqlaFormData;
+export type QueryFormData = SqlaFormData;
 
 //---------------------------------------------------
 // Type guards
 //---------------------------------------------------
-
-export function isDruidFormData(
-  formData: QueryFormData,
-): formData is DruidFormData {
-  return 'granularity' in formData;
-}
-
-export function isSavedMetric(metric: QueryFormMetric): metric is SavedMetric {
-  return typeof metric === 'string';
-}
 
 export default {};

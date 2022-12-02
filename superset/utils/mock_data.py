@@ -112,7 +112,9 @@ def get_type_generator(  # pylint: disable=too-many-return-statements,too-many-b
 
     if isinstance(sqltype, sqlalchemy.sql.sqltypes.TIME):
         return lambda: time(
-            random.randrange(24), random.randrange(60), random.randrange(60),
+            random.randrange(24),
+            random.randrange(60),
+            random.randrange(60),
         )
 
     if isinstance(
@@ -176,7 +178,7 @@ def add_data(
     If the table already exists `columns` can be `None`.
 
     :param Optional[List[ColumnInfo]] columns: list of column names and types to create
-    :param int run_nows: how many rows to generate and insert
+    :param int num_rows: how many rows to generate and insert
     :param str table_name: name of table, will be created if it doesn't exist
     :param bool append: if the table already exists, append data or replace?
     """
@@ -185,31 +187,29 @@ def add_data(
 
     database = get_example_database()
     table_exists = database.has_table_by_name(table_name)
-    engine = database.get_sqla_engine()
 
-    if columns is None:
-        if not table_exists:
-            raise Exception(
-                f"The table {table_name} does not exist. To create it you need to "
-                "pass a list of column names and types."
-            )
+    with database.get_sqla_engine_with_context() as engine:
+        if columns is None:
+            if not table_exists:
+                raise Exception(
+                    f"The table {table_name} does not exist. To create it you need to "
+                    "pass a list of column names and types."
+                )
 
-        inspector = inspect(engine)
-        columns = inspector.get_columns(table_name)
+            inspector = inspect(engine)
+            columns = inspector.get_columns(table_name)
 
-    # create table if needed
-    column_objects = get_column_objects(columns)
-    metadata = MetaData()
-    table = Table(table_name, metadata, *column_objects)
-    metadata.create_all(engine)
+        # create table if needed
+        column_objects = get_column_objects(columns)
+        metadata = MetaData()
+        table = Table(table_name, metadata, *column_objects)
+        metadata.create_all(engine)
 
-    if not append:
-        # pylint: disable=no-value-for-parameter # sqlalchemy/issues/4656
-        engine.execute(table.delete())
+        if not append:
+            engine.execute(table.delete())
 
-    data = generate_data(columns, num_rows)
-    # pylint: disable=no-value-for-parameter # sqlalchemy/issues/4656
-    engine.execute(table.insert(), data)
+        data = generate_data(columns, num_rows)
+        engine.execute(table.insert(), data)
 
 
 def get_column_objects(columns: List[ColumnInfo]) -> List[Column]:
@@ -239,6 +239,7 @@ def add_sample_rows(
 ) -> Iterator[Model]:
     """
     Add entities of a given model.
+    :param Session session: an SQLAlchemy session
     :param Model model: a Superset/FAB model
     :param int count: how many entities to generate and insert
     """

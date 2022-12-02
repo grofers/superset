@@ -36,7 +36,6 @@ import {
   LOG_ACTIONS_MOUNT_DASHBOARD,
   Logger,
 } from '../../logger/LogUtils';
-import OmniContainer from '../../components/OmniContainer';
 import { areObjectsEqual } from '../../reduxUtils';
 
 import '../stylesheets/index.less';
@@ -57,7 +56,7 @@ const propTypes = {
   charts: PropTypes.objectOf(chartPropShape).isRequired,
   slices: PropTypes.objectOf(slicePropShape).isRequired,
   activeFilters: PropTypes.object.isRequired,
-  chartConfiguration: PropTypes.object.isRequired,
+  chartConfiguration: PropTypes.object,
   datasources: PropTypes.object.isRequired,
   ownDataCharts: PropTypes.object.isRequired,
   layout: PropTypes.object.isRequired,
@@ -292,7 +291,6 @@ class Dashboard extends React.PureComponent {
     }
     return (
       <>
-        <OmniContainer />
         <DashboardBuilder />
       </>
     );

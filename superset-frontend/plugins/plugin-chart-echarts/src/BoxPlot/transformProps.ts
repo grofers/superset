@@ -18,7 +18,6 @@
  */
 import {
   CategoricalColorNamespace,
-  DataRecordValue,
   getColumnLabel,
   getMetricLabel,
   getNumberFormatter,
@@ -36,17 +35,27 @@ import {
   getColtypesMapping,
   sanitizeHtml,
 } from '../utils/series';
-import { defaultGrid, defaultTooltip, defaultYAxis } from '../defaults';
+import { convertInteger } from '../utils/convertInteger';
+import { defaultGrid, defaultYAxis } from '../defaults';
 import { getPadding } from '../Timeseries/transformers';
 import { OpacityEnum } from '../constants';
+import { getDefaultTooltip } from '../utils/tooltip';
+import { Refs } from '../types';
 
 export default function transformProps(
   chartProps: EchartsBoxPlotChartProps,
 ): BoxPlotChartTransformedProps {
-  const { width, height, formData, hooks, filterState, queriesData } =
-    chartProps;
+  const {
+    width,
+    height,
+    formData,
+    hooks,
+    filterState,
+    queriesData,
+    inContextMenu,
+  } = chartProps;
   const { data = [] } = queriesData[0];
-  const { setDataMask = () => {} } = hooks;
+  const { setDataMask = () => {}, onContextMenu } = hooks;
   const coltypeMapping = getColtypesMapping(queriesData[0]);
   const {
     colorScheme,
@@ -62,7 +71,9 @@ export default function transformProps(
     xAxisTitleMargin,
     yAxisTitleMargin,
     yAxisTitlePosition,
+    sliceId,
   } = formData as BoxPlotQueryFormData;
+  const refs: Refs = {};
   const colorFn = CategoricalColorNamespace.getScale(colorScheme as string);
   const numberFormatter = getNumberFormatter(numberFormat);
   const metricLabels = metrics.map(getMetricLabel);
@@ -97,9 +108,9 @@ export default function transformProps(
             datum[`${metric}__outliers`],
           ],
           itemStyle: {
-            color: colorFn(groupbyLabel),
+            color: colorFn(groupbyLabel, sliceId),
             opacity: isFiltered ? OpacityEnum.SemiTransparent : 0.6,
-            borderColor: colorFn(groupbyLabel),
+            borderColor: colorFn(groupbyLabel, sliceId),
           },
         };
       });
@@ -128,6 +139,7 @@ export default function transformProps(
           type: 'scatter',
           data: outlierDatum.map(val => [name, val]),
           tooltip: {
+            ...getDefaultTooltip(refs),
             formatter: (param: { data: [string, number] }) => {
               const [outlierName, stats] = param.data;
               const headline = groupbyLabels.length
@@ -137,7 +149,7 @@ export default function transformProps(
             },
           },
           itemStyle: {
-            color: colorFn(groupbyLabel),
+            color: colorFn(groupbyLabel, sliceId),
             opacity: isFiltered
               ? OpacityEnum.SemiTransparent
               : OpacityEnum.NonTransparent,
@@ -147,21 +159,18 @@ export default function transformProps(
     )
     .flat(2);
 
-  const labelMap = data.reduce(
-    (acc: Record<string, DataRecordValue[]>, datum) => {
-      const label = extractGroupbyLabel({
-        datum,
-        groupby: groupbyLabels,
-        coltypeMapping,
-        timeFormatter: getTimeFormatter(dateFormat),
-      });
-      return {
-        ...acc,
-        [label]: groupbyLabels.map(col => datum[col]),
-      };
-    },
-    {},
-  );
+  const labelMap = data.reduce((acc: Record<string, string[]>, datum) => {
+    const label = extractGroupbyLabel({
+      datum,
+      groupby: groupbyLabels,
+      coltypeMapping,
+      timeFormatter: getTimeFormatter(dateFormat),
+    });
+    return {
+      ...acc,
+      [label]: groupbyLabels.map(col => datum[col] as string),
+    };
+  }, {});
 
   const selectedValues = (filterState.selectedValues || []).reduce(
     (acc: Record<string, number>, selectedValue: string) => {
@@ -189,6 +198,7 @@ export default function transformProps(
       type: 'boxplot',
       data: transformedData,
       tooltip: {
+        ...getDefaultTooltip(refs),
         formatter: (param: CallbackDataParams) => {
           // @ts-ignore
           const {
@@ -240,8 +250,8 @@ export default function transformProps(
     null,
     addXAxisTitleOffset,
     yAxisTitlePosition,
-    yAxisTitleMargin,
-    xAxisTitleMargin,
+    convertInteger(yAxisTitleMargin),
+    convertInteger(xAxisTitleMargin),
   );
   const echartOptions: EChartsCoreOption = {
     grid: {
@@ -253,7 +263,7 @@ export default function transformProps(
       data: transformedData.map(row => row.name),
       axisLabel,
       name: xAxisTitle,
-      nameGap: xAxisTitleMargin,
+      nameGap: convertInteger(xAxisTitleMargin),
       nameLocation: 'middle',
     },
     yAxis: {
@@ -261,11 +271,12 @@ export default function transformProps(
       type: 'value',
       axisLabel: { formatter: numberFormatter },
       name: yAxisTitle,
-      nameGap: yAxisTitleMargin,
+      nameGap: convertInteger(yAxisTitleMargin),
       nameLocation: yAxisTitlePosition === 'Left' ? 'middle' : 'end',
     },
     tooltip: {
-      ...defaultTooltip,
+      ...getDefaultTooltip(refs),
+      show: !inContextMenu,
       trigger: 'item',
       axisPointer: {
         type: 'shadow',
@@ -284,5 +295,7 @@ export default function transformProps(
     labelMap,
     groupby,
     selectedValues,
+    onContextMenu,
+    refs,
   };
 }

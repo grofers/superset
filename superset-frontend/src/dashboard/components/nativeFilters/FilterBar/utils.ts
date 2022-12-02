@@ -18,34 +18,8 @@
  */
 
 import { areObjectsEqual } from 'src/reduxUtils';
-import {
-  DataMaskStateWithId,
-  Filter,
-  FilterState,
-  Divider,
-} from '@superset-ui/core';
-
-export enum TabIds {
-  AllFilters = 'allFilters',
-  FilterSets = 'filterSets',
-}
-
-export function mapParentFiltersToChildren(filters: Array<Filter | Divider>): {
-  [id: string]: Filter[];
-} {
-  const cascadeChildren = {};
-  filters.forEach(filter => {
-    const [parentId] =
-      ('cascadeParentIds' in filter && filter.cascadeParentIds) || [];
-    if (parentId) {
-      if (!cascadeChildren[parentId]) {
-        cascadeChildren[parentId] = [];
-      }
-      cascadeChildren[parentId].push(filter);
-    }
-  });
-  return cascadeChildren;
-}
+import { DataMaskStateWithId, Filter, FilterState } from '@superset-ui/core';
+import { testWithId } from 'src/utils/testUtils';
 
 export const getOnlyExtraFormData = (data: DataMaskStateWithId) =>
   Object.values(data).reduce(
@@ -87,3 +61,6 @@ export const checkIsApplyDisabled = (
     )
   );
 };
+
+export const FILTER_BAR_TEST_ID = 'filter-bar';
+export const getFilterBarTestId = testWithId(FILTER_BAR_TEST_ID);

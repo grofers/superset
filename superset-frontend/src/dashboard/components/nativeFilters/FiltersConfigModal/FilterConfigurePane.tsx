@@ -22,7 +22,7 @@ import FilterTitlePane from './FilterTitlePane';
 import { FilterRemoval } from './types';
 
 interface Props {
-  children: (filterId: string) => React.ReactNode;
+  children?: React.ReactNode;
   getFilterTitle: (filterId: string) => string;
   onChange: (activeKey: string) => void;
   onAdd: (type: NativeFilterType) => void;
@@ -31,7 +31,7 @@ interface Props {
   erroredFilters: string[];
   restoreFilter: (id: string) => void;
   currentFilterId: string;
-  filterGroups: string[][];
+  filters: string[];
   removedFilters: Record<string, FilterRemoval>;
 }
 
@@ -50,7 +50,7 @@ const TitlesContainer = styled.div`
   border-right: 1px solid ${({ theme }) => theme.colors.grayscale.light2};
 `;
 
-const FiltureConfigurePane: React.FC<Props> = ({
+const FilterConfigurePane: React.FC<Props> = ({
   getFilterTitle,
   onChange,
   onRemove,
@@ -60,42 +60,26 @@ const FiltureConfigurePane: React.FC<Props> = ({
   erroredFilters,
   children,
   currentFilterId,
-  filterGroups,
+  filters,
   removedFilters,
-}) => {
-  const active = filterGroups.flat().filter(id => id === currentFilterId)[0];
-  return (
-    <Container>
-      <TitlesContainer>
-        <FilterTitlePane
-          currentFilterId={currentFilterId}
-          filterGroups={filterGroups}
-          removedFilters={removedFilters}
-          erroredFilters={erroredFilters}
-          getFilterTitle={getFilterTitle}
-          onChange={onChange}
-          onAdd={(type: NativeFilterType) => onAdd(type)}
-          onRearrage={onRearrange}
-          onRemove={(id: string) => onRemove(id)}
-          restoreFilter={restoreFilter}
-        />
-      </TitlesContainer>
-      <ContentHolder>
-        {filterGroups.flat().map(id => (
-          <div
-            key={id}
-            style={{
-              height: '100%',
-              overflowY: 'auto',
-              display: id === active ? '' : 'none',
-            }}
-          >
-            {children(id)}
-          </div>
-        ))}
-      </ContentHolder>
-    </Container>
-  );
-};
+}) => (
+  <Container>
+    <TitlesContainer>
+      <FilterTitlePane
+        currentFilterId={currentFilterId}
+        filters={filters}
+        removedFilters={removedFilters}
+        erroredFilters={erroredFilters}
+        getFilterTitle={getFilterTitle}
+        onChange={onChange}
+        onAdd={(type: NativeFilterType) => onAdd(type)}
+        onRearrange={onRearrange}
+        onRemove={(id: string) => onRemove(id)}
+        restoreFilter={restoreFilter}
+      />
+    </TitlesContainer>
+    <ContentHolder>{children}</ContentHolder>
+  </Container>
+);
 
-export default FiltureConfigurePane;
+export default FilterConfigurePane;

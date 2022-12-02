@@ -16,13 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { omit } from 'lodash';
 import { SupersetClient, JsonObject } from '@superset-ui/core';
 
 type Payload = {
-  dataset_id: number;
+  datasource_id: number;
+  datasource_type: string;
   form_data: string;
   chart_id?: number;
 };
+
+const TEMPORARY_CONTROLS = ['url_params'];
+
+export const sanitizeFormData = (formData: JsonObject): JsonObject =>
+  omit(formData, TEMPORARY_CONTROLS);
 
 const assembleEndpoint = (key?: string, tabId?: string) => {
   let endpoint = 'api/v1/explore/form_data';
@@ -36,13 +43,15 @@ const assembleEndpoint = (key?: string, tabId?: string) => {
 };
 
 const assemblePayload = (
-  datasetId: number,
-  form_data: JsonObject,
+  datasourceId: number,
+  datasourceType: string,
+  formData: JsonObject,
   chartId?: number,
 ) => {
   const payload: Payload = {
-    dataset_id: datasetId,
-    form_data: JSON.stringify(form_data),
+    datasource_id: datasourceId,
+    datasource_type: datasourceType,
+    form_data: JSON.stringify(sanitizeFormData(formData)),
   };
   if (chartId) {
     payload.chart_id = chartId;
@@ -51,24 +60,36 @@ const assemblePayload = (
 };
 
 export const postFormData = (
-  datasetId: number,
-  form_data: JsonObject,
+  datasourceId: number,
+  datasourceType: string,
+  formData: JsonObject,
   chartId?: number,
   tabId?: string,
 ): Promise<string> =>
   SupersetClient.post({
     endpoint: assembleEndpoint(undefined, tabId),
-    jsonPayload: assemblePayload(datasetId, form_data, chartId),
+    jsonPayload: assemblePayload(
+      datasourceId,
+      datasourceType,
+      formData,
+      chartId,
+    ),
   }).then(r => r.json.key);
 
 export const putFormData = (
-  datasetId: number,
+  datasourceId: number,
+  datasourceType: string,
   key: string,
-  form_data: JsonObject,
+  formData: JsonObject,
   chartId?: number,
   tabId?: string,
 ): Promise<string> =>
   SupersetClient.put({
     endpoint: assembleEndpoint(key, tabId),
-    jsonPayload: assemblePayload(datasetId, form_data, chartId),
+    jsonPayload: assemblePayload(
+      datasourceId,
+      datasourceType,
+      formData,
+      chartId,
+    ),
   }).then(r => r.json.message);

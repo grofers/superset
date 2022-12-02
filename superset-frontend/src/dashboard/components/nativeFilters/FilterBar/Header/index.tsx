@@ -18,21 +18,22 @@
  */
 /* eslint-disable no-param-reassign */
 import {
-  DataMaskState,
-  DataMaskStateWithId,
-  Filter,
+  css,
+  FeatureFlag,
+  isFeatureEnabled,
   styled,
   t,
   useTheme,
 } from '@superset-ui/core';
-import React, { FC } from 'react';
+import React, { FC, useMemo } from 'react';
 import Icons from 'src/components/Icons';
 import Button from 'src/components/Button';
 import { useSelector } from 'react-redux';
 import FilterConfigurationLink from 'src/dashboard/components/nativeFilters/FilterBar/FilterConfigurationLink';
 import { useFilters } from 'src/dashboard/components/nativeFilters/FilterBar/state';
-import { getFilterBarTestId } from '..';
-import { RootState } from '../../../../types';
+import { RootState } from 'src/dashboard/types';
+import { getFilterBarTestId } from '../utils';
+import FilterBarOrientationSelect from '../FilterBarOrientationSelect';
 
 const TitleArea = styled.h4`
   display: flex;
@@ -46,77 +47,65 @@ const TitleArea = styled.h4`
   }
 `;
 
-const ActionButtons = styled.div`
-  display: grid;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-  grid-gap: 10px;
-  grid-template-columns: 1fr 1fr;
-  ${({ theme }) => `padding: 0 ${theme.gridUnit * 2}px`};
+const HeaderButton = styled(Button)`
+  padding: 0;
 
-  .btn {
-    flex: 1;
+  .anticon {
+    padding-top: ${({ theme }) => `${theme.gridUnit + 2}px`};
   }
 `;
 
-const HeaderButton = styled(Button)`
-  padding: 0;
-`;
-
 const Wrapper = styled.div`
-  padding: ${({ theme }) => theme.gridUnit}px
-    ${({ theme }) => theme.gridUnit * 2}px;
+  ${({ theme }) => `
+    padding: ${theme.gridUnit}px ${theme.gridUnit * 2}px;
+
+    .ant-dropdown-trigger span {
+      padding-right: ${theme.gridUnit * 2}px;
+    }
+  `}
 `;
 
 type HeaderProps = {
   toggleFiltersBar: (arg0: boolean) => void;
-  onApply: () => void;
-  onClearAll: () => void;
-  dataMaskSelected: DataMaskState;
-  dataMaskApplied: DataMaskStateWithId;
-  isApplyDisabled: boolean;
 };
 
-const Header: FC<HeaderProps> = ({
-  onApply,
-  onClearAll,
-  isApplyDisabled,
-  dataMaskSelected,
-  dataMaskApplied,
-  toggleFiltersBar,
-}) => {
+const AddFiltersButtonContainer = styled.div`
+  ${({ theme }) => css`
+    margin-top: ${theme.gridUnit * 2}px;
+
+    & button > [role='img']:first-of-type {
+      margin-right: ${theme.gridUnit}px;
+      line-height: 0;
+    }
+
+    span[role='img'] {
+      padding-bottom: 1px;
+    }
+
+    .ant-btn > .anticon + span {
+      margin-left: 0;
+    }
+  `}
+`;
+
+const Header: FC<HeaderProps> = ({ toggleFiltersBar }) => {
   const theme = useTheme();
   const filters = useFilters();
-  const filterValues = Object.values<Filter>(filters);
+  const filterValues = useMemo(() => Object.values(filters), [filters]);
   const canEdit = useSelector<RootState, boolean>(
     ({ dashboardInfo }) => dashboardInfo.dash_edit_perm,
   );
   const dashboardId = useSelector<RootState, number>(
     ({ dashboardInfo }) => dashboardInfo.id,
   );
-
-  const isClearAllDisabled = Object.values(dataMaskApplied).every(
-    filter =>
-      dataMaskSelected[filter.id]?.filterState?.value === null ||
-      (!dataMaskSelected[filter.id] && filter.filterState?.value === null),
-  );
+  const canSetHorizontalFilterBar =
+    canEdit && isFeatureEnabled(FeatureFlag.HORIZONTAL_FILTER_BAR);
 
   return (
     <Wrapper>
       <TitleArea>
         <span>{t('Filters')}</span>
-        {canEdit && (
-          <FilterConfigurationLink
-            dashboardId={dashboardId}
-            createNewOnOpen={filterValues.length === 0}
-          >
-            <Icons.Edit
-              data-test="create-filter"
-              iconColor={theme.colors.grayscale.base}
-            />
-          </FilterConfigurationLink>
-        )}
+        {canSetHorizontalFilterBar && <FilterBarOrientationSelect />}
         <HeaderButton
           {...getFilterBarTestId('collapse-button')}
           buttonStyle="link"
@@ -126,31 +115,18 @@ const Header: FC<HeaderProps> = ({
           <Icons.Expand iconColor={theme.colors.grayscale.base} />
         </HeaderButton>
       </TitleArea>
-      <ActionButtons className="filter-action-buttons">
-        <Button
-          disabled={isClearAllDisabled}
-          buttonStyle="tertiary"
-          buttonSize="small"
-          className="filter-clear-all-button"
-          onClick={onClearAll}
-          {...getFilterBarTestId('clear-button')}
-        >
-          {t('Clear all')}
-        </Button>
-        <Button
-          disabled={isApplyDisabled}
-          buttonStyle="primary"
-          htmlType="submit"
-          buttonSize="small"
-          className="filter-apply-button"
-          onClick={onApply}
-          {...getFilterBarTestId('apply-button')}
-        >
-          {t('Apply')}
-        </Button>
-      </ActionButtons>
+      {canEdit && (
+        <AddFiltersButtonContainer>
+          <FilterConfigurationLink
+            dashboardId={dashboardId}
+            createNewOnOpen={filterValues.length === 0}
+          >
+            <Icons.PlusSmall /> {t('Add/Edit Filters')}
+          </FilterConfigurationLink>
+        </AddFiltersButtonContainer>
+      )}
     </Wrapper>
   );
 };
 
-export default Header;
+export default React.memo(Header);

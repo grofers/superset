@@ -23,7 +23,7 @@ import Layout from '@theme/Layout';
 
 const links = [
   [
-    'https://join.slack.com/t/apache-superset/shared_invite/zt-uxbh5g36-AISUtHbzOXcu0BIj7kgUaw',
+    'https://join.slack.com/t/apache-superset/shared_invite/zt-1jp6hjzrq-H0PlFtToyLWuPiJDuRWCNw',
     'Slack',
     'interact with other Superset users and community members',
   ],

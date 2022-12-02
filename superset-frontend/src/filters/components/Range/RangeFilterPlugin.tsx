@@ -25,8 +25,9 @@ import {
   t,
 } from '@superset-ui/core';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Slider } from 'src/common/components';
 import { rgba } from 'emotion-rgba';
+import { AntdSlider } from 'src/components';
+import { FilterBarOrientation } from 'src/dashboard/types';
 import { PluginFilterRangeProps } from './types';
 import { StatusMessage, StyledFormItem, FilterPluginStyle } from '../common';
 import { getRangeExtraFormData } from '../../utils';
@@ -37,7 +38,7 @@ const DARK_BLUE = '#6dd3e3';
 const LIGHT_GRAY = '#f5f5f5';
 const DARK_GRAY = '#e1e1e1';
 
-const StyledMinSlider = styled(Slider)<{
+const StyledMinSlider = styled(AntdSlider)<{
   validateStatus?: 'error' | 'warning' | 'info';
 }>`
   ${({ theme, validateStatus }) => `
@@ -65,8 +66,12 @@ const StyledMinSlider = styled(Slider)<{
   `}
 `;
 
-const Wrapper = styled.div<{ validateStatus?: 'error' | 'warning' | 'info' }>`
-  ${({ theme, validateStatus }) => `
+const Wrapper = styled.div<{
+  validateStatus?: 'error' | 'warning' | 'info';
+  orientation?: FilterBarOrientation;
+  isOverflowing?: boolean;
+}>`
+  ${({ theme, validateStatus, orientation, isOverflowing }) => `
     border: 1px solid transparent;
     &:focus {
       border: 1px solid
@@ -76,8 +81,18 @@ const Wrapper = styled.div<{ validateStatus?: 'error' | 'warning' | 'info' }>`
         ${rgba(theme.colors[validateStatus || 'primary']?.base, 0.2)};
     }
     & .ant-slider {
-      margin-top: ${theme.gridUnit}px;
-      margin-bottom: ${theme.gridUnit * 5}px;
+      margin-top: ${
+        orientation === FilterBarOrientation.HORIZONTAL ? 0 : theme.gridUnit
+      }px;
+      margin-bottom: ${
+        orientation === FilterBarOrientation.HORIZONTAL ? 0 : theme.gridUnit * 5
+      }px;
+
+      ${
+        orientation === FilterBarOrientation.HORIZONTAL &&
+        !isOverflowing &&
+        `line-height: 1.2;`
+      }
 
       & .ant-slider-track {
         background-color: ${
@@ -93,6 +108,10 @@ const Wrapper = styled.div<{ validateStatus?: 'error' | 'warning' | 'info' }>`
             ${rgba(theme.colors[validateStatus || 'primary']?.base, 0.2)};
         }
       }
+      & .ant-slider-mark {
+        font-size: ${theme.typography.sizes.s}px;
+      }
+
       &:hover {
         & .ant-slider-track {
           background-color: ${
@@ -152,12 +171,16 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
     setDataMask,
     setFocusedFilter,
     unsetFocusedFilter,
+    setFilterActive,
     filterState,
+    inputRef,
+    filterBarOrientation,
+    isOverflowingFilterBar,
   } = props;
   const [row] = data;
   // @ts-ignore
   const { min, max }: { min: number; max: number } = row;
-  const { groupby, defaultValue, inputRef, enableSingleValue } = formData;
+  const { groupby, defaultValue, enableSingleValue } = formData;
 
   const enableSingleMinValue = enableSingleValue === SingleValueType.Minimum;
   const enableSingleMaxValue = enableSingleValue === SingleValueType.Maximum;
@@ -259,13 +282,13 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
 
   useEffect(() => {
     if (enableSingleMaxValue) {
-      handleAfterChange([min, minMax[minIndex]]);
+      handleAfterChange([min, minMax[maxIndex]]);
     }
   }, [enableSingleMaxValue]);
 
   useEffect(() => {
     if (enableSingleMinValue) {
-      handleAfterChange([minMax[maxIndex], max]);
+      handleAfterChange([minMax[minIndex], max]);
     }
   }, [enableSingleMinValue]);
 
@@ -285,13 +308,17 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
             tabIndex={-1}
             ref={inputRef}
             validateStatus={filterState.validateStatus}
+            orientation={filterBarOrientation}
+            isOverflowing={isOverflowingFilterBar}
             onFocus={setFocusedFilter}
             onBlur={unsetFocusedFilter}
             onMouseEnter={setFocusedFilter}
             onMouseLeave={unsetFocusedFilter}
+            onMouseDown={() => setFilterActive(true)}
+            onMouseUp={() => setFilterActive(false)}
           >
             {enableSingleMaxValue && (
-              <Slider
+              <AntdSlider
                 min={min}
                 max={max}
                 value={minMax[maxIndex]}
@@ -314,7 +341,7 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
               />
             )}
             {enableSingleExactValue && (
-              <Slider
+              <AntdSlider
                 min={min}
                 max={max}
                 included={false}
@@ -326,7 +353,7 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
               />
             )}
             {rangeValue && (
-              <Slider
+              <AntdSlider
                 range
                 min={min}
                 max={max}

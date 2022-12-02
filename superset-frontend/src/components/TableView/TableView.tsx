@@ -16,11 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import isEqual from 'lodash/isEqual';
 import { styled, t } from '@superset-ui/core';
 import { useFilters, usePagination, useSortBy, useTable } from 'react-table';
-import { Empty } from 'src/common/components';
+import { Empty } from 'src/components';
 import Pagination from 'src/components/Pagination';
 import TableCollection from 'src/components/TableCollection';
 import { SortByType, ServerPagination } from './types';
@@ -49,7 +49,9 @@ export interface TableViewProps {
   isPaginationSticky?: boolean;
   showRowCount?: boolean;
   scrollTable?: boolean;
+  scrollTopOnPagination?: boolean;
   small?: boolean;
+  columnsForWrapText?: string[];
 }
 
 const EmptyWrapper = styled.div`
@@ -127,7 +129,9 @@ const TableView = ({
   noDataText,
   showRowCount = true,
   serverPagination = false,
+  columnsForWrapText,
   onServerPagination = () => {},
+  scrollTopOnPagination = false,
   ...props
 }: TableViewProps) => {
   const initialState = {
@@ -159,22 +163,6 @@ const TableView = ({
     useSortBy,
     usePagination,
   );
-  useEffect(() => {
-    if (serverPagination && pageIndex !== initialState.pageIndex) {
-      onServerPagination({
-        pageIndex,
-      });
-    }
-  }, [pageIndex]);
-
-  useEffect(() => {
-    if (serverPagination && !isEqual(sortBy, initialState.sortBy)) {
-      onServerPagination({
-        pageIndex: 0,
-        sortBy,
-      });
-    }
-  }, [sortBy]);
 
   const content = withPagination ? page : rows;
 
@@ -192,10 +180,34 @@ const TableView = ({
 
   const isEmpty = !loading && content.length === 0;
   const hasPagination = pageCount > 1 && withPagination;
+  const tableRef = useRef<HTMLTableElement>(null);
+  const handleGotoPage = (p: number) => {
+    if (scrollTopOnPagination) {
+      tableRef?.current?.scroll(0, 0);
+    }
+    gotoPage(p);
+  };
+
+  useEffect(() => {
+    if (serverPagination && pageIndex !== initialState.pageIndex) {
+      onServerPagination({
+        pageIndex,
+      });
+    }
+  }, [pageIndex]);
+
+  useEffect(() => {
+    if (serverPagination && !isEqual(sortBy, initialState.sortBy)) {
+      onServerPagination({
+        pageIndex: 0,
+        sortBy,
+      });
+    }
+  }, [sortBy]);
 
   return (
     <>
-      <TableViewStyles {...props}>
+      <TableViewStyles {...props} ref={tableRef}>
         <TableCollection
           getTableProps={getTableProps}
           getTableBodyProps={getTableBodyProps}
@@ -204,6 +216,7 @@ const TableView = ({
           rows={content}
           columns={columns}
           loading={loading}
+          columnsForWrapText={columnsForWrapText}
         />
         {isEmpty && (
           <EmptyWrapperComponent>
@@ -226,7 +239,7 @@ const TableView = ({
           <Pagination
             totalPages={pageCount || 0}
             currentPage={pageCount ? pageIndex + 1 : 0}
-            onChange={(p: number) => gotoPage(p - 1)}
+            onChange={(p: number) => handleGotoPage(p - 1)}
             hideFirstAndLastPageLinks
           />
           {showRowCount && (

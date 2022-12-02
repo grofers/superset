@@ -25,6 +25,12 @@ export type HandlerFunction = (...args: unknown[]) => void;
 export enum Behavior {
   INTERACTIVE_CHART = 'INTERACTIVE_CHART',
   NATIVE_FILTER = 'NATIVE_FILTER',
+
+  /**
+   * Include `DRILL_TO_DETAIL` behavior if plugin handles `contextmenu` event
+   * when dimensions are right-clicked on.
+   */
+  DRILL_TO_DETAIL = 'DRILL_TO_DETAIL',
 }
 
 export enum AppSection {
@@ -50,6 +56,34 @@ export type SetDataMaskHook = {
 export interface PlainObject {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
+}
+
+export enum ChartLabel {
+  DEPRECATED = 'DEPRECATED',
+  FEATURED = 'FEATURED',
+}
+
+export const chartLabelExplanations: Record<ChartLabel, string> = {
+  [ChartLabel.DEPRECATED]:
+    'This chart uses features or modules which are no longer actively maintained. It will eventually be replaced or removed.',
+  [ChartLabel.FEATURED]:
+    'This chart was tested and verified, so the overall experience should be stable.',
+};
+
+export const chartLabelWeight: Record<ChartLabel, { weight: number }> = {
+  [ChartLabel.DEPRECATED]: {
+    weight: -0.1,
+  },
+  [ChartLabel.FEATURED]: {
+    weight: 0.1,
+  },
+};
+
+export enum AxisType {
+  category = 'category',
+  value = 'value',
+  time = 'time',
+  log = 'log',
 }
 
 export default {};

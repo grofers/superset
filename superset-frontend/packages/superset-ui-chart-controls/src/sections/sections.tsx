@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { t } from '@superset-ui/core';
+import { hasGenericChartAxes, t } from '@superset-ui/core';
 import { ControlPanelSectionConfig } from '../types';
 
 // A few standard controls sections that are used internally.
@@ -32,17 +32,29 @@ export const legacyTimeseriesTime: ControlPanelSectionConfig = {
   ...baseTimeSection,
   controlSetRows: [
     ['granularity'],
-    ['druid_time_origin'],
     ['granularity_sqla'],
     ['time_grain_sqla'],
     ['time_range'],
   ],
 };
 
-export const legacyRegularTime: ControlPanelSectionConfig = {
-  ...baseTimeSection,
-  controlSetRows: [['granularity_sqla'], ['time_range']],
-};
+export const genericTime: ControlPanelSectionConfig = hasGenericChartAxes
+  ? { controlSetRows: [] }
+  : {
+      ...baseTimeSection,
+      controlSetRows: [
+        ['granularity_sqla'],
+        ['time_grain_sqla'],
+        ['time_range'],
+      ],
+    };
+
+export const legacyRegularTime: ControlPanelSectionConfig = hasGenericChartAxes
+  ? { controlSetRows: [] }
+  : {
+      ...baseTimeSection,
+      controlSetRows: [['granularity_sqla'], ['time_range']],
+    };
 
 export const datasourceAndVizType: ControlPanelSectionConfig = {
   label: t('Datasource & Chart Type'),
@@ -89,15 +101,6 @@ export const datasourceAndVizType: ControlPanelSectionConfig = {
           description: t(
             'Extra parameters that any plugins can choose to set for use in Jinja templated queries',
           ),
-        },
-      },
-      {
-        name: 'time_range_endpoints',
-        config: {
-          type: 'HiddenControl',
-          label: t('Time range endpoints'),
-          hidden: true,
-          description: t('Time range endpoints (SIP-15)'),
         },
       },
     ],

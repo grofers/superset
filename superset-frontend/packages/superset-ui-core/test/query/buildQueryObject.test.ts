@@ -119,15 +119,26 @@ describe('buildQueryObject', () => {
     expect(query.metrics).toEqual(['sum__num', 'avg__num']);
   });
 
-  it('should build limit', () => {
-    const limit = 2;
+  it('should build series_limit from legacy control', () => {
+    const series_limit = 2;
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
       viz_type: 'table',
-      limit,
+      limit: series_limit,
     });
-    expect(query.timeseries_limit).toEqual(limit);
+    expect(query.series_limit).toEqual(series_limit);
+  });
+
+  it('should build series_limit', () => {
+    const series_limit = 2;
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity_sqla: 'ds',
+      viz_type: 'table',
+      series_limit,
+    });
+    expect(query.series_limit).toEqual(series_limit);
   });
 
   it('should build order_desc', () => {
@@ -141,7 +152,7 @@ describe('buildQueryObject', () => {
     expect(query.order_desc).toEqual(orderDesc);
   });
 
-  it('should build timeseries_limit_metric', () => {
+  it('should build series_limit_metric from legacy control', () => {
     const metric = 'country';
     query = buildQueryObject({
       datasource: '5__table',
@@ -149,7 +160,29 @@ describe('buildQueryObject', () => {
       viz_type: 'table',
       timeseries_limit_metric: metric,
     });
-    expect(query.timeseries_limit_metric).toEqual(metric);
+    expect(query.series_limit_metric).toEqual(metric);
+  });
+
+  it('should build series_limit_metric', () => {
+    const metric = 'country';
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity_sqla: 'ds',
+      viz_type: 'pivot_table_v2',
+      series_limit_metric: metric,
+    });
+    expect(query.series_limit_metric).toEqual(metric);
+  });
+
+  it('should build series_limit_metric as undefined when empty array', () => {
+    const metric: any = [];
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity_sqla: 'ds',
+      viz_type: 'pivot_table_v2',
+      series_limit_metric: metric,
+    });
+    expect(query.series_limit_metric).toEqual(undefined);
   });
 
   it('should handle null and non-numeric row_limit and row_offset', () => {
@@ -205,6 +238,7 @@ describe('buildQueryObject', () => {
         name: 'My Formula',
         opacity: AnnotationOpacity.Low,
         show: true,
+        showLabel: false,
         style: AnnotationStyle.Solid,
         value: '10*sin(x)',
         width: 1,
@@ -213,6 +247,7 @@ describe('buildQueryObject', () => {
         annotationType: AnnotationType.Interval,
         color: null,
         show: false,
+        showLabel: false,
         name: 'My Interval',
         sourceType: AnnotationSourceType.Native,
         style: AnnotationStyle.Dashed,
@@ -231,6 +266,7 @@ describe('buildQueryObject', () => {
         },
         sourceType: AnnotationSourceType.Table,
         show: false,
+        showLabel: false,
         timeColumn: 'ds',
         style: AnnotationStyle.Dashed,
         value: 1,
@@ -260,9 +296,30 @@ describe('buildQueryObject', () => {
         datasource: '5__table',
         granularity_sqla: 'ds',
         viz_type: 'table',
-        url_params: null as unknown as undefined,
+        // @ts-expect-error
+        url_params: null,
       }).url_params,
     ).toBeUndefined();
+  });
+
+  it('should populate granularity', () => {
+    const granularity = 'ds';
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity,
+      viz_type: 'table',
+    });
+    expect(query.granularity).toEqual(granularity);
+  });
+
+  it('should populate granularity from legacy field', () => {
+    const granularity = 'ds';
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity_sqla: granularity,
+      viz_type: 'table',
+    });
+    expect(query.granularity).toEqual(granularity);
   });
 
   it('should populate custom_params', () => {

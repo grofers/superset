@@ -70,7 +70,13 @@ export type Method = RequestInit['method'];
 export type Mode = RequestInit['mode'];
 export type Redirect = RequestInit['redirect'];
 export type ClientTimeout = number | undefined;
-export type ParseMethod = 'json' | 'text' | 'raw' | null | undefined;
+export type ParseMethod =
+  | 'json'
+  | 'json-bigint'
+  | 'text'
+  | 'raw'
+  | null
+  | undefined;
 export type Signal = RequestInit['signal'];
 export type Stringify = boolean;
 export type Url = string;
@@ -81,6 +87,7 @@ export interface RequestBase {
   fetchRetryOptions?: FetchRetryOptions;
   headers?: Headers;
   host?: Host;
+  ignoreUnauthorized?: boolean;
   mode?: Mode;
   method?: Method;
   jsonPayload?: Payload;
@@ -136,6 +143,7 @@ export interface ClientConfig {
   headers?: Headers;
   mode?: Mode;
   timeout?: ClientTimeout;
+  unauthorizedHandler?: () => void;
 }
 
 export interface SupersetClientInterface
@@ -144,13 +152,15 @@ export interface SupersetClientInterface
     | 'delete'
     | 'get'
     | 'post'
+    | 'postForm'
     | 'put'
     | 'request'
     | 'init'
     | 'isAuthenticated'
     | 'reAuthenticate'
+    | 'getGuestToken'
   > {
-  configure: (config?: ClientConfig) => SupersetClientClass;
+  configure: (config?: ClientConfig) => SupersetClientInterface;
   reset: () => void;
 }
 

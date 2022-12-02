@@ -77,8 +77,9 @@ class TestBigQueryDbEngineSpec(TestDbEngineSpec):
             "TIMESTAMP": "TIMESTAMP_TRUNC(temporal, HOUR)",
         }
         for type_, expected in test_cases.items():
+            col.type = type_
             actual = BigQueryEngineSpec.get_timestamp_expr(
-                col=col, pdf=None, time_grain="PT1H", type_=type_
+                col=col, pdf=None, time_grain="PT1H"
             )
             self.assertEqual(str(actual), expected)
 
@@ -99,8 +100,9 @@ class TestBigQueryDbEngineSpec(TestDbEngineSpec):
             ") AS TIMESTAMP)",
         }
         for type_, expected in test_cases.items():
+            col.type = type_
             actual = BigQueryEngineSpec.get_timestamp_expr(
-                col=col, pdf=None, time_grain="PT5M", type_=type_
+                col=col, pdf=None, time_grain="PT5M"
             )
             assert str(actual) == expected
 
@@ -139,8 +141,14 @@ class TestBigQueryDbEngineSpec(TestDbEngineSpec):
         self.assertEqual(result, {})
 
         index_metadata = [
-            {"name": "clustering", "column_names": ["c_col1", "c_col2", "c_col3"],},
-            {"name": "partition", "column_names": ["p_col1", "p_col2", "p_col3"],},
+            {
+                "name": "clustering",
+                "column_names": ["c_col1", "c_col2", "c_col3"],
+            },
+            {
+                "name": "partition",
+                "column_names": ["p_col1", "p_col2", "p_col3"],
+            },
         ]
         expected_result = {
             "partitions": {"cols": [["p_col1", "p_col2", "p_col3"]]},
@@ -219,8 +227,10 @@ class TestBigQueryDbEngineSpec(TestDbEngineSpec):
             return_value="account_info"
         )
 
-        mock_get_engine.return_value.url.host = "google-host"
-        mock_get_engine.return_value.dialect.credentials_info = "secrets"
+        mock_get_engine.return_value.__enter__.return_value.url.host = "google-host"
+        mock_get_engine.return_value.__enter__.return_value.dialect.credentials_info = (
+            "secrets"
+        )
 
         BigQueryEngineSpec.df_to_sql(
             database=database,
@@ -238,16 +248,21 @@ class TestBigQueryDbEngineSpec(TestDbEngineSpec):
         )
 
     def test_extract_errors(self):
-        msg = "403 POST https://bigquery.googleapis.com/bigquery/v2/projects/test-keel-310804/jobs?prettyPrint=false: Access Denied: Project User does not have bigquery.jobs.create permission in project profound-keel-310804"
+        msg = "403 POST https://bigquery.googleapis.com/bigquery/v2/projects/test-keel-310804/jobs?prettyPrint=false: Access Denied: Project profound-keel-310804: User does not have bigquery.jobs.create permission in project profound-keel-310804"
         result = BigQueryEngineSpec.extract_errors(Exception(msg))
         assert result == [
             SupersetError(
-                message="We were unable to connect to your database. Please confirm that your service account has the Viewer and Job User roles on the project.",
+                message='Unable to connect. Verify that the following roles are set on the service account: "BigQuery Data Viewer", "BigQuery Metadata Viewer", "BigQuery Job User" and the following permissions are set "bigquery.readsessions.create", "bigquery.readsessions.getData"',
                 error_type=SupersetErrorType.CONNECTION_DATABASE_PERMISSIONS_ERROR,
                 level=ErrorLevel.ERROR,
                 extra={
                     "engine_name": "Google BigQuery",
-                    "issue_codes": [{"code": 1017, "message": "",}],
+                    "issue_codes": [
+                        {
+                            "code": 1017,
+                            "message": "",
+                        }
+                    ],
                 },
             )
         ]
@@ -351,8 +366,8 @@ class TestBigQueryDbEngineSpec(TestDbEngineSpec):
             table=table,
             expression="""
             case
-              when gender=true then "male"
-              else "female"
+              when gender='boy' then 'male'
+              else 'female'
             end
             """,
         )

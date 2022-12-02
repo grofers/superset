@@ -18,12 +18,24 @@
  */
 /* eslint camelcase: 0 */
 import { ActionCreators as UndoActionCreators } from 'redux-undo';
-import { ensureIsArray, t, SupersetClient } from '@superset-ui/core';
-import { addChart, removeChart, refreshChart } from 'src/chart/chartAction';
-import { chart as initChart } from 'src/chart/chartReducer';
+import {
+  ensureIsArray,
+  t,
+  SupersetClient,
+  getSharedLabelColor,
+} from '@superset-ui/core';
+import {
+  addChart,
+  removeChart,
+  refreshChart,
+} from 'src/components/Chart/chartAction';
+import { chart as initChart } from 'src/components/Chart/chartReducer';
 import { applyDefaultFormData } from 'src/explore/store';
 import { getClientErrorObject } from 'src/utils/getClientErrorObject';
-import { SAVE_TYPE_OVERWRITE } from 'src/dashboard/util/constants';
+import {
+  SAVE_TYPE_OVERWRITE,
+  SAVE_TYPE_OVERWRITE_CONFIRMED,
+} from 'src/dashboard/util/constants';
 import {
   addSuccessToast,
   addWarningToast,
@@ -34,6 +46,8 @@ import serializeFilterScopes from 'src/dashboard/util/serializeFilterScopes';
 import { getActiveFilters } from 'src/dashboard/util/activeDashboardFilters';
 import { safeStringify } from 'src/utils/safeStringify';
 import { FeatureFlag, isFeatureEnabled } from 'src/featureFlags';
+import { logEvent } from 'src/logger/actions';
+import { LOG_ACTIONS_CONFIRM_OVERWRITE_DASHBOARD_METADATA } from 'src/logger/LogUtils';
 import { UPDATE_COMPONENTS_PARENTS_LIST } from './dashboardLayout';
 import {
   setChartConfiguration,
@@ -47,6 +61,7 @@ import {
   updateDirectPathToFilter,
 } from './dashboardFilters';
 import { SET_FILTER_CONFIG_COMPLETE } from './nativeFilters';
+import getOverwriteItems from '../util/getOverwriteItems';
 
 export const SET_UNSAVED_CHANGES = 'SET_UNSAVED_CHANGES';
 export function setUnsavedChanges(hasUnsavedChanges) {
@@ -180,6 +195,14 @@ export function saveDashboardRequestSuccess(lastModifiedTime) {
   };
 }
 
+export const SET_OVERRIDE_CONFIRM = 'SET_OVERRIDE_CONFIRM';
+export function setOverrideConfirm(overwriteConfirmMetadata) {
+  return {
+    type: SET_OVERRIDE_CONFIRM,
+    overwriteConfirmMetadata,
+  };
+}
+
 export function saveDashboardRequest(data, id, saveType) {
   return (dispatch, getState) => {
     dispatch({ type: UPDATE_COMPONENTS_PARENTS_LIST });
@@ -226,8 +249,10 @@ export function saveDashboardRequest(data, id, saveType) {
         ...data.metadata,
         color_namespace: data.metadata?.color_namespace || undefined,
         color_scheme: data.metadata?.color_scheme || '',
+        color_scheme_domain: data.metadata?.color_scheme_domain || [],
         expanded_slices: data.metadata?.expanded_slices || {},
         label_colors: data.metadata?.label_colors || {},
+        shared_label_colors: data.metadata?.shared_label_colors || {},
         refresh_frequency: data.metadata?.refresh_frequency || 0,
         timed_refresh_immune_slices:
           data.metadata?.timed_refresh_immune_slices || [],
@@ -273,7 +298,7 @@ export function saveDashboardRequest(data, id, saveType) {
     const onUpdateSuccess = response => {
       const updatedDashboard = response.json.result;
       const lastModifiedTime = response.json.last_modified_time;
-      // synching with the backend transformations of the metadata
+      // syncing with the backend transformations of the metadata
       if (updatedDashboard.json_metadata) {
         const metadata = JSON.parse(updatedDashboard.json_metadata);
         dispatch(
@@ -305,12 +330,13 @@ export function saveDashboardRequest(data, id, saveType) {
       );
 
       dispatch(addSuccessToast(t('This dashboard was saved successfully.')));
+      dispatch(setOverrideConfirm(undefined));
       return response;
     };
 
     const onError = async response => {
       const { error, message } = await getClientErrorObject(response);
-      let errorText = t('Sorry, an unknown error occured');
+      let errorText = t('Sorry, an unknown error occurred');
 
       if (error) {
         errorText = t(
@@ -324,34 +350,85 @@ export function saveDashboardRequest(data, id, saveType) {
       dispatch(addDangerToast(errorText));
     };
 
-    if (saveType === SAVE_TYPE_OVERWRITE) {
+    if (
+      [SAVE_TYPE_OVERWRITE, SAVE_TYPE_OVERWRITE_CONFIRMED].includes(saveType)
+    ) {
       let chartConfiguration = {};
       if (isFeatureEnabled(FeatureFlag.DASHBOARD_CROSS_FILTERS)) {
         chartConfiguration = handleChartConfiguration();
       }
-      const updatedDashboard = {
-        certified_by: cleanedData.certified_by,
-        certification_details: cleanedData.certification_details,
-        css: cleanedData.css,
-        dashboard_title: cleanedData.dashboard_title,
-        slug: cleanedData.slug,
-        owners: cleanedData.owners,
-        roles: cleanedData.roles,
-        json_metadata: safeStringify({
-          ...(cleanedData?.metadata || {}),
-          default_filters: safeStringify(serializedFilters),
-          filter_scopes: serializedFilterScopes,
-          chart_configuration: chartConfiguration,
-        }),
-      };
+      const updatedDashboard =
+        saveType === SAVE_TYPE_OVERWRITE_CONFIRMED
+          ? data
+          : {
+              certified_by: cleanedData.certified_by,
+              certification_details: cleanedData.certification_details,
+              css: cleanedData.css,
+              dashboard_title: cleanedData.dashboard_title,
+              slug: cleanedData.slug,
+              owners: cleanedData.owners,
+              roles: cleanedData.roles,
+              json_metadata: safeStringify({
+                ...(cleanedData?.metadata || {}),
+                default_filters: safeStringify(serializedFilters),
+                filter_scopes: serializedFilterScopes,
+                chart_configuration: chartConfiguration,
+              }),
+            };
 
-      return SupersetClient.put({
-        endpoint: `/api/v1/dashboard/${id}`,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedDashboard),
+      const updateDashboard = () =>
+        SupersetClient.put({
+          endpoint: `/api/v1/dashboard/${id}`,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedDashboard),
+        })
+          .then(response => onUpdateSuccess(response))
+          .catch(response => onError(response));
+      return new Promise((resolve, reject) => {
+        if (
+          !isFeatureEnabled(FeatureFlag.CONFIRM_DASHBOARD_DIFF) ||
+          saveType === SAVE_TYPE_OVERWRITE_CONFIRMED
+        ) {
+          // skip overwrite precheck
+          resolve();
+          return;
+        }
+
+        // precheck for overwrite items
+        SupersetClient.get({
+          endpoint: `/api/v1/dashboard/${id}`,
+        }).then(response => {
+          const dashboard = response.json.result;
+          const overwriteConfirmItems = getOverwriteItems(
+            dashboard,
+            updatedDashboard,
+          );
+          if (overwriteConfirmItems.length > 0) {
+            dispatch(
+              setOverrideConfirm({
+                updatedAt: dashboard.changed_on,
+                updatedBy: dashboard.changed_by_name,
+                overwriteConfirmItems,
+                dashboardId: id,
+                data: updatedDashboard,
+              }),
+            );
+            return reject(overwriteConfirmItems);
+          }
+          return resolve();
+        });
       })
-        .then(response => onUpdateSuccess(response))
-        .catch(response => onError(response));
+        .then(updateDashboard)
+        .catch(overwriteConfirmItems => {
+          const errorText = t('Please confirm the overwrite values.');
+          dispatch(
+            logEvent(LOG_ACTIONS_CONFIRM_OVERWRITE_DASHBOARD_METADATA, {
+              dashboard_id: id,
+              items: overwriteConfirmItems,
+            }),
+          );
+          dispatch(addDangerToast(errorText));
+        });
     }
     // changing the data as the endpoint requires
     const copyData = { ...cleanedData };
@@ -418,6 +495,16 @@ const refreshCharts = (chartList, force, interval, dashboardId, dispatch) =>
     resolve();
   });
 
+export const ON_FILTERS_REFRESH = 'ON_FILTERS_REFRESH';
+export function onFiltersRefresh() {
+  return { type: ON_FILTERS_REFRESH };
+}
+
+export const ON_FILTERS_REFRESH_SUCCESS = 'ON_FILTERS_REFRESH_SUCCESS';
+export function onFiltersRefreshSuccess() {
+  return { type: ON_FILTERS_REFRESH_SUCCESS };
+}
+
 export const ON_REFRESH_SUCCESS = 'ON_REFRESH_SUCCESS';
 export function onRefreshSuccess() {
   return { type: ON_REFRESH_SUCCESS };
@@ -432,8 +519,11 @@ export function onRefresh(
 ) {
   return dispatch => {
     dispatch({ type: ON_REFRESH });
-    refreshCharts(chartList, force, interval, dashboardId, dispatch).then(() =>
-      dispatch({ type: ON_REFRESH_SUCCESS }),
+    refreshCharts(chartList, force, interval, dashboardId, dispatch).then(
+      () => {
+        dispatch(onRefreshSuccess());
+        dispatch(onFiltersRefresh());
+      },
     );
   };
 }
@@ -461,8 +551,7 @@ export function addSliceToDashboard(id, component) {
     const newChart = {
       ...initChart,
       id,
-      form_data,
-      formData: applyDefaultFormData(form_data),
+      form_data: applyDefaultFormData(form_data),
     };
 
     return Promise.all([
@@ -487,6 +576,7 @@ export function removeSliceFromDashboard(id) {
 
     dispatch(removeSlice(id));
     dispatch(removeChart(id));
+    getSharedLabelColor().removeSlice(id);
   };
 }
 
@@ -546,5 +636,13 @@ export function maxUndoHistoryToast() {
         `You have used all ${historyLength} undo slots and will not be able to fully undo subsequent actions. You may save your current state to reset the history.`,
       ),
     );
+  };
+}
+
+export const SET_DATASETS_STATUS = 'SET_DATASETS_STATUS';
+export function setDatasetsStatus(status) {
+  return {
+    type: SET_DATASETS_STATUS,
+    status,
   };
 }

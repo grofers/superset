@@ -17,7 +17,6 @@
 from . import (
     access_requests,
     alerts,
-    annotations,
     api,
     base,
     core,
@@ -27,7 +26,6 @@ from . import (
     dynamic_plugins,
     health,
     redirects,
-    schedules,
     sql_lab,
     tags,
 )

@@ -21,7 +21,7 @@ import logging
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 import simplejson
-from flask import current_app, g, make_response, request, Response
+from flask import current_app, make_response, request, Response
 from flask_appbuilder.api import expose, protect
 from flask_babel import gettext as _
 from marshmallow import ValidationError
@@ -44,7 +44,7 @@ from superset.connectors.base.models import BaseDatasource
 from superset.exceptions import QueryObjectValidationError
 from superset.extensions import event_logger
 from superset.utils.async_query_manager import AsyncQueryTokenException
-from superset.utils.core import create_zip, json_int_dttm_ser
+from superset.utils.core import create_zip, get_user_id, json_int_dttm_ser
 from superset.views.base import CsvResponse, generate_download_headers
 from superset.views.base_api import statsd_metrics
 
@@ -89,6 +89,11 @@ class ChartDataRestApi(ChartRestApi):
             description: The type in which the data should be returned
             schema:
               type: string
+          - in: query
+            name: force
+            description: Should the queries be forced to load from the source
+            schema:
+                type: boolean
           responses:
             200:
               description: Query result
@@ -130,6 +135,7 @@ class ChartDataRestApi(ChartRestApi):
             "format", ChartDataResultFormat.JSON
         )
         json_body["result_type"] = request.args.get("type", ChartDataResultType.FULL)
+        json_body["force"] = request.args.get("force")
 
         try:
             query_context = self._create_query_context_from_form(json_body)
@@ -306,16 +312,13 @@ class ChartDataRestApi(ChartRestApi):
         Execute command as an async query.
         """
         # First, look for the chart query results in the cache.
+        result = None
         try:
             result = command.run(force_cached=True)
+            if result is not None:
+                return self._send_chart_response(result)
         except ChartDataCacheLoadError:
-            result = None  # type: ignore
-
-        already_cached_result = result is not None
-
-        # If the chart query has already been cached, return it immediately.
-        if already_cached_result:
-            return self._send_chart_response(result)
+            pass
 
         # Otherwise, kick off a background job to run the chart query.
         # Clients will either poll or be notified of query completion,
@@ -327,7 +330,7 @@ class ChartDataRestApi(ChartRestApi):
         except AsyncQueryTokenException:
             return self.response_401()
 
-        result = async_command.run(form_data, g.user.get_id())
+        result = async_command.run(form_data, get_user_id())
         return self.response(202, **result)
 
     def _send_chart_response(

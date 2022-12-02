@@ -16,13 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { QueryFormColumn, QueryFormData } from '@superset-ui/core';
 import {
-  ChartDataResponseResult,
-  ChartProps,
-  QueryFormColumn,
-  QueryFormData,
-} from '@superset-ui/core';
-import { DEFAULT_LEGEND_FORM_DATA, EChartTransformedProps } from '../types';
+  BaseChartProps,
+  BaseTransformedProps,
+  ContextMenuTransformedProps,
+  CrossFilterTransformedProps,
+} from '../types';
+import { DEFAULT_LEGEND_FORM_DATA } from '../constants';
 
 export type AxisTickLineStyle = {
   width: number;
@@ -32,10 +33,10 @@ export type AxisTickLineStyle = {
 export type EchartsGaugeFormData = QueryFormData & {
   colorScheme?: string;
   groupby: QueryFormColumn[];
-  metric?: object;
+  metric?: string;
   rowLimit: number;
-  minVal: number;
-  maxVal: number;
+  minVal: number | null;
+  maxVal: number | null;
   fontSize: number;
   numberFormat: string;
   animation: boolean;
@@ -58,8 +59,8 @@ export const DEFAULT_FORM_DATA: Partial<EchartsGaugeFormData> = {
   ...DEFAULT_LEGEND_FORM_DATA,
   groupby: [],
   rowLimit: 10,
-  minVal: 0,
-  maxVal: 100,
+  minVal: null,
+  maxVal: null,
   fontSize: 15,
   numberFormat: 'SMART_NUMBER',
   animation: true,
@@ -78,10 +79,12 @@ export const DEFAULT_FORM_DATA: Partial<EchartsGaugeFormData> = {
   emitFilter: false,
 };
 
-export interface EchartsGaugeChartProps extends ChartProps {
+export interface EchartsGaugeChartProps
+  extends BaseChartProps<EchartsGaugeFormData> {
   formData: EchartsGaugeFormData;
-  queriesData: ChartDataResponseResult[];
 }
 
 export type GaugeChartTransformedProps =
-  EChartTransformedProps<EchartsGaugeFormData>;
+  BaseTransformedProps<EchartsGaugeFormData> &
+    ContextMenuTransformedProps &
+    CrossFilterTransformedProps;

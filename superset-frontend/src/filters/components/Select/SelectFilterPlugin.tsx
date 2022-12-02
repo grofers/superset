@@ -17,6 +17,7 @@
  * under the License.
  */
 /* eslint-disable no-param-reassign */
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AppSection,
   DataMask,
@@ -31,14 +32,14 @@ import {
   tn,
 } from '@superset-ui/core';
 import { LabeledValue as AntdLabeledValue } from 'antd/lib/select';
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { Select } from 'src/components';
 import debounce from 'lodash/debounce';
-import { SLOW_DEBOUNCE } from 'src/constants';
 import { useImmerReducer } from 'use-immer';
-import { propertyComparator } from 'src/components/Select/Select';
+import { Select } from 'src/components';
+import { SLOW_DEBOUNCE } from 'src/constants';
+import { propertyComparator } from 'src/components/Select/utils';
+import { FilterBarOrientation } from 'src/dashboard/types';
 import { PluginFilterSelectProps, SelectValue } from './types';
-import { StyledFormItem, FilterPluginStyle, StatusMessage } from '../common';
+import { FilterPluginStyle, StatusMessage, StyledFormItem } from '../common';
 import { getDataRecordFormatter, getSelectExtraFormData } from '../../utils';
 
 type DataMaskAction =
@@ -84,16 +85,18 @@ export default function PluginFilterSelect(props: PluginFilterSelectProps) {
     setDataMask,
     setFocusedFilter,
     unsetFocusedFilter,
+    setFilterActive,
     appSection,
     showOverflow,
     parentRef,
+    inputRef,
+    filterBarOrientation,
   } = props;
   const {
     enableEmptyFilter,
     multiSelect,
     showSearch,
     inverseSelection,
-    inputRef,
     defaultToFirstItem,
     searchAllOptions,
   } = formData;
@@ -208,7 +211,8 @@ export default function PluginFilterSelect(props: PluginFilterSelectProps) {
 
   const handleChange = useCallback(
     (value?: SelectValue | number | string) => {
-      const values = ensureIsArray(value);
+      const values = value === null ? [null] : ensureIsArray(value);
+
       if (values.length === 0) {
         updateDataMask(null);
       } else {
@@ -226,7 +230,7 @@ export default function PluginFilterSelect(props: PluginFilterSelectProps) {
         : null;
       // firstItem[0] !== undefined for a case when groupby changed but new data still not fetched
       // TODO: still need repopulate default value in config modal when column changed
-      if (firstItem && firstItem[0] !== undefined) {
+      if (firstItem?.[0] !== undefined) {
         updateDataMask(firstItem);
       }
     } else if (isDisabled) {
@@ -304,7 +308,10 @@ export default function PluginFilterSelect(props: PluginFilterSelectProps) {
           value={filterState.value || []}
           disabled={isDisabled}
           getPopupContainer={
-            showOverflow ? () => parentRef?.current : undefined
+            showOverflow
+              ? () => (parentRef?.current as HTMLElement) || document.body
+              : (trigger: HTMLElement) =>
+                  (trigger?.parentNode as HTMLElement) || document.body
           }
           showSearch={showSearch}
           mode={multiSelect ? 'multiple' : 'single'}
@@ -318,11 +325,15 @@ export default function PluginFilterSelect(props: PluginFilterSelectProps) {
           onChange={handleChange}
           ref={inputRef}
           loading={isRefreshing}
-          maxTagCount={5}
+          oneLine={filterBarOrientation === FilterBarOrientation.HORIZONTAL}
           invertSelection={inverseSelection}
           // @ts-ignore
           options={options}
           sortComparator={sortComparator}
+          maxTagPlaceholder={(val: AntdLabeledValue[]) => (
+            <span>+{val.length}</span>
+          )}
+          onDropdownVisibleChange={setFilterActive}
         />
       </StyledFormItem>
     </FilterPluginStyle>
