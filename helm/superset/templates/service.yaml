@@ -31,10 +31,10 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
+    - port: {{ .Values.service.servicePort }}
+      targetPort: 80
       protocol: TCP
-      name: http
+      name: https
   selector:
     app: {{ template "superset.name" . }}
     release: {{ .Release.Name }}
