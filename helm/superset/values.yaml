@@ -190,6 +190,7 @@ initImage:
 service:
   type: ClusterIP
   port: 8088
+  targetPort: 8088
   annotations: {}
     # cloud.google.com/load-balancer-type: "Internal"
   loadBalancerIP: ~
@@ -258,6 +259,7 @@ supersetNode:
     redis_host: '{{ .Release.Name }}-redis-headless'
     # redis_password: superset
     redis_port: "6379"
+    redis_db: "0"
     # You need to change below configuration incase bringing own PostgresSQL instance and also set postgresql.enabled:false
     db_host: '{{ .Release.Name }}-postgresql'
     db_port: "5432"

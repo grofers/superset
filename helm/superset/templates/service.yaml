@@ -34,12 +34,16 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: http
+      targetPort: {{ .Values.service.targetPort }}
       protocol: TCP
+<<<<<<< HEAD
       name: http
       {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePort.http)) }}
       nodePort: {{ .Values.service.nodePort.http }}
       {{- end }}
+=======
+      name: https
+>>>>>>> 9b2868b6a (Add target port)
   selector:
     app: {{ template "superset.name" . }}
     release: {{ .Release.Name }}
