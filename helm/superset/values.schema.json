@@ -202,12 +202,7 @@
                 }
             },
             "required": [
-                "enabled",
-                "annotations",
-                "path",
-                "pathType",
-                "hosts",
-                "tls"
+                "enabled"
             ]
         },
         "resources": {
@@ -473,11 +468,7 @@
                 }
             },
             "required": [
-                "enabled",
-                "service",
-                "postgresqlUsername",
-                "postgresqlDatabase",
-                "persistence"
+                "enabled"
             ]
         },
         "redis": {
@@ -554,9 +545,7 @@
                 }
             },
             "required": [
-                "enabled",
-                "architecture",
-                "master"
+                "enabled"
             ]
         },
         "nodeSelector": {
@@ -570,7 +559,6 @@
         }
     },
     "required": [
-        "replicaCount",
         "runAsUser",
         "serviceAccount",
         "bootstrapScript",
@@ -593,7 +581,6 @@
         "service",
         "ingress",
         "resources",
-        "hostAliases",
         "supersetNode",
         "supersetWorker",
         "supersetCeleryBeat",
