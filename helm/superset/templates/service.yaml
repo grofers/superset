@@ -37,9 +37,6 @@ spec:
       targetPort: 80
       protocol: TCP
       name: https
-      {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePort.http)) }}
-      nodePort: {{ .Values.service.nodePort.http }}
-      {{- end }}
   selector:
     app: {{ template "superset.name" . }}
     release: {{ .Release.Name }}
