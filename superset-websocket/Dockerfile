@@ -28,12 +28,16 @@ ENV NODE_ENV=production
 WORKDIR /home/superset-websocket
 
 COPY --from=build /home/superset-websocket/dist ./dist
+COPY --from=tianon/gosu /gosu /usr/local/bin/
 COPY package*.json ./
+
 
 # Only install production dependencies
 RUN npm ci --omit=dev
+RUN apk add --no-cache jq bash
 
-# Don't run as root!
-USER node
+COPY generate_config.sh ./
+RUN chmod +x generate_config.sh
 
-CMD [ "npm", "start" ]
+# Use ENTRYPOINT to ensure the script runs and then npm start
+ENTRYPOINT ["/bin/sh", "-c", "/home/superset-websocket/generate_config.sh"]
