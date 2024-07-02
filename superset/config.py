@@ -1396,7 +1396,7 @@ TEST_DATABASE_CONNECTION_TIMEOUT = timedelta(seconds=30)
 CONTENT_SECURITY_POLICY_WARNING = True
 
 # Do you want Talisman enabled?
-TALISMAN_ENABLED = utils.cast_to_boolean(os.environ.get("TALISMAN_ENABLED", True))
+TALISMAN_ENABLED = utils.cast_to_boolean(os.environ.get("TALISMAN_ENABLED", False))
 
 # If you want Talisman, how do you want it configured??
 TALISMAN_CONFIG = {
@@ -1415,6 +1415,7 @@ TALISMAN_CONFIG = {
             "'self'",
             "https://api.mapbox.com",
             "https://events.mapbox.com",
+            "ws://127.0.0.1:8080"
         ],
         "object-src": "'none'",
         "style-src": [
@@ -1444,6 +1445,7 @@ TALISMAN_DEV_CONFIG = {
             "'self'",
             "https://api.mapbox.com",
             "https://events.mapbox.com",
+            "ws://127.0.0.1:8080/"
         ],
         "object-src": "'none'",
         "style-src": [
