@@ -143,7 +143,7 @@ FEATURE_FLAGS = {"ALERT_REPORTS": True,
                  "USE_ANALAGOUS_COLORS": True,
                  "DATAPANEL_CLOSED_BY_DEFAULT": True,
                  "DASHBOARD_VIRTUALIZATION": True,
-                 "GLOBAL_ASYNC_QUERIES": True,
+                 "GLOBAL_ASYNC_QUERIES": False,
                  "DRILL_TO_DETAIL": True
                  }
 
