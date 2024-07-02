@@ -59,7 +59,14 @@ ENV LANG=C.UTF-8 \
     FLASK_APP="superset.app:create_app()" \
     PYTHONPATH="/app/pythonpath" \
     SUPERSET_HOME="/app/superset_home" \
-    SUPERSET_PORT=8088
+    SUPERSET_PORT=8088 \
+    PIP_DEFAULT_TIMEOUT=100 \
+    # Allow statements and log messages to immediately appear
+    PYTHONUNBUFFERED=1 \
+    # disable a pip version check to reduce run-time & log-spam
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # cache is useless in docker image, so disable to reduce image size
+    PIP_NO_CACHE_DIR=1
 
 RUN mkdir -p ${PYTHONPATH} superset/static superset-frontend apache_superset.egg-info requirements \
     && useradd --user-group -d ${SUPERSET_HOME} -m --no-log-init --shell /bin/bash superset \
@@ -106,8 +113,8 @@ CMD ["/usr/bin/run-server.sh"]
 # Dev image...
 ######################################################################
 FROM lean AS dev
-ARG GECKODRIVER_VERSION=v0.33.0 \
-    FIREFOX_VERSION=117.0.1
+ARG GECKODRIVER_VERSION=v0.33.0
+ARG FIREFOX_VERSION=117.0.1
 
 USER root
 
@@ -131,6 +138,18 @@ RUN --mount=type=bind,target=./requirements/base.txt,src=./requirements/base.txt
     --mount=type=bind,target=./requirements/docker.txt,src=./requirements/docker.txt \
     --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements/docker.txt
+# custom packages
+
+COPY --chown=root custom_requirements.txt requirements/requirements_custom.txt
+COPY /docker/install_dep.sh /app/docker/
+RUN pip install --no-cache -r requirements/requirements_custom.txt
+RUN chmod +x /app/docker/install_dep.sh
+RUN /app/docker/install_dep.sh
+
+COPY --chown=superset ./superset_config.py /app/
+COPY --chown=superset ./docker/docker-bootstrap.sh /app/docker/
+COPY --chown=superset ./docker/docker-init.sh /app/docker/
+
 
 USER superset
 ######################################################################
