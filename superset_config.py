@@ -124,9 +124,10 @@ class CeleryConfig(object):
 
     # Separate queues to control workers
     task_routes = {
-        "cache_dashboard_thumbnail": {"queue": "celery-priority"},
+        "cache_dashboard_thumbnail": {"queue": "celery-low-priority"},
         "cache_chart_thumbnail": {"queue": "celery-priority"},
-        "cache-warmup": {"queue": "celery-priority"}
+        "cache-warmup": {"queue": "celery-priority"},
+        "cache_dashboard_screenshot": {"queue": "celery-priority"}
     }
 
 
@@ -143,7 +144,7 @@ FEATURE_FLAGS = {"ALERT_REPORTS": True,
                  "USE_ANALAGOUS_COLORS": True,
                  "DATAPANEL_CLOSED_BY_DEFAULT": True,
                  "DASHBOARD_VIRTUALIZATION": True,
-                 "GLOBAL_ASYNC_QUERIES": False,
+                 "GLOBAL_ASYNC_QUERIES": True,
                  "DRILL_TO_DETAIL": True
                  }
 
@@ -248,15 +249,11 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
     user = security_manager.find_user(username=username)
     logger.info(f"Passed username: {username}, user: {user}")
     if user and user.email and backend_name in tuple(
-            get_env_variable("DB_MUTATOR_WHITELIST", "presto,trino").split(",")):
-        logger.info(f"Email: {user.email}")
-        try:
-            uri.username = user.email
-        except:
-            logger.info("Immutable Object")
-        uri = uri.update_query_dict({'username': user.email})
-        logger.info(uri)
-        logger.info(f"Passed un: {username}")
+             get_env_variable("DB_MUTATOR_WHITELIST", "presto,trino").split(",")):
+    #     logger.info(f"Email: {user.email}")
+    #     uri = uri.update_query_dict({'username': user.email})
+    #     logger.info(uri)
+    #     logger.info(f"Passed un: {username}")
 
         if get_env_variable("FORCE_PARAM_OVERRIDING","false").lower() == "true":
             try:
