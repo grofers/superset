@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import os
 import builtins
 import json
 import logging
@@ -28,7 +29,7 @@ from contextlib import closing, contextmanager, nullcontext, suppress
 from copy import deepcopy
 from datetime import datetime
 from functools import lru_cache
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, Optional
 
 import numpy
 import pandas as pd
@@ -88,6 +89,19 @@ if TYPE_CHECKING:
     from superset.models.sql_lab import Query
 
 DB_CONNECTION_MUTATOR = config["DB_CONNECTION_MUTATOR"]
+
+def get_env_variable(var_name: str, default: Optional[str] = None) -> str:
+    """Get the environment variable or raise exception."""
+    try:
+        return os.environ[var_name]
+    except KeyError:
+        if default is not None:
+            return default
+        else:
+            error_msg = "The environment variable {} was missing, abort...".format(
+                var_name
+            )
+            raise EnvironmentError(error_msg)
 
 
 class KeyValue(Model):  # pylint: disable=too-few-public-methods
@@ -461,6 +475,11 @@ class Database(
         )
 
         effective_username = self.get_effective_user(sqlalchemy_url)
+        if effective_username and sqlalchemy_url.get_backend_name() in tuple(
+            get_env_variable("DB_MUTATOR_WHITELIST", "presto,trino").split(",")):
+            user = security_manager.find_user(username=effective_username)
+            if user and user.email:
+                effective_username = user.email
         # If using MySQL or Presto for example, will set url.username
         # If using Hive, will not do anything yet since that relies on a
         # configuration parameter instead.
