@@ -98,8 +98,25 @@ class CacheRestApi(BaseSupersetModelRestApi):
             .all()
         )
         cache_keys = [c.cache_key for c in cache_key_objs]
+        if datasources.get("cache_type", None) == 'thumbnail_cache':
+            cache_keys.extend(datasource_uids)
+            cache_key_objs.extend(datasource_uids)
+        all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
         if cache_key_objs:
-            all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
+            cache_type = datasources.get("cache_type", None)
+            if cache_type == 'cache':
+                c_all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
+            elif cache_type == 'data_cache':
+                c_all_keys_deleted = cache_manager.data_cache.delete_many(*cache_keys)
+            elif cache_type == 'thumbnail_cache':
+                c_all_keys_deleted = cache_manager.thumbnail_cache.delete_many(*cache_keys)
+            elif cache_type == 'filter_state_cache':
+                c_all_keys_deleted = cache_manager.filter_state_cache.delete_many(*cache_keys)
+            elif cache_type == 'explore_form_data_cache':
+                c_all_keys_deleted = cache_manager.explore_form_data_cache.delete_many(*cache_keys)
+            else:
+                c_all_keys_deleted = None
+            logger.info("Keys Deleted %s", c_all_keys_deleted)
 
             if not all_keys_deleted:
                 # expected behavior as keys may expire and cache is not a

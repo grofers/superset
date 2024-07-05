@@ -1,7 +1,7 @@
 from typing import Any
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from cachelib.file import FileSystemCache
@@ -108,6 +108,8 @@ if SUPERSET_CACHE_S3_BUCKET == "" or SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFI
 else:
     RESULTS_BACKEND = S3Cache(SUPERSET_CACHE_S3_BUCKET, SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFIX)
 
+SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT = int(
+    timedelta(seconds=int(get_env_variable("SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT", 150))).total_seconds() * 1000)
 
 class CeleryConfig(object):
     broker_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_CELERY_DB}"
@@ -125,7 +127,7 @@ class CeleryConfig(object):
     # Separate queues to control workers
     task_routes = {
         "cache_dashboard_thumbnail": {"queue": "celery-low-priority"},
-        "cache_chart_thumbnail": {"queue": "celery-priority"},
+        "cache_chart_thumbnail": {"queue": "celery-low-priority"},
         "cache-warmup": {"queue": "celery-priority"},
         "cache_dashboard_screenshot": {"queue": "celery-priority"}
     }
@@ -261,13 +263,13 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
             except Exception as e:
                 logger.info(f"Something went wrong while overriding {e}")
 
-        if user.email in get_env_variable("PRIORITY_CLUSTER_EMAIL", "jumbo@zomato.com"):
-            uri = uri.update_query_dict({'host': get_env_variable("PRIORITY_CLUSTER", "")})
-            logger.info(uri)
-        logger.info(source)
-        if source == 1 and get_env_variable("FORCE_ROUTING_DASHBOARDS", "true").lower() == "true":
-            uri = uri.update_query_dict({'host': get_env_variable("REPORTING_CLUSTER", "")})
-            logger.info(uri)
+    if username in get_env_variable("PRIORITY_CLUSTER_EMAIL", "jumbo@zomato.com"):
+        uri = uri.update_query_dict({'host': get_env_variable("PRIORITY_CLUSTER", "")})
+        logger.info(uri)
+    logger.info(source)
+    if source == 1 and get_env_variable("FORCE_ROUTING_DASHBOARDS", "true").lower() == "true":
+        uri = uri.update_query_dict({'host': get_env_variable("REPORTING_CLUSTER", "")})
+        logger.info(uri)
 
     return uri, params
 

@@ -45,9 +45,12 @@ class Datasource(Schema):
 class CacheInvalidationRequestSchema(Schema):
     datasource_uids = fields.List(
         fields.String(),
-        metadata={"description": datasource_uid_description},
+        description=datasource_uid_description,
+    )
+    cache_type = fields.String(
+        description="cache_type",
     )
     datasources = fields.List(
         fields.Nested(Datasource),
-        metadata={"description": "A list of the data source and database names"},
+        description="A list of the data source and database names",
     )

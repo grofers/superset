@@ -655,6 +655,7 @@ class QueryContextProcessor:
         ]
         return_value = {"queries": query_results}
 
+
         if cache_query_context:
             cache_key = self.cache_key()
             set_and_log_cache(
@@ -670,6 +671,7 @@ class QueryContextProcessor:
                     },
                 },
                 self.get_cache_timeout(),
+                self._query_context.datasource.uid or self._query_context.queries[0].datasource.uid,
             )
             return_value["cache_key"] = cache_key  # type: ignore
 
