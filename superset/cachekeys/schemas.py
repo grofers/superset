@@ -50,6 +50,10 @@ class CacheInvalidationRequestSchema(Schema):
     cache_type = fields.String(
         description="cache_type",
     )
+    cache_keys = fields.List(
+        fields.String(),
+        description="cache_keys",
+    )
     datasources = fields.List(
         fields.Nested(Datasource),
         description="A list of the data source and database names",

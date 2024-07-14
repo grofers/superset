@@ -101,8 +101,8 @@ def cache_dashboard_thumbnail(
             user=user,
             cache=thumbnail_cache,
             force=force,
+            window_size=window_size,
             thumb_size=thumb_size,
-            window_size=window_size
         )
 
 

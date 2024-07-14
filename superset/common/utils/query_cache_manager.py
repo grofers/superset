@@ -185,11 +185,11 @@ class QueryCacheManager:
                     exc_info=True,
                 )
             logger.debug("Serving from cache")
-
         if force_cached and not query_cache.is_loaded:
             logger.warning(
                 "force_cached (QueryContext): value not found for key %s", key
             )
+            # This closes the connection and gives 401 on all subsequent API Requests
             raise CacheLoadError("Error loading data from cache")
         return query_cache
 
