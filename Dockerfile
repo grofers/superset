@@ -127,6 +127,8 @@ RUN apt-get update -qq \
         libasound2 \
         libxtst6 \
         wget \
+        libdrm2 \
+        libgbm1 \
     # Install GeckoDriver WebDriver
     && wget -q https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz -O - | tar xfz - -C /usr/local/bin \
     # Install Firefox
@@ -141,10 +143,10 @@ RUN --mount=type=bind,target=./requirements/base.txt,src=./requirements/base.txt
 # custom packages
 
 COPY --chown=root custom_requirements.txt requirements/requirements_custom.txt
-COPY /docker/install_dep.sh /app/docker/
 RUN pip install --no-cache -r requirements/requirements_custom.txt
+
+COPY /docker/install_dep.sh /app/docker/
 RUN chmod +x /app/docker/install_dep.sh
-RUN /app/docker/install_dep.sh
 
 COPY --chown=superset ./superset_config.py /app/
 COPY --chown=superset ./docker/docker-bootstrap.sh /app/docker/
@@ -152,6 +154,7 @@ COPY --chown=superset ./docker/docker-init.sh /app/docker/
 
 
 USER superset
+RUN /app/docker/install_dep.sh
 ######################################################################
 # CI image...
 ######################################################################

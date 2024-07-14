@@ -155,6 +155,9 @@ class WebDriverPlaywright(WebDriverProxy):
             )
             self.auth(user, context)
             page = context.new_page()
+            # For Debugging any errors
+            # page.on("request", lambda request: print(">>", request.method, request.url))
+            # page.on("response", lambda response: print("<<", response.status, response.url))
             try:
                 page.goto(
                     url,
