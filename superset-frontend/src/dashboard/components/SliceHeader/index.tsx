@@ -52,6 +52,7 @@ type SliceHeaderProps = SliceHeaderControlsProps & {
   formData: object;
   width: number;
   height: number;
+  mergedPivotTables?: [];
 };
 
 const annotationsLoading = t('Annotation layers are still loading.');
@@ -162,6 +163,7 @@ const SliceHeader: FC<SliceHeaderProps> = ({
   formData,
   width,
   height,
+  mergedPivotTables = [],
 }) => {
   const SliceHeaderExtension = extensionsRegistry.get('dashboard.slice.header');
   const uiConfig = useUiConfig();
@@ -290,6 +292,7 @@ const SliceHeader: FC<SliceHeaderProps> = ({
                 formData={formData}
                 exploreUrl={exploreUrl}
                 crossFiltersEnabled={isCrossFiltersEnabled}
+                mergedPivotTables={mergedPivotTables}
               />
             )}
           </>

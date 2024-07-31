@@ -146,6 +146,7 @@ class DashboardJSONMetadataSchema(Schema):
     remote_id = fields.Integer()
     filter_bar_orientation = fields.Str(allow_none=True)
     native_filter_migration = fields.Dict()
+    merge_charts = fields.List(fields.List(fields.Str(allow_none=True)))
 
     @pre_load
     def remove_show_native_filters(  # pylint: disable=unused-argument

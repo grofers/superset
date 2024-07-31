@@ -563,3 +563,13 @@ export type ControlFormItemSpec<T extends ControlType = ControlType> = {
                 defaultValue?: Currency;
               }
             : {});
+
+export type PrefixSuffixFormatters = {
+  column: string;
+  addSymbols: string;
+}[];
+
+export type ColD3Formatting = {
+  column: string;
+  d3ValueFormatting: string;
+}[];

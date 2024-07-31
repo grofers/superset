@@ -71,6 +71,9 @@ const ConditionalFormattingControl = ({
   columnOptions,
   verboseMap,
   removeIrrelevantConditions,
+  hasOperator = true,
+  name,
+  isD3ValueFormatting,
   ...props
 }: ConditionalFormattingControlProps) => {
   const theme = useTheme();
@@ -120,8 +123,21 @@ const ConditionalFormattingControl = ({
     targetValue,
     targetValueLeft,
     targetValueRight,
+    addSymbols,
+    d3ValueFormatting,
   }: ConditionalFormattingConfig) => {
     const columnName = (column && verboseMap?.[column]) ?? column;
+
+    if (d3ValueFormatting) {
+      return `${columnName} ${d3ValueFormatting}`;
+    }
+
+    if (addSymbols) {
+      return name.slice(0, 6) === 'prefix'
+        ? `${addSymbols} ${columnName}`
+        : `${columnName} ${addSymbols}`;
+    }
+
     switch (operator) {
       case Comparator.None:
         return `${columnName}`;
@@ -135,6 +151,22 @@ const ConditionalFormattingControl = ({
         return `${targetValueLeft} ${Comparator.LessThan} ${columnName} ${Comparator.LessOrEqual} ${targetValueRight}`;
       default:
         return `${columnName} ${operator} ${targetValue}`;
+    }
+  };
+
+  const getTitle = () => {
+    switch (name) {
+      case 'prefix_formatting':
+        return t('Add new prefix');
+
+      case 'suffix_formatting':
+        return t('Add new suffix');
+
+      case 'col_value_formatting':
+        return t('Add new formatter');
+
+      default:
+        return t('Add new color formatter');
     }
   };
 
@@ -155,6 +187,8 @@ const ConditionalFormattingControl = ({
                 onEdit(newConfig, index)
               }
               destroyTooltipOnHide
+              hasOperator={hasOperator}
+              isD3ValueFormatting={isD3ValueFormatting}
             >
               <OptionControlContainer withCaret>
                 <Label>{createLabel(config)}</Label>
@@ -166,14 +200,16 @@ const ConditionalFormattingControl = ({
           </FormatterContainer>
         ))}
         <FormattingPopover
-          title={t('Add new formatter')}
+          title={getTitle()}
           columns={columnOptions}
           onChange={onSave}
           destroyTooltipOnHide
+          hasOperator={hasOperator}
+          isD3ValueFormatting={isD3ValueFormatting}
         >
           <AddControlLabel>
             <Icons.PlusSmall iconColor={theme.colors.grayscale.light1} />
-            {t('Add new color formatter')}
+            {getTitle()}
           </AddControlLabel>
         </FormattingPopover>
       </FormattersContainer>

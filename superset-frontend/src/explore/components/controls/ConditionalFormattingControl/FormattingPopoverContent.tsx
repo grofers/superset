@@ -20,7 +20,9 @@ import React from 'react';
 import { styled, SupersetTheme, t, useTheme } from '@superset-ui/core';
 import {
   Comparator,
+  D3_FORMAT_OPTIONS,
   MultipleValueComparators,
+  sharedControls,
 } from '@superset-ui/chart-controls';
 import { Form, FormItem, FormProps } from 'src/components/Form';
 import Select from 'src/components/Select/Select';
@@ -28,6 +30,7 @@ import { Col, Row } from 'src/components';
 import { InputNumber } from 'src/components/Input';
 import Button from 'src/components/Button';
 import { ConditionalFormattingConfig } from './types';
+import SelectControl from '../SelectControl';
 
 const FullWidthInputNumber = styled(InputNumber)`
   width: 100%;
@@ -45,6 +48,14 @@ const colorSchemeOptions = (theme: SupersetTheme) => [
   { value: theme.colors.success.dark1, label: t('success dark') },
   { value: theme.colors.alert.dark1, label: t('alert dark') },
   { value: theme.colors.error.dark1, label: t('error dark') },
+];
+
+// add translation... and change the symbols
+const formattingSymbolsOptions = [
+  { value: 'a', label: t('a') },
+  { value: 'b', label: t('b') },
+  { value: 'c', label: t('c') },
+  { value: 'd', label: t('d') },
 ];
 
 const operatorOptions = [
@@ -186,10 +197,14 @@ export const FormattingPopoverContent = ({
   config,
   onChange,
   columns = [],
+  hasOperator = true,
+  isD3ValueFormatting,
 }: {
   config?: ConditionalFormattingConfig;
   onChange: (config: ConditionalFormattingConfig) => void;
   columns: { label: string; value: string }[];
+  hasOperator: Boolean;
+  isD3ValueFormatting?: Boolean;
 }) => {
   const theme = useTheme();
   const colorScheme = colorSchemeOptions(theme);
@@ -211,20 +226,51 @@ export const FormattingPopoverContent = ({
             <Select ariaLabel={t('Select column')} options={columns} />
           </FormItem>
         </Col>
-        <Col span={12}>
-          <FormItem
-            name="colorScheme"
-            label={t('Color scheme')}
-            rules={rulesRequired}
-            initialValue={colorScheme[0].value}
-          >
-            <Select ariaLabel={t('Color scheme')} options={colorScheme} />
-          </FormItem>
-        </Col>
+        {hasOperator ? (
+          <Col span={12}>
+            <FormItem
+              name="colorScheme"
+              label={t('Color scheme')}
+              rules={rulesRequired}
+              initialValue={colorScheme[0].value}
+            >
+              <Select ariaLabel={t('Color scheme')} options={colorScheme} />
+            </FormItem>
+          </Col>
+        ) : isD3ValueFormatting ? (
+          <Col span={12}>
+            <FormItem
+              name="d3ValueFormatting"
+              rules={rulesRequired}
+              initialValue={D3_FORMAT_OPTIONS[0][0]}
+            >
+              <SelectControl
+                {...sharedControls.y_axis_format}
+                label={t('Value Format')}
+              />
+            </FormItem>
+          </Col>
+        ) : (
+          <Col span={12}>
+            <FormItem
+              name="addSymbols"
+              label="Add Symbols"
+              rules={rulesRequired}
+              initialValue={formattingSymbolsOptions[0].value}
+            >
+              <Select
+                ariaLabel="Add Symbols"
+                options={formattingSymbolsOptions}
+              />
+            </FormItem>
+          </Col>
+        )}
       </Row>
-      <FormItem noStyle shouldUpdate={shouldFormItemUpdate}>
-        {renderOperatorFields}
-      </FormItem>
+      {hasOperator ? (
+        <FormItem noStyle shouldUpdate={shouldFormItemUpdate}>
+          {renderOperatorFields}
+        </FormItem>
+      ) : null}
       <FormItem>
         <JustifyEnd>
           <Button htmlType="submit" buttonStyle="primary">

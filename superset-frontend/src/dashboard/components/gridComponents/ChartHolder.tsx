@@ -37,6 +37,7 @@ import {
   GRID_MIN_COLUMN_COUNT,
   GRID_MIN_ROW_UNITS,
 } from 'src/dashboard/util/constants';
+import { isEmpty } from 'lodash';
 
 export const CHART_MARGIN = 32;
 
@@ -108,6 +109,11 @@ const ChartHolder: React.FC<ChartHolderProps> = ({
   const dashboardState = useSelector(
     (state: RootState) => state.dashboardState,
   );
+  const dashboardLayout = useSelector(
+    (state: RootState) => state.dashboardLayout,
+  );
+  const { present: { mergedPivotTables = [] } = {} } = dashboardLayout || {};
+
   const [extraControls, setExtraControls] = useState<Record<string, unknown>>(
     {},
   );
@@ -242,6 +248,25 @@ const ChartHolder: React.FC<ChartHolderProps> = ({
     }));
   }, []);
 
+  // making display as none but rendering the chart (charts present in the mergedPivotTables except 0th index of every array) for the computations
+  const processTables = () => {
+    if (id && !isEmpty(mergedPivotTables)) {
+      const flatMergedTables = (mergedPivotTables as []).flat();
+      let isChartOnFirstIndex = false;
+      (mergedPivotTables as []).forEach((table: []) => {
+        if (id === (table as string[])[0]) {
+          isChartOnFirstIndex = true;
+        }
+      });
+
+      if (!isChartOnFirstIndex && (flatMergedTables as string[]).includes(id))
+        return true;
+    }
+
+    return false;
+  };
+
+  // eslint-disable-next-line consistent-return
   return (
     <Draggable
       component={component}
@@ -252,6 +277,7 @@ const ChartHolder: React.FC<ChartHolderProps> = ({
       onDrop={handleComponentDrop}
       disableDragDrop={false}
       editMode={editMode}
+      style={processTables() ? { display: 'none' } : {}}
     >
       {({ dragSourceRef }) => (
         <ResizableContainer

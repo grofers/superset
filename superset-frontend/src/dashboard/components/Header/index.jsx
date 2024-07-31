@@ -464,6 +464,7 @@ class Header extends React.PureComponent {
       setRefreshFrequency,
       lastModifiedTime,
       logEvent,
+      charts,
     } = this.props;
 
     const userCanEdit =
@@ -693,6 +694,7 @@ class Header extends React.PureComponent {
             colorScheme={this.props.colorScheme}
             onSubmit={handleOnPropertiesChange}
             onlyApply
+            charts={charts}
           />
         )}
 

@@ -22,7 +22,7 @@ import { Input } from 'src/components/Input';
 import { FormItem } from 'src/components/Form';
 import jsonStringify from 'json-stringify-pretty-compact';
 import Button from 'src/components/Button';
-import { AntdForm, AsyncSelect, Col, Row } from 'src/components';
+import { AntdForm, AsyncSelect, Col, Row, Select } from 'src/components';
 import rison from 'rison';
 import {
   CategoricalColorNamespace,
@@ -51,6 +51,8 @@ import {
   OBJECT_TYPES,
 } from 'src/features/tags/tags';
 import { loadTags } from 'src/components/Tags/utils';
+import { useDispatch } from 'react-redux';
+import { mergePivotTables } from 'src/dashboard/actions/dashboardLayout';
 
 const StyledFormItem = styled(FormItem)`
   margin-bottom: 0;
@@ -72,6 +74,7 @@ type PropertiesModalProps = {
   addSuccessToast: (message: string) => void;
   addDangerToast: (message: string) => void;
   onlyApply?: boolean;
+  charts: Object;
 };
 
 type Roles = { id: number; name: string }[];
@@ -89,6 +92,26 @@ type DashboardInfo = {
   certificationDetails: string;
   isManagedExternally: boolean;
 };
+type Option = {
+  label: string;
+  value: string;
+};
+
+type LatestQueryFormData = {
+  viz_type: string[];
+};
+
+type ChartData = {
+  latestQueryFormData?: LatestQueryFormData;
+};
+
+type ChartsMap = {
+  [key: string]: ChartData;
+};
+
+type MergedTablesDataState = {
+  [key: string]: string;
+};
 
 const PropertiesModal = ({
   addSuccessToast,
@@ -101,6 +124,7 @@ const PropertiesModal = ({
   onlyApply = false,
   onSubmit = () => {},
   show = false,
+  charts = {},
 }: PropertiesModalProps) => {
   const [form] = AntdForm.useForm();
   const [isLoading, setIsLoading] = useState(false);
@@ -112,7 +136,37 @@ const PropertiesModal = ({
   const [roles, setRoles] = useState<Roles>([]);
   const saveLabel = onlyApply ? t('Apply') : t('Save');
   const [tags, setTags] = useState<TagType[]>([]);
+  const [mergedPivotTables, setMergedPivotTables] = useState<string[][]>([[]]);
   const categoricalSchemeRegistry = getCategoricalSchemeRegistry();
+
+  const dispatch = useDispatch();
+
+  const { position_data = {} } = currentDashboardInfo || {};
+
+  const tableIdOptions: MergedTablesDataState = Object.keys(position_data)
+    ?.map((objKey: string) => {
+      if (!objKey.startsWith('CHART')) return undefined;
+      const chartId = position_data[objKey]?.meta?.chartId as
+        | string
+        | undefined;
+      if (
+        chartId &&
+        !(charts as ChartsMap)[
+          chartId
+        ]?.latestQueryFormData?.viz_type?.includes('pivot_table')
+      ) {
+        return undefined;
+      }
+
+      return {
+        label: position_data?.[objKey]?.meta?.sliceName,
+        value: objKey,
+      } as Option;
+    })
+    .reduce((acc, option) => {
+      if (option?.label && option?.value) acc[option.label] = option.value;
+      return acc;
+    }, {} as MergedTablesDataState);
 
   const tagsAsSelectValues = useMemo(() => {
     const selectTags = tags.map(tag => ({
@@ -194,6 +248,11 @@ const PropertiesModal = ({
       setOwners(owners);
       setRoles(roles);
       setColorScheme(metadata.color_scheme);
+
+      const chartsToBeMerged = metadata?.merge_charts?.map((charts: string[]) =>
+        charts.map((chart_title: string) => tableIdOptions[chart_title]),
+      );
+      setMergedPivotTables(chartsToBeMerged);
 
       const metaDataCopy = omit(metadata, [
         'positions',
@@ -438,8 +497,22 @@ const PropertiesModal = ({
       certificationDetails,
       ...moreOnSubmitProps,
     };
+
     if (onlyApply) {
       onSubmit(onSubmitProps);
+
+      const mergeCharts = JSON.parse(jsonMetadata)?.merge_charts;
+      if (mergeCharts) {
+        const chartsToBeMerged = (mergeCharts || []).map((charts: string[]) =>
+          charts.map((chart_title: string) => tableIdOptions[chart_title]),
+        );
+        setMergedPivotTables(chartsToBeMerged);
+        dispatch(mergePivotTables(chartsToBeMerged));
+      } else {
+        setMergedPivotTables([]);
+        dispatch(mergePivotTables([]));
+      }
+
       onHide();
       addSuccessToast(t('Dashboard properties updated'));
     } else {
@@ -624,7 +697,6 @@ const PropertiesModal = ({
   const handleChangeTags = (values: { label: string; value: number }[]) => {
     // triggered whenever a new tag is selected or a tag was deselected
     // on new tag selected, add the tag
-
     const uniqueTags = [...new Set(values.map(v => v.label))];
     setTags([...uniqueTags.map(t => ({ name: t }))]);
   };
