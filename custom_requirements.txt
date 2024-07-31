@@ -11,3 +11,4 @@ pinotdb==0.5.0
 trino==0.328.0
 statsd==4.0.1
 playwright==1.44.0
+starrocks==1.0.6
