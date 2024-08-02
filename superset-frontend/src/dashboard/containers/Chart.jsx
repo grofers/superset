@@ -83,6 +83,7 @@ function mapStateToProps(
     let mergedColTypes = [];
     let colNameSet = new Set();
     let colTypeDict = {};
+    let indexNames = [];
 
     mergedTables.forEach(table => {
       const chartId = dashboardLayout.present?.[table]?.meta?.chartId;
@@ -91,12 +92,16 @@ function mapStateToProps(
         data = [],
         label_map = {},
         coltypes = [],
+        indexnames = [],
       } = chartQueries[chartId].queriesResponse?.[0] || {};
 
       mutated_label_map = { ...mutated_label_map, ...label_map };
 
       colnames.forEach(col => {
-        if (!colNames.includes(col)) colNames.push(col);
+        if (!colNames.includes(col)) {
+          colNames.push(col);
+          indexNames = [...indexNames, indexNames.length];
+        }
       });
 
       let tableMetricRows = [];
@@ -131,6 +136,12 @@ function mapStateToProps(
       mutated_label_map;
     ((mutatedChart.queriesResponse || [])[0] || {}).coltypes =
       mergedColTypes || [];
+    ((mutatedChart.queriesResponse || [])[0] || {}).indexnames =
+      indexNames || [];
+    ((mutatedChart.queriesResponse || [])[0] || {}).rowcount =
+      indexNames.length;
+    ((mutatedChart.queriesResponse || [])[0] || {}).sql_rowcount =
+      indexNames.length;
 
     let mergedMetrics = mergedCharts?.map(
       chart => chartQueries?.[chart]?.form_data?.metrics,
@@ -138,6 +149,10 @@ function mapStateToProps(
     mergedMetrics = mergedMetrics.flat();
 
     mutatedChart.form_data.metrics = mergedMetrics;
+
+    //* check to maintain the order...
+    mutatedChart.form_data.colOrder = 'none';
+    mutatedChart.form_data.rowOrder = 'none';
   }
 
   const chart = mutationNeeded
