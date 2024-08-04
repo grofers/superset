@@ -68,7 +68,7 @@ function getCellStyles(
   if (isSubtotal) return { fontWeight: 'bold' };
 
   if (conditionalCellFormatter && cellColorFormattersPresent) {
-    return { color: backgroundColor, fontWeight: '800' };
+    return { color: backgroundColor ? 'green' : 'red', fontWeight: '800' };
   }
   return { backgroundColor };
 }
