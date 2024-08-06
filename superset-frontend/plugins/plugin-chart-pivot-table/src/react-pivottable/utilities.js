@@ -698,8 +698,6 @@ class PivotData {
         case 'value_z_to_a':
           this.rowKeys.sort((a, b) => -naturalSort(v(a, []), v(b, [])));
           break;
-        case 'none':
-          break;
         default:
           this.rowKeys.sort(
             this.arrSort(this.props.rows, this.subtotals.rowPartialOnTop),
@@ -716,8 +714,6 @@ class PivotData {
           break;
         case 'value_z_to_a':
           this.colKeys.sort((a, b) => -naturalSort(v([], a), v([], b)));
-          break;
-        case 'none':
           break;
         default:
           this.colKeys.sort(
