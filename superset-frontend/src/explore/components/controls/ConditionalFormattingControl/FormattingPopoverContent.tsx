@@ -52,10 +52,10 @@ const colorSchemeOptions = (theme: SupersetTheme) => [
 
 // add translation... and change the symbols
 const formattingSymbolsOptions = [
-  { value: 'a', label: t('a') },
-  { value: 'b', label: t('b') },
-  { value: 'c', label: t('c') },
-  { value: 'd', label: t('d') },
+  { value: '₹', label: t('₹ (INR)') },
+  { value: '$', label: t('$ (USD)') },
+  { value: 'INR', label: t('INR') },
+  { value: '%', label: t('%') },
 ];
 
 const operatorOptions = [

@@ -745,8 +745,8 @@ export class TableRenderer extends React.Component {
                 .forEach(formatter => {
                   cellColorFormattersPresent = true;
                   const formatterResult = conditionalCellFormatter
-                    ? formatter.getColorFromValue(aggValue)
-                    : formatter.getColorFromValue(aggValue, true);
+                    ? formatter.getColorFromValue(aggValue, true)
+                    : formatter.getColorFromValue(aggValue);
                   if (formatterResult) {
                     backgroundColor = formatterResult;
                   }
