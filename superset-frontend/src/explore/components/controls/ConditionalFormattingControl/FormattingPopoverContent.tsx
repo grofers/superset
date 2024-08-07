@@ -245,7 +245,7 @@ export const FormattingPopoverContent = ({
               initialValue={D3_FORMAT_OPTIONS[0][0]}
             >
               <SelectControl
-                {...sharedControls.y_axis_format}
+                {...sharedControls.mutated_y_axis_format}
                 label={t('Value Format')}
               />
             </FormItem>
