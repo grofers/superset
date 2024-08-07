@@ -55,6 +55,7 @@ const formattingSymbolsOptions = [
   { value: '₹', label: t('₹ (INR)') },
   { value: '$', label: t('$ (USD)') },
   { value: 'INR', label: t('INR') },
+  { value: '%', label: t('%') },
 ];
 
 const operatorOptions = [

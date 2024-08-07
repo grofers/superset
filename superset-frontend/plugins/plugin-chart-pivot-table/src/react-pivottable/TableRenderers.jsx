@@ -68,7 +68,7 @@ function getCellStyles(
   if (isSubtotal) return { fontWeight: 'bold' };
 
   if (conditionalCellFormatter && cellColorFormattersPresent) {
-    return { color: backgroundColor ? 'green' : 'red', fontWeight: '800' };
+    return { color: backgroundColor, fontWeight: '800' };
   }
   return { backgroundColor };
 }
@@ -745,8 +745,8 @@ export class TableRenderer extends React.Component {
                 .forEach(formatter => {
                   cellColorFormattersPresent = true;
                   const formatterResult = conditionalCellFormatter
-                    ? formatter.getColorFromValue(aggValue)
-                    : formatter.getColorFromValue(aggValue, true);
+                    ? formatter.getColorFromValue(aggValue, true)
+                    : formatter.getColorFromValue(aggValue);
                   if (formatterResult) {
                     backgroundColor = formatterResult;
                   }

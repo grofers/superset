@@ -642,6 +642,7 @@ class PivotData {
     this.allTotal = this.aggregator(this, [], []);
     this.subtotals = subtotals;
     this.sorted = false;
+    this.processedRecords = new Set();
 
     // iterate through input, accumulating data for cells
     PivotData.forEachRecord(this.props.data, this.processRecord);
@@ -747,6 +748,18 @@ class PivotData {
     this.props.rows.forEach(row => {
       rowKey.push(row in record ? record[row] : 'null');
     });
+
+    // Generate a unique key for the record
+    const recordKey = JSON.stringify({ colKey, rowKey });
+
+    // Check if the record is a duplicate
+    if (this.processedRecords.has(recordKey)) {
+      console.log('DR detected:', record);
+      return; // Skip processing this record
+    }
+
+    // Add the unique key to the Set to mark this record as processed
+    this.processedRecords.add(recordKey);
 
     this.allTotal.push(record);
 
