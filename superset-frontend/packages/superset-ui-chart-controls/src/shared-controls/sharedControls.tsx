@@ -56,7 +56,6 @@ import {
   D3_TIME_FORMAT_DOCS,
   DEFAULT_TIME_FORMAT,
   DEFAULT_NUMBER_FORMAT,
-  MUTATED_D3_FORMAT_OPTIONS,
 } from '../utils';
 import { DEFAULT_MAX_ROW, TIME_FILTER_LABELS } from '../constants';
 import {
@@ -305,31 +304,6 @@ const y_axis_format: SharedControlConfig<'SelectControl', SelectDefaultOption> =
     },
   };
 
-const mutated_y_axis_format: SharedControlConfig<
-  'SelectControl',
-  SelectDefaultOption
-> = {
-  type: 'SelectControl',
-  freeForm: true,
-  label: t('Y Axis Format'),
-  renderTrigger: true,
-  default: DEFAULT_NUMBER_FORMAT,
-  choices: MUTATED_D3_FORMAT_OPTIONS,
-  description: D3_FORMAT_DOCS,
-  tokenSeparators: ['\n', '\t', ';'],
-  filterOption: ({ data: option }, search) =>
-    option.label.includes(search) || option.value.includes(search),
-  mapStateToProps: state => {
-    const isPercentage =
-      state.controls?.comparison_type?.value === ComparisonType.Percentage;
-    return {
-      choices: isPercentage
-        ? MUTATED_D3_FORMAT_OPTIONS.filter(option => option[0].includes('%'))
-        : MUTATED_D3_FORMAT_OPTIONS,
-    };
-  },
-};
-
 const currency_format: SharedControlConfig<'CurrencyControl'> = {
   type: 'CurrencyControl',
   label: t('Currency format'),
@@ -426,5 +400,4 @@ export default {
   show_empty_columns,
   temporal_columns_lookup,
   currency_format,
-  mutated_y_axis_format,
 };
