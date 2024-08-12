@@ -29,6 +29,7 @@ from superset.connectors.sqla.models import SqlaTable
 from superset.extensions import cache_manager, db, event_logger, stats_logger_manager
 from superset.models.cache import CacheKey
 from superset.views.base_api import BaseSupersetModelRestApi, statsd_metrics
+from superset.utils.cache import delete_many
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class CacheRestApi(BaseSupersetModelRestApi):
             cache_keys = [c.cache_key for c in cache_key_objs]
         else:
             cache_keys = payload.get('cache_keys', [])
-        all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
+        all_keys_deleted = delete_many(cache_manager.cache, *cache_keys)
         if cache_keys:
             cache_type = payload.get("cache_type")
             cache_mapping = {
@@ -113,7 +114,7 @@ class CacheRestApi(BaseSupersetModelRestApi):
             }
             cache = cache_mapping.get(cache_type)
             if cache:
-                c_all_keys_deleted = cache.delete_many(*cache_keys)
+                c_all_keys_deleted = delete_many(cache, *cache_keys)
             else:
                 c_all_keys_deleted = None
 

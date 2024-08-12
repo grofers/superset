@@ -257,3 +257,17 @@ def etag_cache(
         return wrapper
 
     return decorator
+
+def delete_many(cache: Cache = cache_manager.cache, *keys):
+    """Deletes multiple keys at once.
+
+    :param keys: The function accepts multiple keys as positional
+                    arguments.
+    :returns: A list containing all sucessfuly deleted keys
+    :rtype: boolean
+    """
+    deleted_keys = []
+    for key in keys:
+        if cache.delete(key):
+            deleted_keys.append(key)
+    return deleted_keys
