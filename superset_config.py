@@ -147,7 +147,8 @@ FEATURE_FLAGS = {"ALERT_REPORTS": True,
                  "DATAPANEL_CLOSED_BY_DEFAULT": True,
                  "DASHBOARD_VIRTUALIZATION": True,
                  "GLOBAL_ASYNC_QUERIES": True,
-                 "DRILL_TO_DETAIL": True
+                 "DRILL_TO_DETAIL": True,
+                 "ENABLE_JAVASCRIPT_CONTROLS": True
                  }
 
 # Global Async

@@ -54,6 +54,7 @@ from superset.commands.importers.exceptions import NoValidFilesFoundError
 from superset.commands.importers.v1.utils import get_contents_from_bundle
 from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP, RouteMethod
 from superset.daos.dashboard import DashboardDAO, EmbeddedDashboardDAO
+from superset.utils.hashing import md5_sha_from_str
 from superset.dashboards.filters import (
     DashboardAccessFilter,
     DashboardCertifiedFilter,
@@ -950,6 +951,10 @@ class DashboardRestApi(BaseSupersetModelRestApi):
             "anchor": payload.get("anchor", ""),
             "urlParams": payload.get("urlParams", []),
         }
+        digest = md5_sha_from_str(f"{dashboard_state.get('dataMask', '')}\n"
+                                  f"{dashboard_state.get('activeTabs', '')}\n"
+                                  f"{dashboard_state.get('anchor', '')}\n"
+                                  f"{dashboard_state.get('urlParams', '')}")
 
         permalink_key = CreateDashboardPermalinkCommand(
             dashboard_id=str(dashboard.id),
@@ -957,7 +962,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         ).run()
 
         dashboard_url = get_url_path("Superset.dashboard_permalink", key=permalink_key)
-        screenshot_obj = DashboardScreenshot(dashboard_url, dashboard.digest)
+        screenshot_obj = DashboardScreenshot(dashboard_url, digest if payload else dashboard.digest)
         cache_key = screenshot_obj.cache_key(window_size, thumb_size)
         image_url = get_url_path(
             "DashboardRestApi.screenshot", pk=dashboard.id, digest=cache_key
@@ -972,6 +977,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
                 force=True,
                 thumb_size=thumb_size,
                 window_size=window_size,
+                digest=digest if payload else dashboard.digest,
             )
             return self.response(
                 202,
