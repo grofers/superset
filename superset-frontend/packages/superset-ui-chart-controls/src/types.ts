@@ -280,6 +280,7 @@ export type SelectControlType =
   | 'AdhocFilterControl'
   | 'FilterBoxItemControl';
 
+// via react-select/src/filters
 export interface FilterOption<T extends SelectOption> {
   label: string;
   value: string;
@@ -438,6 +439,11 @@ export enum Comparator {
   BetweenOrRightEqual = '< x ≤',
 }
 
+export enum OPERATION_TYPE {
+  ABSOLUTE = 'absolute',
+  PERCENTILE = 'percentile',
+}
+
 export const MultipleValueComparators = [
   Comparator.Between,
   Comparator.BetweenOrEqual,
@@ -447,6 +453,7 @@ export const MultipleValueComparators = [
 
 export type ConditionalFormattingConfig = {
   operator?: Comparator;
+  operationType?: OPERATION_TYPE;
   targetValue?: number;
   targetValueLeft?: number;
   targetValueRight?: number;

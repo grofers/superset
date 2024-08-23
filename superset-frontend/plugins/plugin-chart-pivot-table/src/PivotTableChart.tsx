@@ -164,6 +164,9 @@ export default function PivotTableChart(props: PivotTableProps) {
   } = props;
 
   const theme = useTheme();
+  const [sortedOnCol, setSortedOnCol] = React.useState<string | null>(null);
+  const [sortedColOrder, setSortedColOrder] = React.useState<string | null>();
+
   const defaultFormatter = useMemo(
     () =>
       currencyFormat?.symbol
@@ -576,6 +579,10 @@ export default function PivotTableChart(props: PivotTableProps) {
           subtotalOptions={subtotalOptions}
           namesMapping={verboseMap}
           onContextMenu={handleContextMenu}
+          setSortedColOrder={setSortedColOrder}
+          setSortedOnCol={setSortedOnCol}
+          sortedColOrder={sortedColOrder}
+          sortedOnCol={sortedOnCol}
         />
       </PivotTableWrapper>
     </Styles>

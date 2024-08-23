@@ -21,8 +21,14 @@ import { ReactNode } from 'react';
 import { PopoverProps } from 'antd/lib/popover';
 import { Comparator, ControlComponentProps } from '@superset-ui/chart-controls';
 
+export enum OPERATOR_TYPE {
+  ABSOLUTE = 'absolute',
+  PERCENTILE = 'percentile',
+}
+
 export type ConditionalFormattingConfig = {
   operator?: Comparator;
+  operatorType?: OPERATOR_TYPE;
   targetValue?: number;
   targetValueLeft?: number;
   targetValueRight?: number;

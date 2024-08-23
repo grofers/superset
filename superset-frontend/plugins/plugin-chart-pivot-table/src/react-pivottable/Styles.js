@@ -132,6 +132,28 @@ export const Styles = styled.div`
       white-space: normal;
     }
 
+    .head-wrapper {
+      display: flex;
+      gap: ${theme.gridUnit}px;
+      align-items: center;
+    }
+
+    .icon-wrapper {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .sort-icon {
+      font-size: 10px;
+      color: ${theme.colors.grayscale.light2};
+    }
+
+    .sort-icon.sm {
+      font-size: 8px;
+    }
+
     .toggle {
       padding-right: ${theme.gridUnit}px;
       cursor: pointer;
