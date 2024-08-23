@@ -34,13 +34,31 @@ const parseLabel = value => {
   return String(value);
 };
 
-function displayHeaderCell(
+function SortIcon({ toggleTo, icon, handleSort, sm }) {
+  return (
+    <div
+      role="button"
+      tabIndex="0"
+      className={`sort-icon ${sm ? 'sm' : ''}`}
+      onClick={e => {
+        e.stopPropagation();
+        handleSort(toggleTo);
+      }}
+    >
+      {icon}
+    </div>
+  );
+}
+
+function displayHeaderCell({
   needToggle,
   ArrowIcon,
   onArrowClick,
   value,
   namesMapping,
-) {
+  sortedOrder,
+  handleSort,
+}) {
   const name = namesMapping[value] || value;
   return needToggle ? (
     <span className="toggle-wrapper">
@@ -55,7 +73,25 @@ function displayHeaderCell(
       <span className="toggle-val">{parseLabel(name)}</span>
     </span>
   ) : (
-    parseLabel(name)
+    <div className="head-wrapper">
+      {parseLabel(name)}
+      {handleSort && (
+        <div className="icons-wrapper">
+          {sortedOrder ? (
+            <SortIcon
+              toggleTo={sortedOrder === 'desc' ? 'asc' : null}
+              icon={sortedOrder === 'asc' ? '▲' : '▼'}
+              handleSort={handleSort}
+            />
+          ) : (
+            <>
+              <SortIcon toggleTo="desc" sm icon="▲" handleSort={handleSort} />
+              <SortIcon toggleTo="desc" sm icon="▼" handleSort={handleSort} />
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -80,7 +116,10 @@ export class TableRenderer extends React.Component {
     // We need state to record which entries are collapsed and which aren't.
     // This is an object with flat-keys indicating if the corresponding rows
     // should be collapsed.
-    this.state = { collapsedRows: {}, collapsedCols: {} };
+    this.state = {
+      collapsedRows: {},
+      collapsedCols: {},
+    };
 
     this.clickHeaderHandler = this.clickHeaderHandler.bind(this);
     this.clickHandler = this.clickHandler.bind(this);
@@ -130,6 +169,16 @@ export class TableRenderer extends React.Component {
     });
     const rowKeys = pivotData.getRowKeys();
     const colKeys = pivotData.getColKeys();
+
+    const colKey = this.props.sortedOnCol;
+    const sortedOrder = this.props.sortedColOrder;
+    if (colKey && sortedOrder) {
+      rowKeys.sort((a, b) => {
+        const aVal = pivotData.getAggregator(a, colKey).value();
+        const bVal = pivotData.getAggregator(b, colKey).value();
+        return sortedOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      });
+    }
 
     // Also pre-calculate all the callbacks for cells, etc... This is nice to have to
     // avoid re-calculations of the call-backs on cell expansions, etc...
@@ -402,13 +451,13 @@ export class TableRenderer extends React.Component {
     }
     const attrNameCell = (
       <th key="label" className="pvtAxisLabel" style={borderStyle}>
-        {displayHeaderCell(
+        {displayHeaderCell({
           needToggle,
-          subArrow,
-          arrowClickHandle,
-          attrName,
+          ArrowIcon: subArrow,
+          onArrowClick: arrowClickHandle,
+          value: attrName,
           namesMapping,
-        )}
+        })}
       </th>
     );
 
@@ -465,15 +514,20 @@ export class TableRenderer extends React.Component {
             onContextMenu={handleContextMenu}
             style={borderStyle}
           >
-            {displayHeaderCell(
+            {displayHeaderCell({
               needToggle,
-              this.state.collapsedCols[flatColKey]
+              ArrowIcon: this.state.collapsedCols[flatColKey]
                 ? arrowCollapsed
                 : arrowExpanded,
               onArrowClick,
-              headerCellFormattedValue,
+              value: headerCellFormattedValue,
               namesMapping,
-            )}
+              sortedOrder: this.props.sortedColOrder,
+              handleSort: order => {
+                this.props.setSortedOnCol(colKey);
+                this.props.setSortedColOrder(order);
+              },
+            })}
           </th>,
         );
       } else if (attrIdx === colKey.length) {
@@ -567,13 +621,13 @@ export class TableRenderer extends React.Component {
               key={`rowAttr-${i}`}
               style={borderStyle}
             >
-              {displayHeaderCell(
-                needLabelToggle,
-                subArrow,
-                arrowClickHandle,
-                r,
+              {displayHeaderCell({
+                needToggle: needLabelToggle,
+                ArrowIcon: subArrow,
+                onArrowClick: arrowClickHandle,
+                value: r,
                 namesMapping,
-              )}
+              })}
             </th>
           );
         })}
@@ -687,15 +741,15 @@ export class TableRenderer extends React.Component {
             onContextMenu={handleContextMenu}
             style={borderStyle}
           >
-            {displayHeaderCell(
-              needRowToggle,
-              this.state.collapsedRows[flatRowKey]
+            {displayHeaderCell({
+              needToggle: needRowToggle,
+              ArrowIcon: this.state.collapsedRows[flatRowKey]
                 ? arrowCollapsed
                 : arrowExpanded,
               onArrowClick,
-              headerCellFormattedValue,
+              value: headerCellFormattedValue,
               namesMapping,
-            )}
+            })}
           </th>
         );
       }

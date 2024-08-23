@@ -31,6 +31,7 @@ import { InputNumber } from 'src/components/Input';
 import Button from 'src/components/Button';
 import { ConditionalFormattingConfig } from './types';
 import SelectControl from '../SelectControl';
+import { OPERATOR_TYPE } from './types';
 
 const FullWidthInputNumber = styled(InputNumber)`
   width: 100%;
@@ -70,6 +71,11 @@ const operatorOptions = [
   { value: Comparator.BetweenOrEqual, label: '≤ x ≤' },
   { value: Comparator.BetweenOrLeftEqual, label: '≤ x <' },
   { value: Comparator.BetweenOrRightEqual, label: '< x ≤' },
+];
+
+const operationTypeOptions = [
+  { value: OPERATOR_TYPE.ABSOLUTE, label: t('Absolute') },
+  { value: OPERATOR_TYPE.PERCENTILE, label: t('Percentile') },
 ];
 
 const targetValueValidator =
@@ -145,6 +151,17 @@ const operatorField = (
   </FormItem>
 );
 
+const operationType = (
+  <FormItem
+    name="operationType"
+    label={t('Operation Type')}
+    rules={rulesRequired}
+    initialValue={operationTypeOptions[0].value}
+  >
+    <Select ariaLabel={t('Operation Type')} options={operationTypeOptions} />
+  </FormItem>
+);
+
 const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
   isOperatorNone(getFieldValue('operator')) ? (
     <Row gutter={12}>
@@ -179,18 +196,23 @@ const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
       </Col>
     </Row>
   ) : (
-    <Row gutter={12}>
-      <Col span={6}>{operatorField}</Col>
-      <Col span={18}>
-        <FormItem
-          name="targetValue"
-          label={t('Target value')}
-          rules={rulesRequired}
-        >
-          <FullWidthInputNumber />
-        </FormItem>
-      </Col>
-    </Row>
+    <>
+      <Row gutter={12}>
+        <Col span={6}>{operatorField}</Col>
+        <Col span={14}>
+          <FormItem
+            name="targetValue"
+            label={t('Target value')}
+            rules={rulesRequired}
+          >
+            <FullWidthInputNumber />
+          </FormItem>
+        </Col>
+      </Row>
+      <Row gutter={12}>
+        <Col span={8}>{operationType}</Col>
+      </Row>
+    </>
   );
 
 export const FormattingPopoverContent = ({

@@ -23,6 +23,7 @@ import {
   Comparator,
   ConditionalFormattingConfig,
   MultipleValueComparators,
+  OPERATION_TYPE,
 } from '../types';
 
 export const round = (num: number, precision = 0) =>
@@ -53,9 +54,30 @@ export const getOpacity = (
   );
 };
 
+function findPercentile(data, percentile) {
+  // Sort the data in ascending order
+  data.sort((a, b) => a - b);
+
+  // Calculate the index for the percentile
+  const index = (percentile / 100) * (data.length - 1);
+
+  // If the index is an integer, return the value at that index
+  // If not, interpolate between the values at the surrounding indices
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.ceil(index);
+  const weight = index - lowerIndex;
+
+  if (lowerIndex === upperIndex) {
+    return data[lowerIndex];
+  } else {
+    return data[lowerIndex] * (1 - weight) + data[upperIndex] * weight;
+  }
+}
+
 export const getColorFunction = (
   {
     operator,
+    operationType,
     targetValue,
     targetValueLeft,
     targetValueRight,
@@ -64,6 +86,11 @@ export const getColorFunction = (
   columnValues: number[],
   alpha?: boolean,
 ) => {
+  if (operationType === OPERATION_TYPE.PERCENTILE) {
+    const percentileVal = findPercentile(columnValues, targetValue);
+    targetValue = percentileVal;
+  }
+
   let minOpacity = MIN_OPACITY_BOUNDED;
   const maxOpacity = MAX_OPACITY;
 
