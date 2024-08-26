@@ -523,10 +523,10 @@ export class TableRenderer extends React.Component {
               value: headerCellFormattedValue,
               namesMapping,
               sortedOrder: this.props.sortedColOrder,
-              handleSort: order => {
+              handleSort: this.props.sortingEnabled ? order => {
                 this.props.setSortedOnCol(colKey);
                 this.props.setSortedColOrder(order);
-              },
+              }: null,
             })}
           </th>,
         );
