@@ -30,6 +30,7 @@ import {
   isAdhocColumn,
   isFeatureEnabled,
   isPhysicalColumn,
+  JsonObject,
   NumberFormatter,
   styled,
   t,
@@ -43,6 +44,7 @@ import {
   PivotTableStylesProps,
   SelectedFiltersType,
 } from './types';
+import { useSelector } from 'react-redux';
 
 const Styles = styled.div<PivotTableStylesProps>`
   ${({ height, width, margin }) => `
@@ -162,7 +164,9 @@ export default function PivotTableChart(props: PivotTableProps) {
     showRowPercentile,
     showColPercentile,
   } = props;
-
+  const dashboardMetaData = useSelector<RootState, JsonObject>(
+    state => state.dashboardInfo?.metadata,
+  );
   const theme = useTheme();
   const [sortedOnCol, setSortedOnCol] = React.useState<string | null>(null);
   const [sortedColOrder, setSortedColOrder] = React.useState<string | null>();
@@ -583,6 +587,7 @@ export default function PivotTableChart(props: PivotTableProps) {
           setSortedOnCol={setSortedOnCol}
           sortedColOrder={sortedColOrder}
           sortedOnCol={sortedOnCol}
+          sortingEnabled={dashboardMetaData?.pivot_sorting_enabled}
         />
       </PivotTableWrapper>
     </Styles>
