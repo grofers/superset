@@ -116,6 +116,7 @@ def cache_dashboard_screenshot(
     thumb_size: Optional[WindowSize] = None,
     window_size: Optional[WindowSize] = None,
     digest: Optional[str] = None,
+    clipping_window: Optional[WindowSize] = None,
 ) -> None:
     # pylint: disable=import-outside-toplevel
     from superset.models.dashboard import Dashboard
@@ -141,4 +142,5 @@ def cache_dashboard_screenshot(
             force=force,
             window_size=window_size,
             thumb_size=thumb_size,
+            clipping_window=clipping_window
         )

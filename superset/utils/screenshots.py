@@ -74,6 +74,7 @@ class BaseScreenshot:
         self,
         window_size: bool | WindowSize | None = None,
         thumb_size: bool | WindowSize | None = None,
+        clipping_window: WindowSize | None = None,
     ) -> str:
         window_size = window_size or self.window_size
         thumb_size = thumb_size or self.thumb_size
@@ -84,13 +85,16 @@ class BaseScreenshot:
             "window_size": window_size,
             "thumb_size": thumb_size,
         }
+        if clipping_window:
+            args.update({"clipping_window": clipping_window})
         return md5_sha_from_dict(args)
 
     def get_screenshot(
-        self, user: User, window_size: WindowSize | None = None
+        self, user: User, window_size: WindowSize | None = None,
+        clipping_window: WindowSize | None = None,
     ) -> bytes | None:
         driver = self.driver(window_size)
-        self.screenshot = driver.get_screenshot(self.url, self.element, user)
+        self.screenshot = driver.get_screenshot(self.url, self.element, user, clipping_window)
         return self.screenshot
 
     def get(
@@ -144,6 +148,7 @@ class BaseScreenshot:
         thumb_size: WindowSize | None = None,
         cache: Cache = None,
         force: bool = True,
+        clipping_window: WindowSize | None = None,
     ) -> bytes | None:
         """
         Fetches the screenshot, computes the thumbnail and caches the result
@@ -155,7 +160,7 @@ class BaseScreenshot:
         :param force: Will force the computation even if it's already cached
         :return: Image payload
         """
-        cache_key = self.cache_key(window_size, thumb_size)
+        cache_key = self.cache_key(window_size, thumb_size, clipping_window)
         window_size = window_size or self.window_size
         thumb_size = thumb_size or self.thumb_size
         if not force and cache and cache.get(cache_key):
@@ -167,7 +172,7 @@ class BaseScreenshot:
 
         # Assuming all sorts of things can go wrong with Selenium
         try:
-            payload = self.get_screenshot(user=user, window_size=window_size)
+            payload = self.get_screenshot(user=user, window_size=window_size, clipping_window=clipping_window)
         except Exception as ex:  # pylint: disable=broad-except
             logger.warning("Failed at generating thumbnail %s", ex, exc_info=True)
 
