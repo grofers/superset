@@ -196,7 +196,7 @@ const ResultSet = ({
   const [cachedData, setCachedData] = useState<Record<string, unknown>[]>([]);
   const [showSaveDatasetModal, setShowSaveDatasetModal] = useState(false);
   const [alertIsOpen, setAlertIsOpen] = useState(false);
-
+  const config = useSelector(state => state?.common?.conf);
   const history = useHistory();
   const dispatch = useDispatch();
   const logAction = useLogAction({ queryId, sqlEditorId: query.sqlEditorId });
@@ -319,7 +319,7 @@ const ResultSet = ({
                 onClick={createExploreResultsOnClick}
               />
             )}
-            {csv && (
+            {csv && config?.SHOW_DOWNLOAD_TO_CSV && (
               <Button
                 buttonSize="small"
                 href={getExportCsvUrl(query.id)}
@@ -328,20 +328,21 @@ const ResultSet = ({
                 <i className="fa fa-file-text-o" /> {t('Download to CSV')}
               </Button>
             )}
-
-            <CopyToClipboard
-              text={prepareCopyToClipboardTabularData(data, columns)}
-              wrapped={false}
-              copyNode={
-                <Button buttonSize="small">
-                  <i className="fa fa-clipboard" /> {t('Copy to Clipboard')}
-                </Button>
-              }
-              hideTooltip
-              onCopyEnd={() =>
-                logAction(LOG_ACTIONS_SQLLAB_COPY_RESULT_TO_CLIPBOARD, {})
-              }
-            />
+            {config?.SHOW_CLIPBOARD && (
+              <CopyToClipboard
+                text={prepareCopyToClipboardTabularData(data, columns)}
+                wrapped={false}
+                copyNode={
+                  <Button buttonSize="small">
+                    <i className="fa fa-clipboard" /> {t('Copy to Clipboard')}
+                  </Button>
+                }
+                hideTooltip
+                onCopyEnd={() =>
+                  logAction(LOG_ACTIONS_SQLLAB_COPY_RESULT_TO_CLIPBOARD, {})
+                }
+              />
+            )}
           </ResultSetButtons>
           {search && (
             <input

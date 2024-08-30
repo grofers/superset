@@ -645,6 +645,7 @@ class Header extends React.PureComponent {
           }}
           additionalActionsMenu={
             <ConnectedHeaderActionsDropdown
+              config={this.props.common?.conf}
               addSuccessToast={this.props.addSuccessToast}
               addDangerToast={this.props.addDangerToast}
               dashboardId={dashboardInfo.id}
