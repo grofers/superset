@@ -23,7 +23,7 @@ import {
   Comparator,
   ConditionalFormattingConfig,
   MultipleValueComparators,
-  OPERATION_TYPE,
+  OperationType,
 } from '../types';
 
 export const round = (num: number, precision = 0) =>
@@ -78,6 +78,7 @@ export const getColorFunction = (
   {
     operator,
     operationType,
+    cellType,
     targetValue,
     targetValueLeft,
     targetValueRight,
@@ -86,7 +87,7 @@ export const getColorFunction = (
   columnValues: number[],
   alpha?: boolean,
 ) => {
-  if (operationType === OPERATION_TYPE.PERCENTILE) {
+  if (operationType === OperationType.PERCENTILE) {
     const percentileVal = findPercentile(columnValues, targetValue);
     targetValue = percentileVal;
   }
@@ -211,7 +212,9 @@ export const getColorFunction = (
       }
       return addAlpha(
         colorScheme,
-        getOpacity(value, cutoffValue, extremeValue, minOpac, maxOpacity),
+        cellType === 'solid'
+          ? 1
+          : getOpacity(value, cutoffValue, extremeValue, minOpac, maxOpacity),
       );
     }
     return colorScheme;

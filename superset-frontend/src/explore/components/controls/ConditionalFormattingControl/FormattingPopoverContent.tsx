@@ -29,9 +29,8 @@ import Select from 'src/components/Select/Select';
 import { Col, Row } from 'src/components';
 import { InputNumber } from 'src/components/Input';
 import Button from 'src/components/Button';
-import { ConditionalFormattingConfig } from './types';
+import { CellTypes, ConditionalFormattingConfig, OPERATOR_TYPE } from './types';
 import SelectControl from '../SelectControl';
-import { OPERATOR_TYPE } from './types';
 
 const FullWidthInputNumber = styled(InputNumber)`
   width: 100%;
@@ -76,6 +75,11 @@ const operatorOptions = [
 const operationTypeOptions = [
   { value: OPERATOR_TYPE.ABSOLUTE, label: t('Absolute') },
   { value: OPERATOR_TYPE.PERCENTILE, label: t('Percentile') },
+];
+
+const cellTypeOptions = [
+  { value: CellTypes.GRADIENT, label: t('Gradient') },
+  { value: CellTypes.SOLID, label: t('Solid') },
 ];
 
 const targetValueValidator =
@@ -162,6 +166,17 @@ const operationType = (
   </FormItem>
 );
 
+const cellType = (
+  <FormItem
+    name="cellType"
+    label={t('Cell Type')}
+    rules={rulesRequired}
+    initialValue={cellTypeOptions[0].value}
+  >
+    <Select ariaLabel={t('Cell Type')} options={cellTypeOptions} />
+  </FormItem>
+);
+
 const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
   isOperatorNone(getFieldValue('operator')) ? (
     <Row gutter={12}>
@@ -210,7 +225,8 @@ const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
         </Col>
       </Row>
       <Row gutter={12}>
-        <Col span={8}>{operationType}</Col>
+        <Col span={10}>{operationType}</Col>
+        <Col span={10}>{cellType}</Col>
       </Row>
     </>
   );
