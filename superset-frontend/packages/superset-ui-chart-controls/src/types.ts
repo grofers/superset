@@ -439,9 +439,14 @@ export enum Comparator {
   BetweenOrRightEqual = '< x ≤',
 }
 
-export enum OPERATION_TYPE {
+export enum OperationType {
   ABSOLUTE = 'absolute',
   PERCENTILE = 'percentile',
+}
+
+export enum CellTypes {
+  GRADIENT = 'gradient',
+  SOLID = 'solid',
 }
 
 export const MultipleValueComparators = [
@@ -453,7 +458,8 @@ export const MultipleValueComparators = [
 
 export type ConditionalFormattingConfig = {
   operator?: Comparator;
-  operationType?: OPERATION_TYPE;
+  operationType?: OperationType;
+  cellType?: CellTypes;
   targetValue?: number;
   targetValueLeft?: number;
   targetValueRight?: number;

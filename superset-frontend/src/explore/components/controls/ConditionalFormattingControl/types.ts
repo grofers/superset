@@ -26,6 +26,11 @@ export enum OPERATOR_TYPE {
   PERCENTILE = 'percentile',
 }
 
+export enum CellTypes {
+  SOLID = 'solid',
+  GRADIENT = 'gradient',
+}
+
 export type ConditionalFormattingConfig = {
   operator?: Comparator;
   operatorType?: OPERATOR_TYPE;

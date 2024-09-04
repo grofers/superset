@@ -193,6 +193,7 @@ export class HeaderActionsDropdown extends PureComponent {
       setIsDropdownVisible,
       isDropdownVisible,
       directPathToChild,
+      config,
       ...rest
     } = this.props;
 
@@ -279,19 +280,21 @@ export class HeaderActionsDropdown extends PureComponent {
             />
           </Menu.Item>
         )}
-        <Menu.SubMenu
-          key={MENU_KEYS.DOWNLOAD_DASHBOARD}
-          disabled={isLoading}
-          title={t('Download')}
-          logEvent={this.props.logEvent}
-        >
-          <DownloadMenuItems
-            pdfMenuItemTitle={t('Export to PDF')}
-            imageMenuItemTitle={t('Download as Image')}
-            dashboardTitle={dashboardTitle}
-            addDangerToast={addDangerToast}
-          />
-        </Menu.SubMenu>
+        {config?.SHOW_DOWNLOAD_DASHBOARD && (
+          <Menu.SubMenu
+            key={MENU_KEYS.DOWNLOAD_DASHBOARD}
+            disabled={isLoading}
+            title={t('Download')}
+            logEvent={this.props.logEvent}
+          >
+            <DownloadMenuItems
+              pdfMenuItemTitle={t('Export to PDF')}
+              imageMenuItemTitle={t('Download as Image')}
+              dashboardTitle={dashboardTitle}
+              addDangerToast={addDangerToast}
+            />
+          </Menu.SubMenu>
+        )}
         {userCanShare && (
           <Menu.SubMenu
             key={MENU_KEYS.SHARE_DASHBOARD}
