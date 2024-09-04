@@ -881,11 +881,11 @@ export class TableRenderer extends React.Component {
         finalValue = parseFloat(aggValue / totalAgg) * 100;
       }
 
-      finalValue = agg.format(finalValue);
-
       if (formatFunc) {
         finalValue = formatFunc(finalValue);
       }
+
+       finalValue = agg.format(finalValue);
 
       if (showRowPercentile || showColPercentile) {
         finalValue = `${finalValue}%`;
