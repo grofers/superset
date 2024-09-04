@@ -942,6 +942,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
         window_size = (
             kwargs["rison"].get("window_size") or DEFAULT_DASHBOARD_WINDOW_SIZE
         )
+        clipping_window = (kwargs["rison"].get("clipping_window"))
         # Don't shrink the image if thumb_size is not specified
         thumb_size = kwargs["rison"].get("thumb_size") or window_size
 
@@ -963,7 +964,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
 
         dashboard_url = get_url_path("Superset.dashboard_permalink", key=permalink_key)
         screenshot_obj = DashboardScreenshot(dashboard_url, digest if payload else dashboard.digest)
-        cache_key = screenshot_obj.cache_key(window_size, thumb_size)
+        cache_key = screenshot_obj.cache_key(window_size, thumb_size, clipping_window)
         image_url = get_url_path(
             "DashboardRestApi.screenshot", pk=dashboard.id, digest=cache_key
         )
@@ -978,6 +979,7 @@ class DashboardRestApi(BaseSupersetModelRestApi):
                 thumb_size=thumb_size,
                 window_size=window_size,
                 digest=digest if payload else dashboard.digest,
+                clipping_window=clipping_window,
             )
             return self.response(
                 202,

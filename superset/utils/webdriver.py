@@ -149,7 +149,7 @@ class WebDriverPlaywright(WebDriverProxy):
         )
 
     def get_screenshot(  # pylint: disable=too-many-locals, too-many-statements
-        self, url: str, element_name: str, user: User
+        self, url: str, element_name: str, user: User, clipping_window: WindowSize | None = None,
     ) -> bytes | None:
         with sync_playwright() as playwright:
             browser_args = current_app.config["WEBDRIVER_OPTION_ARGS"]
@@ -252,7 +252,18 @@ class WebDriverPlaywright(WebDriverProxy):
                             url,
                             unexpected_errors,
                         )
-                img = element.screenshot()
+                neg_width = 0
+                neg_height = 0
+                if clipping_window:
+                    neg_width = clipping_window[0]
+                    neg_height = clipping_window[1]
+                bounding_box = element.bounding_box()
+                img = page.screenshot(clip={
+                    "x": bounding_box["x"],
+                    "y": bounding_box["y"],
+                    "width": bounding_box["width"] - neg_width,
+                    "height": bounding_box["height"] - neg_height
+                })
             except PlaywrightTimeout:
                 # raise again for the finally block, but handled above
                 pass

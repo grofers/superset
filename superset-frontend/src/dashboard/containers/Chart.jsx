@@ -143,12 +143,12 @@ function mapStateToProps(
     ((mutatedChart.queriesResponse || [])[0] || {}).sql_rowcount =
       indexNames.length;
 
-    let mergedMetrics = mergedCharts?.map(
-      chart => chartQueries?.[chart]?.form_data?.metrics,
-    );
-    mergedMetrics = mergedMetrics.flat();
+//     let mergedMetrics = mergedCharts?.map(
+//       chart => chartQueries?.[chart]?.form_data?.metrics,
+//     );
+//     mergedMetrics = mergedMetrics.flat();
 
-    mutatedChart.form_data.metrics = mergedMetrics;
+   // mutatedChart.form_data.metrics = mergedMetrics;
 
     //* check to maintain the order...
     mutatedChart.form_data.colOrder = 'none';
