@@ -48,6 +48,14 @@ const colorSchemeOptions = (theme: SupersetTheme) => [
   { value: theme.colors.success.dark1, label: t('success dark') },
   { value: theme.colors.alert.dark1, label: t('alert dark') },
   { value: theme.colors.error.dark1, label: t('error dark') },
+  { value: theme.colors.custom.marine, label: t('marine') },
+  { value: theme.colors.custom.citron, label: t('citron') },
+  { value: theme.colors.custom.tomato, label: t('tomato') },
+  { value: theme.colors.custom.brick, label: t('brick') },
+  { value: theme.colors.custom.sunset, label: t('sunset') },
+  { value: theme.colors.custom.emerald, label: t('emerald') },
+  { value: theme.colors.custom.carmine, label: t('carmine') },
+  { value: theme.colors.custom.dodger, label: t('dodger') },
 ];
 
 // add translation... and change the symbols

@@ -277,6 +277,10 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
 
 DB_CONNECTION_MUTATOR = custom_db_connection_mutator
 
+SHOW_DOWNLOAD_TO_CSV=get_env_variable("SHOW_DOWNLOAD_TO_CSV", "false").lower() == "true"
+SHOW_CLIPBOARD=get_env_variable("SHOW_CLIPBOARD", "false").lower() == "true"
+SHOW_DOWNLOAD_DASHBOARD=get_env_variable("SHOW_DOWNLOAD_DASHBOARD", "false").lower() == "true"
+
 
 def SQL_QUERY_MUTATOR(sql: str,
                       security_manager,
