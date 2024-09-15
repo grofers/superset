@@ -53,6 +53,7 @@ SQLALCHEMY_DATABASE_URI = "%s://%s:%s@%s:%s/%s" % (
 )
 
 REDIS_HOST = get_env_variable("REDIS_HOST")
+REDIS_CLUSTER_HOST = get_env_variable("REDIS_CLUSTER_HOST")
 REDIS_PORT = get_env_variable("REDIS_PORT")
 REDIS_CELERY_DB = get_env_variable("REDIS_CELERY_DB", "0")
 REDIS_RESULTS_DB = get_env_variable("REDIS_RESULTS_DB", "1")
@@ -64,14 +65,27 @@ DEFAULT_CACHE_DURATION = get_env_variable("DEFAULT_CACHE_DURATION", 60 * 60 * 24
 
 STORE_CACHE_KEYS_IN_METADATA_DB = True  # Required for invalidating cache
 MAPBOX_API_KEY = get_env_variable("SUPERSET_MAPBOX_API", "")
+CACHE_TYPE = get_env_variable("CACHE_TYPE", "RedisCache")
 
 # Default cache for Superset objects
 CACHE_CONFIG = {
-    'CACHE_TYPE': 'RedisCache',
+    'CACHE_TYPE': CACHE_TYPE,
     'CACHE_DEFAULT_TIMEOUT': DEFAULT_CACHE_DURATION,
     'CACHE_KEY_PREFIX': 'superset:',
     'CACHE_REDIS_URL': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_CACHE_DB}',
 }
+if CACHE_TYPE == "RedisClusterCache":
+    CACHE_CONFIG = {
+        'CACHE_TYPE': CACHE_TYPE,
+        'CACHE_DEFAULT_TIMEOUT': DEFAULT_CACHE_DURATION,
+        'CACHE_KEY_PREFIX': 'superset:',
+        'CACHE_REDIS_CLUSTER': f'{REDIS_CLUSTER_HOST}:{REDIS_PORT}',
+        'CACHE_OPTIONS': {
+            'cluster': True,  # Enable Redis Cluster mode
+            'skip_full_coverage_check': True
+        }
+    }
+
 # Cache for datasource metadata and query results
 DATA_CACHE_CONFIG = {**CACHE_CONFIG, "CACHE_KEY_PREFIX": "superset:dc:"}
 
@@ -280,6 +294,7 @@ DB_CONNECTION_MUTATOR = custom_db_connection_mutator
 SHOW_DOWNLOAD_TO_CSV=get_env_variable("SHOW_DOWNLOAD_TO_CSV", "false").lower() == "true"
 SHOW_CLIPBOARD=get_env_variable("SHOW_CLIPBOARD", "false").lower() == "true"
 SHOW_DOWNLOAD_DASHBOARD=get_env_variable("SHOW_DOWNLOAD_DASHBOARD", "false").lower() == "true"
+SHOW_DOWNLOAD_EXPLORE=get_env_variable("SHOW_DOWNLOAD_EXPLORE", "false").lower() == "true"
 
 
 def SQL_QUERY_MUTATOR(sql: str,
