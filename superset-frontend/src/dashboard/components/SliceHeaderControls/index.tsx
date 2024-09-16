@@ -372,6 +372,7 @@ const SliceHeaderControls = (props: SliceHeaderControlsPropsWithRouter) => {
     isCached = [],
     mergedPivotTables = [],
   } = props;
+  const config = useSelector(state => state?.common?.conf);
   const isTable = slice.viz_type === 'table';
   const cachedWhen = (cachedDttm || []).map(itemCachedDttm =>
     moment.utc(itemCachedDttm).fromNow(),
@@ -523,7 +524,7 @@ const SliceHeaderControls = (props: SliceHeaderControlsPropsWithRouter) => {
         </Menu.SubMenu>
       )}
 
-      {props.supersetCanCSV && (
+      {props.supersetCanCSV && !!config?.SHOW_CHART_DOWNLOAD_TO_CSV && (
         <Menu.SubMenu title={t('Download')}>
           <Menu.Item
             key={MENU_KEYS.EXPORT_CSV}
