@@ -67,6 +67,7 @@ interface PivotTableCustomizeProps {
   rowSubtotalPosition: boolean;
   colSubtotalPosition: boolean;
   colTotals: boolean;
+  isTotalAtTop: boolean;
   colSubTotals: boolean;
   rowTotals: boolean;
   rowSubTotals: boolean;

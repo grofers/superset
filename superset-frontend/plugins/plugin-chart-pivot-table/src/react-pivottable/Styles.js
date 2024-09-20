@@ -56,6 +56,10 @@ export const Styles = styled.div`
       bottom: 0;
     }
 
+    table.pvtTable tbody tr.pvtRowTotals.top {
+      position: static;
+    }
+
     table.pvtTable thead tr:last-of-type th,
     table.pvtTable thead tr:first-of-type th.pvtTotalLabel,
     table.pvtTable thead tr:nth-last-of-type(2) th.pvtColLabel,

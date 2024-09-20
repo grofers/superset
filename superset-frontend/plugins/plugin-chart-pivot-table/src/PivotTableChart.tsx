@@ -140,6 +140,7 @@ export default function PivotTableChart(props: PivotTableProps) {
     rowSubtotalPosition,
     colSubtotalPosition,
     colTotals,
+    isTotalAtTop,
     colSubTotals,
     rowTotals,
     rowSubTotals,
@@ -448,6 +449,7 @@ export default function PivotTableChart(props: PivotTableProps) {
       clickRowHeaderCallback: toggleFilter,
       clickColumnHeaderCallback: toggleFilter,
       colTotals,
+      isTotalAtTop,
       colSubTotals,
       rowTotals,
       rowSubTotals,
@@ -470,6 +472,7 @@ export default function PivotTableChart(props: PivotTableProps) {
     [
       toggleFilter,
       colTotals,
+      isTotalAtTop,
       colSubTotals,
       rowTotals,
       rowSubTotals,

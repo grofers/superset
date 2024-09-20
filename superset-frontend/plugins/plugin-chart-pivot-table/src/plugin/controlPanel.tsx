@@ -240,6 +240,18 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'isTotalAtTop',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show columns total at top'),
+              default: false,
+              renderTrigger: true,
+              description: t('Display column level total'),
+            },
+          },
+        ],
+        [
+          {
             name: 'colSubTotals',
             config: {
               type: 'CheckboxControl',
