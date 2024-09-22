@@ -139,6 +139,7 @@ export class TableRenderer extends React.Component {
     };
     const rowTotals = tableOptions.rowTotals || colAttrs.length === 0;
     const colTotals = tableOptions.colTotals || rowAttrs.length === 0;
+    const isTotalAtTop = tableOptions.isTotalAtTop || false;
 
     const namesMapping = props.namesMapping || {};
     const subtotalOptions = {
@@ -233,6 +234,7 @@ export class TableRenderer extends React.Component {
       rowKeys,
       rowTotals,
       colTotals,
+      isTotalAtTop,
       arrowCollapsed: subtotalOptions.arrowCollapsed,
       arrowExpanded: subtotalOptions.arrowExpanded,
       colSubtotalDisplay,
@@ -523,10 +525,12 @@ export class TableRenderer extends React.Component {
               value: headerCellFormattedValue,
               namesMapping,
               sortedOrder: this.props.sortedColOrder,
-              handleSort: this.props.sortingEnabled ? order => {
-                this.props.setSortedOnCol(colKey);
-                this.props.setSortedColOrder(order);
-              }: null,
+              handleSort: this.props.sortingEnabled
+                ? order => {
+                    this.props.setSortedOnCol(colKey);
+                    this.props.setSortedColOrder(order);
+                  }
+                : null,
             })}
           </th>,
         );
@@ -885,7 +889,7 @@ export class TableRenderer extends React.Component {
         finalValue = formatFunc(finalValue);
       }
 
-       finalValue = agg.format(finalValue);
+      finalValue = agg.format(finalValue);
 
       if (showRowPercentile || showColPercentile) {
         finalValue = `${finalValue}%`;
@@ -937,7 +941,7 @@ export class TableRenderer extends React.Component {
     return <tr key={`keyRow-${flatRowKey}`}>{rowCells}</tr>;
   }
 
-  renderTotalsRow(pivotSettings) {
+  renderTotalsRow(pivotSettings, isTop) {
     // Render the final totals rows that has the totals for all the columns.
 
     const {
@@ -1010,7 +1014,7 @@ export class TableRenderer extends React.Component {
     const totalCells = [totalLabelCell, ...totalValueCells, grandTotalCell];
 
     return (
-      <tr key="total" className="pvtRowTotals">
+      <tr key="total" className={`pvtRowTotals ${isTop ? 'top' : ''}`}>
         {totalCells}
       </tr>
     );
@@ -1045,6 +1049,7 @@ export class TableRenderer extends React.Component {
       rowKeys,
       colKeys,
       colTotals,
+      isTotalAtTop,
       rowSubtotalDisplay,
       colSubtotalDisplay,
     } = this.cachedBasePivotSettings;
@@ -1090,10 +1095,13 @@ export class TableRenderer extends React.Component {
             {rowAttrs.length !== 0 && this.renderRowHeaderRow(pivotSettings)}
           </thead>
           <tbody>
+            {colTotals &&
+              isTotalAtTop &&
+              this.renderTotalsRow(pivotSettings, true)}
             {visibleRowKeys.map((r, i) =>
               this.renderTableRow(r, i, pivotSettings),
             )}
-            {colTotals && this.renderTotalsRow(pivotSettings)}
+            {colTotals && !isTotalAtTop && this.renderTotalsRow(pivotSettings)}
           </tbody>
         </table>
       </Styles>
