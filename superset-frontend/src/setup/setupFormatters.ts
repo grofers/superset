@@ -73,8 +73,8 @@ export default function setupFormatters(
       'DURATION_SUB',
       createDurationFormatter({ formatSubMilliseconds: true }),
     )
-    .registerValue('INDIAM_CURRENCY', new NumberFormatter({
-      id: 'INDIAM_CURRENCY',
+    .registerValue('INDIAN_CURRENCY', new NumberFormatter({
+      id: 'INDIAN_CURRENCY',
       formatFunc: v => formatINR(v)
     }));
 
