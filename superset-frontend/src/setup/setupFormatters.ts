@@ -24,6 +24,8 @@ import {
   getTimeFormatterRegistry,
   smartDateFormatter,
   smartDateVerboseFormatter,
+  NumberFormatter,
+  formatINR
 } from '@superset-ui/core';
 import { FormatLocaleDefinition } from 'd3-format';
 
@@ -70,7 +72,11 @@ export default function setupFormatters(
     .registerValue(
       'DURATION_SUB',
       createDurationFormatter({ formatSubMilliseconds: true }),
-    );
+    )
+    .registerValue('INDIAN_CURRENCY', new NumberFormatter({
+      id: 'INDIAN_CURRENCY',
+      formatFunc: v => formatINR(v)
+    }));
 
   getTimeFormatterRegistry()
     .registerValue('smart_date', smartDateFormatter)

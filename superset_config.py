@@ -53,7 +53,6 @@ SQLALCHEMY_DATABASE_URI = "%s://%s:%s@%s:%s/%s" % (
 )
 
 REDIS_HOST = get_env_variable("REDIS_HOST")
-REDIS_CLUSTER_HOST = get_env_variable("REDIS_CLUSTER_HOST")
 REDIS_PORT = get_env_variable("REDIS_PORT")
 REDIS_CELERY_DB = get_env_variable("REDIS_CELERY_DB", "0")
 REDIS_RESULTS_DB = get_env_variable("REDIS_RESULTS_DB", "1")
@@ -75,6 +74,7 @@ CACHE_CONFIG = {
     'CACHE_REDIS_URL': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_CACHE_DB}',
 }
 if CACHE_TYPE == "RedisClusterCache":
+    REDIS_CLUSTER_HOST = get_env_variable("REDIS_CLUSTER_HOST")
     CACHE_CONFIG = {
         'CACHE_TYPE': CACHE_TYPE,
         'CACHE_DEFAULT_TIMEOUT': DEFAULT_CACHE_DURATION,
@@ -295,6 +295,7 @@ SHOW_DOWNLOAD_TO_CSV=get_env_variable("SHOW_DOWNLOAD_TO_CSV", "false").lower() =
 SHOW_CLIPBOARD=get_env_variable("SHOW_CLIPBOARD", "false").lower() == "true"
 SHOW_DOWNLOAD_DASHBOARD=get_env_variable("SHOW_DOWNLOAD_DASHBOARD", "false").lower() == "true"
 SHOW_DOWNLOAD_EXPLORE=get_env_variable("SHOW_DOWNLOAD_EXPLORE", "false").lower() == "true"
+SHOW_CHART_DOWNLOAD_TO_CSV=get_env_variable("SHOW_CHART_DOWNLOAD_TO_CSV", "false").lower() == "true"
 
 
 def SQL_QUERY_MUTATOR(sql: str,
