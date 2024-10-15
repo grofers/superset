@@ -5,8 +5,8 @@ export default function formatINR(value: number) {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
         notation: 'compact',
-        compactDisplay: 'long',
+        currencyDisplay: 'code',
     });
   
-    return formatter.format(value);
+    return formatter.format(value).replace("INR", "").trim();
   }
