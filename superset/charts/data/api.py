@@ -36,6 +36,7 @@ from superset.charts.schemas import ChartDataQueryContextSchema
 from superset.commands.chart.data.create_async_job_command import (
     CreateAsyncChartDataJobCommand,
 )
+from superset.commands.utils import get_datasource_by_id
 from superset.commands.chart.data.get_data_command import ChartDataCommand
 from superset.commands.chart.exceptions import (
     ChartDataCacheLoadError,
@@ -333,6 +334,26 @@ class ChartDataRestApi(ChartRestApi):
                 result = command.run(force_cached=True)
                 if result is not None:
                     return self._send_chart_response(result)
+
+        datasource = form_data.get("datasource")
+        if isinstance(datasource, list):
+            datasource_string = datasource[0]
+            datasource_id = int(datasource_string.split("__")[0])
+            datasource_type = datasource_string.split("__")[1]
+        elif isinstance(datasource, dict):
+            datasource_id = datasource.get("id")
+            datasource_type = datasource.get("type")
+        else:
+            datasource_string = datasource
+            datasource_id = int(datasource_string.split("__")[0])
+            datasource_type = datasource_string.split("__")[1]
+
+        datasource = get_datasource_by_id(datasource_id, datasource_type)
+        database_name = None
+        if datasource and datasource.database:
+            database_name = datasource.database.name
+        queue_name = current_app.config["DATABASE_QUEUE_REDIRECTION"].get(database_name, "celery")
+        form_data["queue_name"] = queue_name
         # Otherwise, kick off a background job to run the chart query.
         # Clients will either poll or be notified of query completion,
         # at which point they will call the /data/<cache_key> endpoint
