@@ -1,5 +1,6 @@
-from typing import Any
+from typing import Any, Dict
 import logging
+import json
 import os
 from datetime import datetime, timedelta
 from typing import Optional
@@ -11,6 +12,7 @@ from s3cache.s3cache import S3Cache
 from superset.stats_logger import StatsdStatsLogger
 
 logger = logging.getLogger()
+
 
 def get_env_variable(var_name: str, default: Optional[str] = None) -> str:
     """Get the environment variable or raise exception."""
@@ -24,6 +26,16 @@ def get_env_variable(var_name: str, default: Optional[str] = None) -> str:
                 var_name
             )
             raise EnvironmentError(error_msg)
+
+
+def get_json_string_env_variable(var_name: str, default: Optional[str] = None) -> Dict[
+    Any, Any]:
+    """Retrieve json_string_env from environment and parse it as JSON."""
+    try:
+        string_json = get_env_variable(var_name, default)
+        return json.loads(string_json)  # Parse JSON string to dict
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON for {var_name}: {e}")
 
 
 STATSD_HOST = get_env_variable("STATSD_HOST", "")
@@ -93,7 +105,8 @@ DATA_CACHE_CONFIG = {**CACHE_CONFIG, "CACHE_KEY_PREFIX": "superset:dc:"}
 FILTER_STATE_CACHE_CONFIG = {**CACHE_CONFIG, "CACHE_KEY_PREFIX": "superset:filter:"}
 
 # Cache for explore form data state
-EXPLORE_FORM_DATA_CACHE_CONFIG = {**CACHE_CONFIG, "CACHE_KEY_PREFIX": "superset:explore:"}
+EXPLORE_FORM_DATA_CACHE_CONFIG = {**CACHE_CONFIG,
+                                  "CACHE_KEY_PREFIX": "superset:explore:"}
 
 
 def init_thumbnail_cache(app: Flask, config, cache_args, cache_options) -> S3Cache:
@@ -103,8 +116,10 @@ def init_thumbnail_cache(app: Flask, config, cache_args, cache_options) -> S3Cac
 
 # thumbnail cache config
 SUPERSET_CACHE_S3_BUCKET = get_env_variable("SUPERSET_CACHE_THUMBNAIL_S3_BUCKET", "")
-SUPERSET_CACHE_THUMBNAIL_S3_KEY_PREFIX = get_env_variable("SUPERSET_CACHE_THUMBNAIL_S3_KEY_PREFIX", "")
-SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFIX = get_env_variable("SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFIX", "")
+SUPERSET_CACHE_THUMBNAIL_S3_KEY_PREFIX = get_env_variable(
+    "SUPERSET_CACHE_THUMBNAIL_S3_KEY_PREFIX", "")
+SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFIX = get_env_variable(
+    "SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFIX", "")
 
 if SUPERSET_CACHE_S3_BUCKET == "" or SUPERSET_CACHE_THUMBNAIL_S3_KEY_PREFIX == "":
     THUMBNAIL_CACHE_CONFIG = {
@@ -118,12 +133,16 @@ else:
     THUMBNAIL_CACHE_CONFIG = {'CACHE_TYPE': 'superset_config.init_thumbnail_cache'}
 
 if SUPERSET_CACHE_S3_BUCKET == "" or SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFIX == "":
-    RESULTS_BACKEND = FileSystemCache("/app/superset_home/sqllab", threshold=1000, default_timeout=1000)
+    RESULTS_BACKEND = FileSystemCache("/app/superset_home/sqllab", threshold=1000,
+                                      default_timeout=1000)
 else:
-    RESULTS_BACKEND = S3Cache(SUPERSET_CACHE_S3_BUCKET, SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFIX)
+    RESULTS_BACKEND = S3Cache(SUPERSET_CACHE_S3_BUCKET,
+                              SUPERSET_CACHE_RESULTS_BACKEND_S3_KEY_PREFIX)
 
 SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT = int(
-    timedelta(seconds=int(get_env_variable("SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT", 150))).total_seconds() * 1000)
+    timedelta(seconds=int(get_env_variable("SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT",
+                                           150))).total_seconds() * 1000)
+
 
 class CeleryConfig(object):
     broker_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_CELERY_DB}"
@@ -146,6 +165,9 @@ class CeleryConfig(object):
         "cache_dashboard_screenshot": {"queue": "celery-priority"}
     }
 
+
+DATABASE_QUEUE_REDIRECTION = get_json_string_env_variable("DATABASE_QUEUE_REDIRECTION",
+                                                          "{\"zomato-ads-superset-store\": \"ads-queue\"}")
 
 CELERY_CONFIG = CeleryConfig
 # TODO: Make feature flags env driven
@@ -173,23 +195,29 @@ GLOBAL_ASYNC_QUERIES_REDIS_CONFIG = {
     "ssl": False
 }
 GLOBAL_ASYNC_QUERIES_REDIS_STREAM_PREFIX = "superset-async-events-"
-GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT = int(get_env_variable("GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT", "1000"))
+GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT = int(
+    get_env_variable("GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT", "1000"))
 GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT_FIREHOSE = int(
     get_env_variable("GLOBAL_ASYNC_QUERIES_REDIS_STREAM_LIMIT_FIREHOSE", "1000000"))
 GLOBAL_ASYNC_QUERIES_JWT_COOKIE_NAME = "superset-async-token"
 GLOBAL_ASYNC_QUERIES_JWT_COOKIE_SECURE = \
     get_env_variable("GLOBAL_ASYNC_QUERIES_JWT_COOKIE_SECURE", "true").lower() == "true"
 GLOBAL_ASYNC_QUERIES_JWT_COOKIE_DOMAIN = None
-GLOBAL_ASYNC_QUERIES_JWT_SECRET = get_env_variable("GLOBAL_ASYNC_QUERIES_JWT_SECRET", "8d4931910ce2b9d011ad5728444a14b0a40937890d33a6e427359e3bd7beaaf3")
-GLOBAL_ASYNC_QUERIES_TRANSPORT = get_env_variable("GLOBAL_ASYNC_QUERIES_TRANSPORT", "polling")
-GLOBAL_ASYNC_QUERIES_WEBSOCKET_URL = get_env_variable("GLOBAL_ASYNC_QUERIES_WEBSOCKET_URL","ws://127.0.0.1:8080/")
-GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(get_env_variable("GLOBAL_ASYNC_QUERIES_POLLING_DELAY", "5000"))  # 5 seconds
+GLOBAL_ASYNC_QUERIES_JWT_SECRET = get_env_variable("GLOBAL_ASYNC_QUERIES_JWT_SECRET",
+                                                   "8d4931910ce2b9d011ad5728444a14b0a40937890d33a6e427359e3bd7beaaf3")
+GLOBAL_ASYNC_QUERIES_TRANSPORT = get_env_variable("GLOBAL_ASYNC_QUERIES_TRANSPORT",
+                                                  "polling")
+GLOBAL_ASYNC_QUERIES_WEBSOCKET_URL = get_env_variable(
+    "GLOBAL_ASYNC_QUERIES_WEBSOCKET_URL", "ws://127.0.0.1:8080/")
+GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(
+    get_env_variable("GLOBAL_ASYNC_QUERIES_POLLING_DELAY", "5000"))  # 5 seconds
 
 # TODO: Introduce schema level behaviour for "CACHE_IMPERSONATION": True, will fix RLS cache issue.
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = False
 WEBDRIVER_BASEURL = get_env_variable("WEBDRIVER_BASE_URL", "http://superset:8088")
 # The base URL for the email report hyperlinks.
-WEBDRIVER_BASEURL_USER_FRIENDLY = get_env_variable("WEBDRIVER_BASEURL_USER_FRIENDLY", "https://superset.zomans.com")
+WEBDRIVER_BASEURL_USER_FRIENDLY = get_env_variable("WEBDRIVER_BASEURL_USER_FRIENDLY",
+                                                   "https://superset.zomans.com")
 THUMBNAIL_SELENIUM_USER = "jumbo"
 WEBDRIVER_WINDOW = {
     "dashboard": (1600, 2000),
@@ -219,8 +247,10 @@ if os.environ.get("Environment", "dev") == "dev":
 else:
     AUTH_TYPE = AUTH_OAUTH
     ENABLE_PROXY_FIX = True
-    SUPERSET_GOOGLE_OAUTH_CLIENT_ID = get_env_variable("SUPERSET_GOOGLE_OAUTH_CLIENT_ID")
-    SUPERSET_GOOGLE_OAUTH_CLIENT_SECRET = get_env_variable("SUPERSET_GOOGLE_OAUTH_CLIENT_SECRET")
+    SUPERSET_GOOGLE_OAUTH_CLIENT_ID = get_env_variable(
+        "SUPERSET_GOOGLE_OAUTH_CLIENT_ID")
+    SUPERSET_GOOGLE_OAUTH_CLIENT_SECRET = get_env_variable(
+        "SUPERSET_GOOGLE_OAUTH_CLIENT_SECRET")
     OAUTH_PROVIDERS = [
         {
             'name': 'google',
@@ -266,13 +296,13 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
     user = security_manager.find_user(username=username)
     logger.info(f"Passed username: {username}, user: {user}")
     if user and user.email and backend_name in tuple(
-             get_env_variable("DB_MUTATOR_WHITELIST", "presto,trino").split(",")):
-    #     logger.info(f"Email: {user.email}")
-    #     uri = uri.update_query_dict({'username': user.email})
-    #     logger.info(uri)
-    #     logger.info(f"Passed un: {username}")
+        get_env_variable("DB_MUTATOR_WHITELIST", "presto,trino").split(",")):
+        #     logger.info(f"Email: {user.email}")
+        #     uri = uri.update_query_dict({'username': user.email})
+        #     logger.info(uri)
+        #     logger.info(f"Passed un: {username}")
 
-        if get_env_variable("FORCE_PARAM_OVERRIDING","false").lower() == "true":
+        if get_env_variable("FORCE_PARAM_OVERRIDING", "false").lower() == "true":
             try:
                 params['connect_args']['user'] = user.email
             except Exception as e:
@@ -282,7 +312,8 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
         uri = uri.update_query_dict({'host': get_env_variable("PRIORITY_CLUSTER", "")})
         logger.info(uri)
     logger.info(source)
-    if source == 1 and get_env_variable("FORCE_ROUTING_DASHBOARDS", "true").lower() == "true":
+    if source == 1 and get_env_variable("FORCE_ROUTING_DASHBOARDS",
+                                        "true").lower() == "true":
         uri = uri.update_query_dict({'host': get_env_variable("REPORTING_CLUSTER", "")})
         logger.info(uri)
 
@@ -291,11 +322,15 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
 
 DB_CONNECTION_MUTATOR = custom_db_connection_mutator
 
-SHOW_DOWNLOAD_TO_CSV=get_env_variable("SHOW_DOWNLOAD_TO_CSV", "false").lower() == "true"
-SHOW_CLIPBOARD=get_env_variable("SHOW_CLIPBOARD", "false").lower() == "true"
-SHOW_DOWNLOAD_DASHBOARD=get_env_variable("SHOW_DOWNLOAD_DASHBOARD", "false").lower() == "true"
-SHOW_DOWNLOAD_EXPLORE=get_env_variable("SHOW_DOWNLOAD_EXPLORE", "false").lower() == "true"
-SHOW_CHART_DOWNLOAD_TO_CSV=get_env_variable("SHOW_CHART_DOWNLOAD_TO_CSV", "false").lower() == "true"
+SHOW_DOWNLOAD_TO_CSV = get_env_variable("SHOW_DOWNLOAD_TO_CSV",
+                                        "false").lower() == "true"
+SHOW_CLIPBOARD = get_env_variable("SHOW_CLIPBOARD", "false").lower() == "true"
+SHOW_DOWNLOAD_DASHBOARD = get_env_variable("SHOW_DOWNLOAD_DASHBOARD",
+                                           "false").lower() == "true"
+SHOW_DOWNLOAD_EXPLORE = get_env_variable("SHOW_DOWNLOAD_EXPLORE",
+                                         "false").lower() == "true"
+SHOW_CHART_DOWNLOAD_TO_CSV = get_env_variable("SHOW_CHART_DOWNLOAD_TO_CSV",
+                                              "false").lower() == "true"
 
 
 def SQL_QUERY_MUTATOR(sql: str,
