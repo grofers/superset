@@ -149,6 +149,7 @@ COPY /docker/install_dep.sh /app/docker/
 RUN chmod +x /app/docker/install_dep.sh
 
 COPY --chown=superset ./superset_config.py /app/
+COPY --chown=superset ./custom_sso_security_manager.py /app/
 COPY --chown=superset ./docker/docker-bootstrap.sh /app/docker/
 COPY --chown=superset ./docker/docker-init.sh /app/docker/
 
