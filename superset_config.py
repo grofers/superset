@@ -10,6 +10,8 @@ from flask import Flask
 from flask_appbuilder.security.manager import AUTH_DB, AUTH_OAUTH
 from s3cache.s3cache import S3Cache
 from superset.stats_logger import StatsdStatsLogger
+from custom_sso_security_manager import CustomSsoSecurityManager
+CUSTOM_SECURITY_MANAGER = CustomSsoSecurityManager
 
 logger = logging.getLogger()
 
