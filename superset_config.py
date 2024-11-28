@@ -281,11 +281,17 @@ filter_query = "zomato%" if TENANT == "ZOMATO" else "blinkit%"
 
 def role_filter(query):
     from superset import security_manager
-    from sqlalchemy import or_
+    from sqlalchemy import or_, and_
+    from flask import g
 
     role_model = security_manager.role_model
     filters = [role_model.name.like(filter_query)]
-    return query.filter(or_(*filters))
+
+    # Add filter for user's own roles
+    user_roles = [role.id for role in security_manager.get_user_roles()]
+    filters.append(role_model.id.in_(user_roles))
+
+    return query.filter(and_(*filters))
 
 
 EXTRA_RELATED_QUERY_FILTERS = {
