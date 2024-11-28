@@ -211,9 +211,10 @@ const PropertiesModal = ({
           .filter((item: { extra: { active: boolean } }) =>
             item.extra.active !== undefined ? item.extra.active : true,
           )
-          .map((item: { value: number; text: string }) => ({
+          .map((item: { value: number; text: string; extra: { email: string } }) => ({
             value: item.value,
             label: item.text,
+            email: item.extra.email,
           })),
         totalCount: response.json.count,
       }));
@@ -552,6 +553,7 @@ const PropertiesModal = ({
               allowClear
               ariaLabel={t('Owners')}
               disabled={isLoading}
+              filterOption={() =>true}
               mode="multiple"
               onChange={handleOnChangeOwners}
               options={(input, page, pageSize) =>
@@ -600,6 +602,11 @@ const PropertiesModal = ({
                 allowNewOptions
                 ariaLabel={t('Owners')}
                 disabled={isLoading}
+                filterOption={(input, option) => 
+                  !input || 
+                  (option?.email?.toLowerCase().includes(input.toLowerCase()) || 
+                  option?.label?.toString().toLowerCase().includes(input.toLowerCase()))
+                }
                 mode="multiple"
                 onChange={handleOnChangeOwners}
                 options={(input, page, pageSize) =>
