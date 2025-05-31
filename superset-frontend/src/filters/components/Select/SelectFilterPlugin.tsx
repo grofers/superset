@@ -266,6 +266,26 @@ export default function PluginFilterSelect(props: PluginFilterSelectProps) {
     } else if (isDisabled) {
       // empty selection if filter is disabled
       updateDataMask(null);
+    } else if (defaultToFirstItem && filterState.value !== undefined) {
+      // Check if current filter value is still valid in the new data
+      const currentValues = ensureIsArray(filterState.value);
+      const availableValues = new Set(data.map(item => item[col]));
+      const hasValidValue = currentValues.some(value => availableValues.has(value));
+      
+      if (!hasValidValue && data.length > 0) {
+        // If current value is not in new data, reset to first item
+        const firstItem: SelectValue = data[0]
+          ? (groupby.map(col => data[0][col]) as string[])
+          : null;
+        if (firstItem?.[0] !== undefined) {
+          updateDataMask(firstItem);
+        } else {
+          updateDataMask(null);
+        }
+      } else {
+        // reset data mask based on filter state
+        updateDataMask(filterState.value);
+      }
     } else {
       // reset data mask based on filter state
       updateDataMask(filterState.value);
