@@ -808,7 +808,7 @@ class PrestoEngineSpec(PrestoBaseEngineSpec):
             query_key = "view_information_schema_query_schema_filtered"
             default_query = """
                 SELECT table_name FROM information_schema.tables
-                WHERE table_schema = {schema} AND table_type = 'VIEW'
+                WHERE table_schema = '{schema}' AND table_type = 'VIEW'
             """
         else:
             query_key = "view_information_schema_query_view"
