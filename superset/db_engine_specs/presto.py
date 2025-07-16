@@ -262,10 +262,13 @@ class PrestoBaseEngineSpec(BaseEngineSpec, metaclass=ABCMeta):
         TimeGrain.MONTH: "date_trunc('month', CAST({col} AS TIMESTAMP))",
         TimeGrain.QUARTER: "date_trunc('quarter', CAST({col} AS TIMESTAMP))",
         TimeGrain.YEAR: "date_trunc('year', CAST({col} AS TIMESTAMP))",
-        TimeGrain.WEEK_STARTING_SUNDAY: "date_trunc('week', CAST({col} AS TIMESTAMP) + interval '1' day) - interval '1' day",  # noqa
+        TimeGrain.WEEK_STARTING_SUNDAY: "date_trunc('week', CAST({col} AS TIMESTAMP) + interval '1' day) - interval '1' day",
+        # noqa
         TimeGrain.WEEK_STARTING_MONDAY: "date_trunc('week', CAST({col} AS TIMESTAMP))",
-        TimeGrain.WEEK_ENDING_SATURDAY: "date_trunc('week', CAST({col} AS TIMESTAMP) + interval '1' day) + interval '5' day",  # noqa
-        TimeGrain.WEEK_ENDING_SUNDAY: "date_trunc('week', CAST({col} AS TIMESTAMP)) + interval '6' day",  # noqa
+        TimeGrain.WEEK_ENDING_SATURDAY: "date_trunc('week', CAST({col} AS TIMESTAMP) + interval '1' day) + interval '5' day",
+        # noqa
+        TimeGrain.WEEK_ENDING_SUNDAY: "date_trunc('week', CAST({col} AS TIMESTAMP)) + interval '6' day",
+        # noqa
     }
 
     @classmethod
@@ -417,7 +420,8 @@ class PrestoBaseEngineSpec(BaseEngineSpec, metaclass=ABCMeta):
         return database.get_df("SHOW FUNCTIONS")["Function"].tolist()
 
     @classmethod
-    def _partition_query(  # pylint: disable=too-many-arguments,too-many-locals,unused-argument
+    def _partition_query(
+        # pylint: disable=too-many-arguments,too-many-locals,unused-argument
         cls,
         table_name: str,
         schema: str | None,
@@ -762,10 +766,20 @@ class PrestoEngineSpec(PrestoBaseEngineSpec):
         :param schema: The schema to inspect
         :returns: The physical table names
         """
+        if schema:
+            query_key = "table_information_schema_query_schema_filtered"
+            default_query = "SHOW TABLES FROM {schema}"
+        else:
+            query_key = "table_information_schema_query"
+            default_query = "SHOW TABLES"
 
-        return super().get_table_names(
-            database, inspector, schema
-        ) - cls.get_view_names(database, inspector, schema)
+        sql_template = dedent(database.get_extra().get("custom_properties", {}).get(query_key, default_query)).strip()
+
+        with database.get_raw_connection(schema=schema) as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql_template.format(schema=schema))
+            results = cursor.fetchall()
+            return {row[0] for row in results} - cls.get_view_names(database, inspector, schema)
 
     @classmethod
     def get_view_names(
@@ -790,28 +804,24 @@ class PrestoEngineSpec(PrestoBaseEngineSpec):
         :param schema: The schema to inspect
         :returns: The view names
         """
-
         if schema:
-            sql = dedent(
-                """
+            query_key = "view_information_schema_query_schema_filtered"
+            default_query = """
                 SELECT table_name FROM information_schema.tables
-                WHERE table_schema = %(schema)s
-                AND table_type = 'VIEW'
-                """
-            ).strip()
-            params = {"schema": schema}
+                WHERE table_schema = {schema} AND table_type = 'VIEW'
+            """
         else:
-            sql = dedent(
-                """
+            query_key = "view_information_schema_query_view"
+            default_query = """
                 SELECT table_name FROM information_schema.tables
                 WHERE table_type = 'VIEW'
-                """
-            ).strip()
-            params = {}
+            """
+
+        sql_template = dedent(database.get_extra().get("custom_properties", {}).get(query_key, default_query)).strip()
 
         with database.get_raw_connection(schema=schema) as conn:
             cursor = conn.cursor()
-            cursor.execute(sql, params)
+            cursor.execute(sql_template.format(schema=schema))
             results = cursor.fetchall()
             return {row[0] for row in results}
 

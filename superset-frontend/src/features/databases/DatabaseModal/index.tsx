@@ -1912,6 +1912,21 @@ const DatabaseModal: FunctionComponent<DatabaseModalProps> = ({
               onChange(ActionType.ExtraEditorChange, payload);
             }}
           />
+          <ValidatedInput
+            label="Custom Properties"
+            name="custom_properties" // This will be the key in the 'extra' JSON
+            value={
+              JSON.parse(db?.extra || '{}').custom_properties || ''
+            }
+            onChange={({ target }: { target: HTMLInputElement }) =>
+              onChange(ActionType.ExtraEditorChange, {
+                name: target.name,
+                json: target.value
+              })
+            }
+            validationMethods={{ onBlur: () => {} }}
+            css={formScrollableStyles}
+          />
         </Tabs.TabPane>
       </TabsStyled>
     </Modal>
