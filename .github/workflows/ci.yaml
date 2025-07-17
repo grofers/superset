@@ -2,7 +2,8 @@ name: superset-ci
 
 on:
   pull_request:
-    types: [synchronize, opened, reopened, ready_for_review]
+    branches:
+      - master
 
 permissions:
   id-token: write
@@ -10,10 +11,6 @@ permissions:
   checks: write
   contents: write
 
-# cancel previous workflow jobs for PRs
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
 
 jobs:
   superset-ci:
