@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   superset-ci:
-    runs-on: [ self-hosted,1v, spot, acc-infraprod, arch-x64 ]
+    runs-on: [ self-hosted,4v, spot, acc-infraprod, arch-x64 ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
