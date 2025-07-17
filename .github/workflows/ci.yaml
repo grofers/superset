@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   superset-ci:
-    runs-on: [ self-hosted, 8v, spot,Zomato ,acc-infraprod, arch-x64 ]
+    runs-on: [ self-hosted,1v, spot, acc-infraprod, arch-x64 ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
