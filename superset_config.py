@@ -318,6 +318,14 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
 
     if username in get_env_variable("PRIORITY_CLUSTER_EMAIL", "jumbo@zomato.com"):
         uri = uri.update_query_dict({'host': get_env_variable("PRIORITY_CLUSTER", "")})
+
+        if get_env_variable("ENABLE_CATALOG_OVERRIDE", "false").lower() == "true":
+            catalog = get_env_variable("PRIORITY_CATALOG", "")
+            uri = uri.update_query_dict({'catalog': catalog})
+            if 'connect_args' not in params:
+                params['connect_args'] = {}
+            params['connect_args']['catalog'] = catalog
+
         logger.info(uri)
     logger.info(source)
     if source == 1 and get_env_variable("FORCE_ROUTING_DASHBOARDS",
