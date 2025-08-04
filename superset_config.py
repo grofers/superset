@@ -320,13 +320,16 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
         uri = uri.update_query_dict({'host': get_env_variable("PRIORITY_CLUSTER", "")})
 
         if get_env_variable("ENABLE_CATALOG_OVERRIDE", "false").lower() == "true":
-            catalog = get_env_variable("PRIORITY_CATALOG", "")
-            uri = uri.update_query_dict({'catalog': catalog})
-            if 'connect_args' not in params:
-                params['connect_args'] = {}
-            params['connect_args']['catalog'] = catalog
+            logger.info(f"uri is {uri.database}")
+            if 'zomato' in uri.database:
+                logger.info(f"Entered into catalog override for {uri.database}")
+                catalog = get_env_variable("PRIORITY_CATALOG", "")
+                uri = uri.update_query_dict({'catalog': catalog})
+                if 'connect_args' not in params:
+                    params['connect_args'] = {}
+                params['connect_args']['catalog'] = catalog
 
-        logger.info(uri)
+    logger.info(uri)
     logger.info(source)
     if source == 1 and get_env_variable("FORCE_ROUTING_DASHBOARDS",
                                         "true").lower() == "true":
