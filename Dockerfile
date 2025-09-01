@@ -22,7 +22,7 @@ ARG PY_VER=3.9-slim-bookworm
 
 # if BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
-FROM --platform=${BUILDPLATFORM} node:16-bookworm-slim AS superset-node
+FROM --platform=${BUILDPLATFORM} node:16.20.2-bookworm-slim AS superset-node
 
 ARG NPM_BUILD_CMD="build"
 
@@ -41,7 +41,21 @@ RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.
 
 RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
     --mount=type=bind,target=./package-lock.json,src=./superset-frontend/package-lock.json \
-    npm ci
+    --mount=type=cache,target=/root/.npm \
+    echo "=== BUILD DIAGNOSTICS ===" && \
+    echo "Node version: $(node --version)" && \
+    echo "NPM version: $(npm --version)" && \
+    echo "Memory info:" && cat /proc/meminfo | grep MemAvailable && \
+    echo "Optimizing npm configuration..." && \
+    npm config set fetch-timeout 600000 && \
+    npm config set fetch-retry-mintimeout 30000 && \
+    npm config set fetch-retry-maxtimeout 180000 && \
+    npm config set fetch-retries 5 && \
+    npm config set registry https://registry.npmjs.org/ && \
+    npm config set progress false && \
+    echo "Starting optimized npm ci at: $(date)" && \
+    npm ci --no-audit --no-fund --no-optional --prefer-offline --loglevel warn && \
+    echo "npm ci completed successfully at: $(date)"
 
 COPY ./superset-frontend ./
 # This seems to be the most expensive step
@@ -131,14 +145,16 @@ RUN apt-get update -qq \
         libgbm1 \
     # Install GeckoDriver WebDriver
     && wget -q https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz -O - | tar xfz - -C /usr/local/bin \
-    # Install Firefox
-    && wget -q https://download-installer.cdn.mozilla.net/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/en-US/firefox-${FIREFOX_VERSION}.tar.bz2 -O - | tar xfj - -C /opt \
-    && ln -s /opt/firefox/firefox /usr/local/bin/firefox \
+    # Install Firefox using package manager
+    && apt-get update \
+    && apt-get install -y --no-install-recommends firefox-esr \
+    && ln -s /usr/bin/firefox-esr /usr/local/bin/firefox \
     && apt-get autoremove -yqq --purge wget && rm -rf /var/[log,tmp]/* /tmp/* /var/lib/apt/lists/*
 # Cache everything for dev purposes...
 RUN --mount=type=bind,target=./requirements/base.txt,src=./requirements/base.txt \
     --mount=type=bind,target=./requirements/docker.txt,src=./requirements/docker.txt \
     --mount=type=cache,target=/root/.cache/pip \
+    pip install --only-binary=:all: gevent==22.10.2 && \
     pip install -r requirements/docker.txt
 # custom packages
 
@@ -149,9 +165,13 @@ COPY /docker/install_dep.sh /app/docker/
 RUN chmod +x /app/docker/install_dep.sh
 
 COPY --chown=superset ./superset_config.py /app/
+COPY --chown=superset ./custom_sso_security_manager.py /app/
 COPY --chown=superset ./docker/docker-bootstrap.sh /app/docker/
 COPY --chown=superset ./docker/docker-init.sh /app/docker/
 
+RUN pip install playwright && \
+    playwright install-deps && \
+    playwright install chromium 
 
 USER superset
 RUN /app/docker/install_dep.sh

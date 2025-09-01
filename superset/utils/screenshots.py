@@ -94,7 +94,16 @@ class BaseScreenshot:
         clipping_window: WindowSize | None = None,
     ) -> bytes | None:
         driver = self.driver(window_size)
-        self.screenshot = driver.get_screenshot(self.url, self.element, user, clipping_window)
+        try:
+            # Check if driver supports clipping_window (Playwright)
+            if hasattr(driver, '_supports_clipping') or 'Playwright' in driver.__class__.__name__:
+                self.screenshot = driver.get_screenshot(self.url, self.element, user, clipping_window)
+            else:
+                # Selenium driver - doesn't support clipping_window
+                self.screenshot = driver.get_screenshot(self.url, self.element, user)
+        except Exception as e:
+            logger.error("Failed at generating thumbnail %s", e, exc_info=True)
+            return None
         return self.screenshot
 
     def get(
