@@ -49,7 +49,7 @@ class FilterRelatedOwners(BaseFilter):  # pylint: disable=too-few-public-methods
             or_(
                 # could be made to handle spaces between names more gracefully
                 (user_model.first_name + " " + user_model.last_name).ilike(like_value),
-                user_model.username.ilike(like_value),
+                user_model.email.ilike(like_value),
             )
         )
 
@@ -98,6 +98,8 @@ class BaseFilterRelatedRoles(BaseFilter):  # pylint: disable=too-few-public-meth
     arg_name = "role"
 
     def apply(self, query: Query, value: Optional[Any]) -> Query:
+        if security_manager.is_admin():
+            return query
         if extra_filters := current_app.config["EXTRA_RELATED_QUERY_FILTERS"].get(
             "role",
         ):
