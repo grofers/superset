@@ -19,13 +19,6 @@ concurrency:
 jobs: 
   superset-ci:
     runs-on: [self-hosted, 8v, od, ZAnalytics, acc-infraprod, arch-x64]
-  group: ${{ github.workflow }}-${{ github.actor }}-${{ github.head_ref }}
-  cancel-in-progress: true
-
-
-jobs:
-  superset-ci:
-    runs-on: [self-hosted, 4v, od, ZAnalytics, acc-infraprod, arch-x64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
