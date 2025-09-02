@@ -59,17 +59,17 @@ DATABASE_DB = get_env_variable("DATABASE_DB")
 
 ## Reporting and alerts
 # Slack
-SLACK_API_TOKEN = get_env_variable("SLACK_API_TOKEN")
+SLACK_API_TOKEN = get_env_variable("SLACK_API_TOKEN", "")
 
 # Email
-SMTP_HOST = get_env_variable("SMTP_HOST")
-SMTP_PORT = int(get_env_variable("SMTP_PORT"))
+SMTP_HOST = get_env_variable("SMTP_HOST", "")
+SMTP_PORT = int(get_env_variable("SMTP_PORT", "0000"))
 SMTP_STARTTLS = get_env_variable("SMTP_STARTTLS", "true").lower() == "true"
 SMTP_SSL_SERVER_AUTH = get_env_variable("SMTP_SSL_SERVER_AUTH", "false").lower() == "true"
 SMTP_SSL = get_env_variable("SMTP_SSL", "false").lower() == "true"
-SMTP_USER = get_env_variable("SMTP_USER")
-SMTP_PASSWORD = get_env_variable("SMTP_PASSWORD")
-SMTP_MAIL_FROM = get_env_variable("SMTP_MAIL_FROM")
+SMTP_USER = get_env_variable("SMTP_USER", "")
+SMTP_PASSWORD = get_env_variable("SMTP_PASSWORD", "")
+SMTP_MAIL_FROM = get_env_variable("SMTP_MAIL_FROM", "")
 EMAIL_REPORTS_SUBJECT_PREFIX = get_env_variable("EMAIL_REPORTS_SUBJECT_PREFIX", "[Superset] ")
 
 # The SQLAlchemy connection string.
@@ -214,7 +214,8 @@ FEATURE_FLAGS = {"ALERT_REPORTS": True,
                  "DASHBOARD_VIRTUALIZATION": True,
                  "GLOBAL_ASYNC_QUERIES": True,
                  "DRILL_TO_DETAIL": True,
-                 "ENABLE_JAVASCRIPT_CONTROLS": True
+                 "ENABLE_JAVASCRIPT_CONTROLS": True,
+                 "DATE_FORMAT_IN_EMAIL_SUBJECT": True
                  }
 
 # Global Async
