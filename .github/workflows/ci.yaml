@@ -71,19 +71,9 @@ jobs:
 
       - name: Build and push docker
         run: |
-          echo "=== Docker Build Context Verification ==="
-          echo "Build context directory: $(pwd)"
-          echo "Git commit being built: $(git rev-parse HEAD)"
-          echo "Files in build context:"
-          ls -la
-          
           docker buildx create --use --driver-opt image=public.ecr.aws/vend/moby/buildkit:buildx-stable-1
           docker buildx build \
             --platform linux/arm64 \
             --target dev \
-            --progress=plain \
-            --no-cache \
             -t 125719378300.dkr.ecr.ap-southeast-1.amazonaws.com/superset:${DOCKER_TAG} \
-            --push \
-            --build-context .=. \
-            .
+            --push .
