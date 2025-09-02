@@ -2,7 +2,6 @@ name: superset-ci-v2
 
 on:
   pull_request:
-    types: [assigned, opened, synchronize, reopened]
     branches:
       - staging
       - master
@@ -13,22 +12,12 @@ permissions:
   checks: write
   contents: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.actor }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs: 
   superset-ci-v2:
     runs-on: [self-hosted, 8v, od, ZAnalytics, acc-infraprod, arch-x64]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
-          token: ${{ github.token }}
-          persist-credentials: false
-          fetch-depth: 0
+        uses: actions/checkout@v3
 
       - name: Verify checkout
         run: |
