@@ -6,6 +6,11 @@ on:
       - staging
       - master
 
+env:
+  GITHUB_BOT_NAME: /sre/github/codebuild/GITHUB_BOT_NAME
+  GITHUB_BOT_PAC: /sre/github/codebuild/GITHUB_BOT_PAC
+  GITHUB_BOT_EMAIL: /sre/github/codebuild/GITHUB_BOT_EMAIL
+
 permissions:
   id-token: write
   pull-requests: write
