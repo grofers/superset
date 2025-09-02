@@ -1,4 +1,4 @@
-name: superset-ci-v2
+name: superset-ci
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 jobs: 
-  superset-ci-v2:
+  superset-ci:
     runs-on: [self-hosted, 8v, od, ZAnalytics, acc-infraprod, arch-x64]
     steps:
       - name: Checkout code
