@@ -22,9 +22,26 @@ jobs:
     runs-on: [self-hosted, 8v, od, ZAnalytics, acc-infraprod, arch-x64]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ github.token }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify checkout
+        run: |
+          echo "=== Git Status ==="
+          git status
+          echo "=== Current Branch ==="
+          git branch -a
+          echo "=== Current Commit ==="
+          git log --oneline -1
+          echo "=== Remote URLs ==="
+          git remote -v
+          echo "=== Dockerfile verification ==="
+          head -20 Dockerfile
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -42,17 +59,37 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
+      - name: Clean Docker state
+        run: |
+          echo "=== Cleaning Docker buildx state ==="
+          docker buildx ls
+          docker buildx rm --all-inactive || true
+          docker system prune -f
+          
       - name: Set Docker tag
         id: set-tag
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
           echo "DOCKER_TAG=staging-${SHORT_SHA}" >> $GITHUB_ENV
+          echo "Building Docker image with SHA: ${SHORT_SHA}"
+          echo "Current working directory: $(pwd)"
+          echo "Dockerfile exists: $(test -f Dockerfile && echo 'yes' || echo 'no')"
 
       - name: Build and push docker
         run: |
+          echo "=== Docker Build Context Verification ==="
+          echo "Build context directory: $(pwd)"
+          echo "Git commit being built: $(git rev-parse HEAD)"
+          echo "Files in build context:"
+          ls -la
+          
           docker buildx create --use --driver-opt image=public.ecr.aws/vend/moby/buildkit:buildx-stable-1
           docker buildx build \
             --platform linux/arm64 \
             --target dev \
+            --progress=plain \
+            --no-cache \
             -t 125719378300.dkr.ecr.ap-southeast-1.amazonaws.com/superset:${DOCKER_TAG} \
-            --push .
+            --push \
+            --build-context .=. \
+            .
