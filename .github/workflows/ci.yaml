@@ -1,4 +1,4 @@
-name: superset-ci
+name: superset-ci-v2
 
 on:
   pull_request_target:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs: 
-  superset-ci:
+  superset-ci-v2:
     runs-on: [self-hosted, 8v, od, ZAnalytics, acc-infraprod, arch-x64]
     steps:
       - name: Checkout code
