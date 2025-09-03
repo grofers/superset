@@ -29,7 +29,11 @@ ARG NPM_BUILD_CMD="build"
 RUN apt-get update -qq \
     && apt-get install -yqq --no-install-recommends \
         build-essential \
-        python3
+        python3 \
+        curl \
+        iputils-ping \
+        procps \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV BUILD_CMD=${NPM_BUILD_CMD} \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
