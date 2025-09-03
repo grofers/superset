@@ -42,19 +42,37 @@ RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.
 RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
     --mount=type=bind,target=./package-lock.json,src=./superset-frontend/package-lock.json \
     --mount=type=cache,target=/root/.npm \
-    echo "=== BUILD DIAGNOSTICS ===" && \
+    echo "=== ENHANCED BUILD DIAGNOSTICS ===" && \
     echo "Node version: $(node --version)" && \
     echo "NPM version: $(npm --version)" && \
-    echo "Memory info:" && cat /proc/meminfo | grep MemAvailable && \
-    echo "Optimizing npm configuration..." && \
-    npm config set fetch-timeout 600000 && \
-    npm config set fetch-retry-mintimeout 30000 && \
-    npm config set fetch-retry-maxtimeout 180000 && \
-    npm config set fetch-retries 5 && \
+    echo "System info:" && \
+    echo "  Memory: $(cat /proc/meminfo | grep -E 'MemTotal|MemFree|MemAvailable')" && \
+    echo "  CPU cores: $(nproc)" && \
+    echo "  Disk space: $(df -h /tmp)" && \
+    echo "Network connectivity test:" && \
+    ping -c 3 registry.npmjs.org || echo "Registry ping failed" && \
+    curl -s -I https://registry.npmjs.org/ | head -3 || echo "Registry HTTPS test failed" && \
+    echo "Package.json validation:" && \
+    cat ./package.json | head -10 && \
+    echo "Package-lock.json validation:" && \
+    cat ./package-lock.json | head -10 && \
+    echo "Clearing npm cache..." && \
+    npm cache clean --force && \
+    echo "Setting optimized npm configuration..." && \
+    npm config set fetch-timeout 300000 && \
+    npm config set fetch-retry-mintimeout 10000 && \
+    npm config set fetch-retry-maxtimeout 60000 && \
+    npm config set fetch-retries 3 && \
     npm config set registry https://registry.npmjs.org/ && \
     npm config set progress false && \
-    echo "Starting optimized npm ci at: $(date)" && \
-    npm ci --no-audit --no-fund --no-optional --prefer-offline --loglevel warn && \
+    npm config set audit false && \
+    npm config set fund false && \
+    npm config set maxsockets 15 && \
+    npm config set prefer-offline true && \
+    echo "Starting npm ci with timeout at: $(date)" && \
+    timeout 1800 npm ci --no-audit --no-fund --no-optional --prefer-offline --loglevel info || \
+    (echo "npm ci failed or timed out, retrying with verbose logging..." && \
+     timeout 1800 npm ci --no-audit --no-fund --no-optional --loglevel verbose) && \
     echo "npm ci completed successfully at: $(date)"
 
 COPY ./superset-frontend ./
