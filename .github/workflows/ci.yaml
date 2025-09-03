@@ -73,7 +73,7 @@ jobs:
         run: |
           docker buildx create --use --driver-opt image=public.ecr.aws/vend/moby/buildkit:buildx-stable-1
           docker buildx build \
-            --platform linux/arm64 \
+            --platform linux/amd64 \
             --target dev \
             -t 125719378300.dkr.ecr.ap-southeast-1.amazonaws.com/superset:${DOCKER_TAG} \
             --push .
