@@ -64,7 +64,7 @@ jobs:
         id: set-tag
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "DOCKER_TAG=v4_custom_v0.0.27_dev" >> $GITHUB_ENV
+          echo "DOCKER_TAG=v4_custom_commit_${SHORT_SHA}_dev" >> $GITHUB_ENV
           echo "Building Docker image with SHA: ${SHORT_SHA}"
           echo "Current working directory: $(pwd)"
           echo "Dockerfile exists: $(test -f Dockerfile && echo 'yes' || echo 'no')"
