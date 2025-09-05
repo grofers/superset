@@ -109,7 +109,7 @@ jobs:
         env:
           build_image: ${{ steps.check-changes.outputs.build_image }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ env.GITHUB_BOT_PAC }}
           script: |
             const shouldBuild = process.env.build_image === 'true';
             let message;
