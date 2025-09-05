@@ -1,10 +1,8 @@
 name: superset-ci
 
 on:
-  pull_request:
-    branches:
-      - staging
-      - master
+  issue_comment:
+    types: [created]
 
 env:
   GITHUB_BOT_NAME: /sre/github/codebuild/GITHUB_BOT_NAME
@@ -17,12 +15,37 @@ permissions:
   checks: write
   contents: write
 
+concurrency:
+  group: superset-ci-pr-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
 jobs: 
   superset-ci:
     runs-on: [self-hosted, 8v, od, ZAnalytics, acc-infraprod, arch-x64]
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/build')
     steps:
-      - name: Checkout code
+      - name: Checkout PR code
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Get PR details
+        id: pr
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            return pr.data;
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ fromJson(steps.pr.outputs.result).head.sha }}
 
       - name: Verify checkout
         run: |
@@ -64,8 +87,10 @@ jobs:
         id: set-tag
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "DOCKER_TAG=v4_custom_commit_${SHORT_SHA}_dev" >> $GITHUB_ENV
-          echo "Building Docker image with SHA: ${SHORT_SHA}"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          RUN_ID=${{ github.run_id }}
+          echo "DOCKER_TAG=v4_custom_commit_${SHORT_SHA}_${TIMESTAMP}_${RUN_ID}_dev" >> $GITHUB_ENV
+          echo "Building Docker image with SHA: ${SHORT_SHA}, Timestamp: ${TIMESTAMP}, Run ID: ${RUN_ID}"
           echo "Current working directory: $(pwd)"
           echo "Dockerfile exists: $(test -f Dockerfile && echo 'yes' || echo 'no')"
 
@@ -77,3 +102,22 @@ jobs:
             --target dev \
             -t 125719378300.dkr.ecr.ap-southeast-1.amazonaws.com/superset:${DOCKER_TAG} \
             --push .
+
+      - name: Comment Docker image on PR
+        uses: actions/github-script@v6
+        if: success()
+        with:
+          script: |
+            const imageName = `125719378300.dkr.ecr.ap-southeast-1.amazonaws.com/superset:${process.env.DOCKER_TAG}`;
+            const comment = `🐳 **Docker Image Built Successfully!**
+            
+            **Image:** \`${imageName}\`
+            
+            You can now use this image for testing or deployment.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
