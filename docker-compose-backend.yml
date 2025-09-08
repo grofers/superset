@@ -31,7 +31,6 @@ version: "3.7"
 services:
   redis:
     image: redis:7
-    # platform: linux/arm64
     container_name: superset_cache
     restart: unless-stopped
     ports:
@@ -42,7 +41,6 @@ services:
   db:
     env_file: docker/.env
     image: postgres:15
-    # platform: linux/arm64
     container_name: superset_db
     restart: unless-stopped
     ports:
@@ -54,7 +52,6 @@ services:
   superset:
     env_file: docker/.env
     image: *superset-image
-    # platform: linux/arm64
     container_name: superset_app
     command: ["/app/docker/docker-bootstrap.sh", "app"]
     restart: unless-stopped
@@ -71,7 +68,6 @@ services:
 
   superset-init:
     image: *superset-image
-    # platform: linux/arm64
     container_name: superset_init
     command: ["/app/docker/docker-init.sh"]
     env_file: docker/.env
@@ -85,7 +81,6 @@ services:
 
   superset-worker:
     image: *superset-image
-    # platform: linux/arm64
     container_name: superset_worker
     command: ["/app/docker/docker-bootstrap.sh", "worker"]
     env_file: docker/.env

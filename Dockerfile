@@ -46,23 +46,8 @@ RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.
 RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
     --mount=type=bind,target=./package-lock.json,src=./superset-frontend/package-lock.json \
     --mount=type=cache,target=/root/.npm \
-    echo "=== ENHANCED BUILD DIAGNOSTICS ===" && \
-    echo "Node version: $(node --version)" && \
-    echo "NPM version: $(npm --version)" && \
-    echo "System info:" && \
-    echo "  Memory: $(cat /proc/meminfo | grep -E 'MemTotal|MemFree|MemAvailable')" && \
-    echo "  CPU cores: $(nproc)" && \
-    echo "  Disk space: $(df -h /tmp)" && \
-    echo "Network connectivity test:" && \
-    ping -c 3 registry.npmjs.org || echo "Registry ping failed" && \
-    curl -s -I https://registry.npmjs.org/ | head -3 || echo "Registry HTTPS test failed" && \
-    echo "Package.json validation:" && \
-    cat ./package.json | head -10 && \
-    echo "Package-lock.json validation:" && \
-    cat ./package-lock.json | head -10 && \
     echo "Clearing npm cache..." && \
     npm cache clean --force && \
-    echo "Setting optimized npm configuration..." && \
     npm config set fetch-timeout 300000 && \
     npm config set fetch-retry-mintimeout 10000 && \
     npm config set fetch-retry-maxtimeout 60000 && \
