@@ -10,6 +10,8 @@ from flask import Flask
 from flask_appbuilder.security.manager import AUTH_DB, AUTH_OAUTH
 from s3cache.s3cache import S3Cache
 from superset.stats_logger import StatsdStatsLogger
+from custom_sso_security_manager import CustomSsoSecurityManager
+CUSTOM_SECURITY_MANAGER = CustomSsoSecurityManager
 
 logger = logging.getLogger()
 
@@ -279,11 +281,17 @@ filter_query = "zomato%" if TENANT == "ZOMATO" else "blinkit%"
 
 def role_filter(query):
     from superset import security_manager
-    from sqlalchemy import or_
+    from sqlalchemy import or_, and_
+    from flask import g
 
     role_model = security_manager.role_model
     filters = [role_model.name.like(filter_query)]
-    return query.filter(or_(*filters))
+
+    # Add filter for user's own roles
+    user_roles = [role.id for role in security_manager.get_user_roles()]
+    filters.append(role_model.id.in_(user_roles))
+
+    return query.filter(and_(*filters))
 
 
 EXTRA_RELATED_QUERY_FILTERS = {
@@ -310,7 +318,18 @@ def custom_db_connection_mutator(uri, params, username, security_manager, source
 
     if username in get_env_variable("PRIORITY_CLUSTER_EMAIL", "jumbo@zomato.com"):
         uri = uri.update_query_dict({'host': get_env_variable("PRIORITY_CLUSTER", "")})
-        logger.info(uri)
+
+        if get_env_variable("ENABLE_CATALOG_OVERRIDE", "false").lower() == "true":
+            logger.info(f"uri is {uri.database}")
+            if 'zomato' in uri.database:
+                logger.info(f"Entered into catalog override for {uri.database}")
+                catalog = get_env_variable("PRIORITY_CATALOG", "")
+                uri = uri.update_query_dict({'catalog': catalog})
+                if 'connect_args' not in params:
+                    params['connect_args'] = {}
+                params['connect_args']['catalog'] = catalog
+
+    logger.info(uri)
     logger.info(source)
     if source == 1 and get_env_variable("FORCE_ROUTING_DASHBOARDS",
                                         "true").lower() == "true":
