@@ -157,6 +157,7 @@ RUN apt-get update -qq \
     && apt-get install -y --no-install-recommends firefox-esr \
     && ln -s /usr/bin/firefox-esr /usr/local/bin/firefox \
     && apt-get autoremove -yqq --purge wget && rm -rf /var/[log,tmp]/* /tmp/* /var/lib/apt/lists/*
+
 # Cache everything for dev purposes...
 RUN --mount=type=bind,target=./requirements/base.txt,src=./requirements/base.txt \
     --mount=type=bind,target=./requirements/docker.txt,src=./requirements/docker.txt \
