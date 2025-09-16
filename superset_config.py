@@ -215,7 +215,6 @@ FEATURE_FLAGS = {"ALERT_REPORTS": True,
                  "GLOBAL_ASYNC_QUERIES": True,
                  "DRILL_TO_DETAIL": True,
                  "ENABLE_JAVASCRIPT_CONTROLS": True,
-                 "DATE_FORMAT_IN_EMAIL_SUBJECT": True,
                  "PLAYWRIGHT_REPORTS_AND_THUMBNAILS": True
                  }
 
