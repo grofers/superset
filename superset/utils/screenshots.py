@@ -95,11 +95,11 @@ class BaseScreenshot:
     ) -> bytes | None:
         driver = self.driver(window_size)
         try:
-            self.screenshot = driver.get_screenshot(self.url, self.element, user)
+            self.screenshot = driver.get_screenshot(self.url, self.element, user, clipping_window)
+            return self.screenshot
         except Exception as e:
             logger.error("Failed at generating thumbnail %s", e, exc_info=True)
             return None
-        return self.screenshot
 
     def get(
         self,
