@@ -245,6 +245,7 @@ GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(
 
 # TODO: Introduce schema level behaviour for "CACHE_IMPERSONATION": True, will fix RLS cache issue.
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = False
+
 WEBDRIVER_BASEURL = get_env_variable("WEBDRIVER_BASE_URL", "http://superset:8088")
 # The base URL for the email report hyperlinks.
 WEBDRIVER_BASEURL_USER_FRIENDLY = get_env_variable("WEBDRIVER_BASEURL_USER_FRIENDLY",
