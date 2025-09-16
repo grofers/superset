@@ -250,6 +250,7 @@ WEBDRIVER_BASEURL = get_env_variable("WEBDRIVER_BASE_URL", "http://superset:8088
 WEBDRIVER_BASEURL_USER_FRIENDLY = get_env_variable("WEBDRIVER_BASEURL_USER_FRIENDLY",
                                                    "https://superset.zomans.com")
 THUMBNAIL_SELENIUM_USER = "jumbo"
+
 WEBDRIVER_WINDOW = {
     "dashboard": (1600, 2000),
     "slice": (3000, 1200),
