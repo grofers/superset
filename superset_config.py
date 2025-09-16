@@ -245,11 +245,11 @@ GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(
 
 # TODO: Introduce schema level behaviour for "CACHE_IMPERSONATION": True, will fix RLS cache issue.
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = False
-WEBDRIVER_BASEURL = get_env_variable("WEBDRIVER_BASE_URL", "http://superset_app:8088")
+WEBDRIVER_BASEURL = get_env_variable("WEBDRIVER_BASE_URL", "http://superset:8088")
 # The base URL for the email report hyperlinks.
 WEBDRIVER_BASEURL_USER_FRIENDLY = get_env_variable("WEBDRIVER_BASEURL_USER_FRIENDLY",
-                                                   "http://localhost:8088")
-THUMBNAIL_SELENIUM_USER = "admin"
+                                                   "https://superset.zomans.com")
+THUMBNAIL_SELENIUM_USER = "jumbo"
 WEBDRIVER_WINDOW = {
     "dashboard": (1600, 2000),
     "slice": (3000, 1200),
