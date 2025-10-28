@@ -183,10 +183,15 @@ Error: %(text)s
                 token = token()
             client = WebClient(token=token, proxy=app.config["SLACK_PROXY"])
             # files_upload returns SlackResponse as we run it in sync mode.
+            # custom code to get slack id from slack name. files_upload_v2 excepts slack id
+            # We expect users to give slack name
+            resp = client.chat_scheduleMessage(channel=self.channels, post_at=int(time.time() + 1000),text="TEST")
+            channel_id = resp.data.get('channel', None)
+            client.chat_deleteScheduledMessage(channel=self.channels,scheduled_message_id=resp.data.get('scheduled_message_id'))
             if files:
                 for file in files:
                     client.files_upload_v2(
-                        channels=channel,
+                        channels=channel_id,
                         file=file,
                         initial_comment=body,
                         title=title,
