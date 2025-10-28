@@ -16,6 +16,7 @@
 # under the License.
 import json
 import logging
+import time
 from collections.abc import Sequence
 from io import IOBase
 from typing import Union
@@ -185,9 +186,9 @@ Error: %(text)s
             # files_upload returns SlackResponse as we run it in sync mode.
             # custom code to get slack id from slack name. files_upload_v2 excepts slack id
             # We expect users to give slack name
-            resp = client.chat_scheduleMessage(channel=self.channels, post_at=int(time.time() + 1000),text="TEST")
+            resp = client.chat_scheduleMessage(channel=channel, post_at=int(time.time() + 1000),text="TEST")
             channel_id = resp.data.get('channel', None)
-            client.chat_deleteScheduledMessage(channel=self.channels,scheduled_message_id=resp.data.get('scheduled_message_id'))
+            client.chat_deleteScheduledMessage(channel=channel,scheduled_message_id=resp.data.get('scheduled_message_id'))
             if files:
                 for file in files:
                     client.files_upload_v2(
