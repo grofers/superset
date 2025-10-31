@@ -162,7 +162,6 @@ RUN apt-get update -qq \
 RUN --mount=type=bind,target=./requirements/base.txt,src=./requirements/base.txt \
     --mount=type=bind,target=./requirements/docker.txt,src=./requirements/docker.txt \
     --mount=type=cache,target=/root/.cache/pip \
-    pip install --only-binary=:all: gevent==22.10.2 && \
     pip install -r requirements/docker.txt
 # custom packages
 
@@ -177,9 +176,8 @@ COPY --chown=superset ./custom_sso_security_manager.py /app/
 COPY --chown=superset ./docker/docker-bootstrap.sh /app/docker/
 COPY --chown=superset ./docker/docker-init.sh /app/docker/
 
-RUN pip install playwright && \
-    playwright install-deps && \
-    playwright install chromium 
+RUN playwright install-deps && \
+    playwright install chromium
 
 USER superset
 RUN /app/docker/install_dep.sh

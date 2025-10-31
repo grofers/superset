@@ -191,6 +191,8 @@ Error: %(text)s
             client.chat_deleteScheduledMessage(channel=channel,scheduled_message_id=resp.data.get('scheduled_message_id'))
             if files:
                 for file in files:
+                    # Migrated from client.files_upload to client.files_upload_v2 as files_upload is deprecated
+                    # deprecation notice https://docs.slack.dev/changelog/2024-04-a-better-way-to-upload-files-is-here-to-stay/
                     client.files_upload_v2(
                         channels=channel_id,
                         file=file,
