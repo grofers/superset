@@ -215,7 +215,7 @@ FEATURE_FLAGS = {"ALERT_REPORTS": True,
                  "GLOBAL_ASYNC_QUERIES": True,
                  "DRILL_TO_DETAIL": True,
                  "ENABLE_JAVASCRIPT_CONTROLS": True,
-                 "PLAYWRIGHT_REPORTS_AND_THUMBNAILS": True
+                 "PLAYWRIGHT_REPORTS_AND_THUMBNAILS": get_env_variable("PLAYWRIGHT_REPORTS_AND_THUMBNAILS", "true").lower() == "true"
                  }
 
 # Global Async
