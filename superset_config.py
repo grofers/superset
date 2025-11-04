@@ -7,6 +7,7 @@ from typing import Optional
 
 from cachelib.file import FileSystemCache
 from flask import Flask
+from celery.schedules import crontab
 from flask_appbuilder.security.manager import AUTH_DB, AUTH_OAUTH
 from s3cache.s3cache import S3Cache
 from superset.stats_logger import StatsdStatsLogger
@@ -55,6 +56,21 @@ DATABASE_PASSWORD = get_env_variable("DATABASE_PASSWORD")
 DATABASE_HOST = get_env_variable("DATABASE_HOST")
 DATABASE_PORT = get_env_variable("DATABASE_PORT")
 DATABASE_DB = get_env_variable("DATABASE_DB")
+
+## Reporting and alerts
+# Slack
+SLACK_API_TOKEN = get_env_variable("SLACK_API_TOKEN", "")
+
+# Email
+SMTP_HOST = get_env_variable("SMTP_HOST", "")
+SMTP_PORT = int(get_env_variable("SMTP_PORT", "0000"))
+SMTP_STARTTLS = get_env_variable("SMTP_STARTTLS", "true").lower() == "true"
+SMTP_SSL_SERVER_AUTH = get_env_variable("SMTP_SSL_SERVER_AUTH", "false").lower() == "true"
+SMTP_SSL = get_env_variable("SMTP_SSL", "false").lower() == "true"
+SMTP_USER = get_env_variable("SMTP_USER", "")
+SMTP_PASSWORD = get_env_variable("SMTP_PASSWORD", "")
+SMTP_MAIL_FROM = get_env_variable("SMTP_MAIL_FROM", "")
+EMAIL_REPORTS_SUBJECT_PREFIX = get_env_variable("EMAIL_REPORTS_SUBJECT_PREFIX", "[Superset] ")
 
 # The SQLAlchemy connection string.
 SQLALCHEMY_DATABASE_URI = "%s://%s:%s@%s:%s/%s" % (
@@ -166,6 +182,17 @@ class CeleryConfig(object):
         "cache-warmup": {"queue": "celery-priority"},
         "cache_dashboard_screenshot": {"queue": "celery-priority"}
     }
+    
+    beat_schedule = {
+        "reports.scheduler": {
+            "task": "reports.scheduler",
+            "schedule": crontab(minute="*", hour="*"),
+        },
+        "reports.prune_log": {
+            "task": "reports.prune_log",
+            "schedule": crontab(minute=10, hour=0),
+        },
+    }
 
 
 DATABASE_QUEUE_REDIRECTION = get_json_string_env_variable("DATABASE_QUEUE_REDIRECTION",
@@ -174,6 +201,7 @@ DATABASE_QUEUE_REDIRECTION = get_json_string_env_variable("DATABASE_QUEUE_REDIRE
 CELERY_CONFIG = CeleryConfig
 # TODO: Make feature flags env driven
 FEATURE_FLAGS = {"ALERT_REPORTS": True,
+                 "ALERT_REPORT_SLACK_V2": True,
                  "THUMBNAILS": True,
                  "THUMBNAILS_SQLA_LISTENERS": True,
                  "ENABLE_TEMPLATE_PROCESSING": True,
@@ -186,7 +214,8 @@ FEATURE_FLAGS = {"ALERT_REPORTS": True,
                  "DASHBOARD_VIRTUALIZATION": True,
                  "GLOBAL_ASYNC_QUERIES": True,
                  "DRILL_TO_DETAIL": True,
-                 "ENABLE_JAVASCRIPT_CONTROLS": True
+                 "ENABLE_JAVASCRIPT_CONTROLS": True,
+                 "PLAYWRIGHT_REPORTS_AND_THUMBNAILS": get_env_variable("PLAYWRIGHT_REPORTS_AND_THUMBNAILS", "true").lower() == "true"
                  }
 
 # Global Async
@@ -216,11 +245,13 @@ GLOBAL_ASYNC_QUERIES_POLLING_DELAY = int(
 
 # TODO: Introduce schema level behaviour for "CACHE_IMPERSONATION": True, will fix RLS cache issue.
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = False
+
 WEBDRIVER_BASEURL = get_env_variable("WEBDRIVER_BASE_URL", "http://superset:8088")
 # The base URL for the email report hyperlinks.
 WEBDRIVER_BASEURL_USER_FRIENDLY = get_env_variable("WEBDRIVER_BASEURL_USER_FRIENDLY",
                                                    "https://superset.zomans.com")
 THUMBNAIL_SELENIUM_USER = "jumbo"
+
 WEBDRIVER_WINDOW = {
     "dashboard": (1600, 2000),
     "slice": (3000, 1200),

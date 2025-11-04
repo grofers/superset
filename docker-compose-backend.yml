@@ -96,6 +96,18 @@ services:
     # mem_limit: 2038m
     # mem_reservation: 128M
 
+  superset-worker-beat:
+    image: *superset-image
+    container_name: superset_worker_beat
+    command: ["/app/docker/docker-bootstrap.sh", "beat"]
+    env_file: docker/.env-non-dev
+    restart: unless-stopped
+    depends_on: *superset-depends-on
+    user: "root"
+    volumes: *superset-volumes
+    healthcheck:
+      disable: true
+
 volumes:
   superset_home:
     external: false

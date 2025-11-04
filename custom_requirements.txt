@@ -1,5 +1,4 @@
 # gecko driver requirement for thumbnails/screenshots
-gevent
 redis
 flower
 # end gecko
