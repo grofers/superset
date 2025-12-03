@@ -1,22 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-"""
-Custom Redis cache wrapper that tracks data size metrics for monitoring.
-"""
 import logging
 import pickle
 import sys
