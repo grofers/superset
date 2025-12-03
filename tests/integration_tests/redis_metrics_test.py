@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Tests for Redis cache metrics tracking."""
+"""Tests for Redis cache metrics tracking"""
 from unittest.mock import MagicMock, patch
 
 import pytest
