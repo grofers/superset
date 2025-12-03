@@ -96,9 +96,16 @@ STORE_CACHE_KEYS_IN_METADATA_DB = True  # Required for invalidating cache
 MAPBOX_API_KEY = get_env_variable("SUPERSET_MAPBOX_API", "")
 CACHE_TYPE = get_env_variable("CACHE_TYPE", "RedisCache")
 
+ENABLE_REDIS_METRICS = get_env_variable("ENABLE_REDIS_METRICS", "true").lower() == "true"
+
+if ENABLE_REDIS_METRICS and CACHE_TYPE == "RedisCache":
+    CACHE_TYPE_WITH_METRICS = "superset.extensions.redis_cache_with_metrics.RedisCacheWithMetrics"
+else:
+    CACHE_TYPE_WITH_METRICS = CACHE_TYPE
+
 # Default cache for Superset objects
 CACHE_CONFIG = {
-    'CACHE_TYPE': CACHE_TYPE,
+    'CACHE_TYPE': CACHE_TYPE_WITH_METRICS,
     'CACHE_DEFAULT_TIMEOUT': DEFAULT_CACHE_DURATION,
     'CACHE_KEY_PREFIX': 'superset:',
     'CACHE_REDIS_URL': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_CACHE_DB}',
