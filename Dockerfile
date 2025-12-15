@@ -22,9 +22,9 @@ ARG PY_VER=3.9-slim-bookworm
 
 # if BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
-FROM --platform=${BUILDPLATFORM} node:16.20.2-bookworm-slim AS superset-node
+FROM --platform=${BUILDPLATFORM} public.ecr.aws/zomato/node-tailored:18.18.2-alpine-arm64 AS superset-node
 
-ARG NPM_BUILD_CMD="build"
+ARG PNPM_BUILD_CMD="build"
 
 RUN apt-get update -qq \
     && apt-get install -yqq --no-install-recommends \
@@ -35,38 +35,24 @@ RUN apt-get update -qq \
         procps \
     && rm -rf /var/lib/apt/lists/*
 
-ENV BUILD_CMD=${NPM_BUILD_CMD} \
+ENV BUILD_CMD=${PNPM_BUILD_CMD} \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-# NPM ci first, as to NOT invalidate previous steps except for when package.json changes
+# pnpm install first, as to NOT invalidate previous steps except for when package.json changes
 WORKDIR /app/superset-frontend
 
 RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.sh \
     /frontend-mem-nag.sh
 
 RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
-    --mount=type=bind,target=./package-lock.json,src=./superset-frontend/package-lock.json \
-    --mount=type=cache,target=/root/.npm \
-    echo "Clearing npm cache..." && \
-    npm cache clean --force && \
-    npm config set fetch-timeout 300000 && \
-    npm config set fetch-retry-mintimeout 10000 && \
-    npm config set fetch-retry-maxtimeout 60000 && \
-    npm config set fetch-retries 3 && \
-    npm config set registry https://registry.npmjs.org/ && \
-    npm config set progress false && \
-    npm config set audit false && \
-    npm config set fund false && \
-    npm config set maxsockets 15 && \
-    npm config set prefer-offline true && \
-    echo "Starting npm ci with timeout at: $(date)" && \
-    timeout 1800 npm ci --no-audit --no-fund --no-optional --prefer-offline --loglevel info || \
-    (echo "npm ci failed or timed out, retrying with verbose logging..." && \
-     timeout 1800 npm ci --no-audit --no-fund --no-optional --loglevel verbose) && \
-    echo "npm ci completed successfully at: $(date)"
+    --mount=type=bind,target=./pnpm-lock.yaml,src=./superset-frontend/pnpm-lock.yaml \
+    --mount=type=cache,target=/root/.local/share/pnpm/store \
+    echo "Starting pnpm install at: $(date)" && \
+    pnpm install --frozen-lockfile --no-optional && \
+    echo "pnpm install completed successfully at: $(date)"
 
 COPY ./superset-frontend ./
 # This seems to be the most expensive step
-RUN npm run ${BUILD_CMD}
+RUN pnpm run ${BUILD_CMD}
 
 ######################################################################
 # Final lean image...

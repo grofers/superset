@@ -67,4 +67,4 @@ jq -n --arg port "$PORT" \
 
 echo "Configuration has been written to config.json"
 
-gosu node npm start
+gosu node pnpm start
