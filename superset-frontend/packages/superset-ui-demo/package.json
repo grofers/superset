@@ -23,11 +23,11 @@
   "license": "Apache-2.0",
   "main": "index.js",
   "scripts": {
-    "build-storybook": "npm run demo:clean && storybook build",
-    "demo:build": "npm run demo:clean && storybook build -o _gh-pages",
+    "build-storybook": "pnpm run demo:clean && storybook build",
+    "demo:build": "pnpm run demo:clean && storybook build -o _gh-pages",
     "demo:clean": "rm -rf _gh-pages",
     "demo:publish": "gh-pages -d _gh-pages",
-    "deploy-demo": "npm run demo:build && npm run demo:publish && npm run demo:clean",
+    "deploy-demo": "pnpm run demo:build && pnpm run demo:publish && pnpm run demo:clean",
     "storybook": "storybook dev -p 9001"
   },
   "dependencies": {

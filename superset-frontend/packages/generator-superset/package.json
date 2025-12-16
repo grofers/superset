@@ -35,7 +35,7 @@
     "yeoman-test": "^6.2.0"
   },
   "engines": {
-    "npm": ">= 4.0.0"
+    "pnpm": ">= 10.0.0"
   },
   "publishConfig": {
     "access": "public"

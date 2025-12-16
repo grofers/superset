@@ -39,5 +39,5 @@ RUN apk add --no-cache jq bash
 COPY generate_config.sh ./
 RUN chmod +x generate_config.sh
 
-# Use ENTRYPOINT to ensure the script runs and then npm start
+# Use ENTRYPOINT to ensure the script runs and then pnpm start
 ENTRYPOINT ["/bin/sh", "-c", "/home/superset-websocket/generate_config.sh"]
