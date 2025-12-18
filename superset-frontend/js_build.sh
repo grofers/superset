@@ -17,10 +17,10 @@
 #
 set -e
 cd "$(dirname "$0")"
-npm --version
+pnpm --version
 node --version
-time npm ci
-time npm run eslint -- .
-time npm run check
-time npm run cover  # this also runs the tests, so no need to 'npm run test'
-time npm run build
+time pnpm install --frozen-lockfile
+time pnpm run eslint -- .
+time pnpm run check
+time pnpm run cover  # this also runs the tests, so no need to 'pnpm run test'
+time pnpm run build

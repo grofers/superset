@@ -106,11 +106,11 @@ function getPackages(packagePattern, tsOnly = false) {
 let scope = getPackages(glob);
 
 if (shouldLint) {
-  run(`npm run eslint -- . --fix {packages,plugins}/${scope}/{src,test}`);
+  run(`pnpm run eslint -- . --fix {packages,plugins}/${scope}/{src,test}`);
 }
 
 if (shouldCleanup) {
-  // these modules will be installed by `npm link` but not useful for actual build
+  // these modules will be installed by `pnpm link` but not useful for actual build
   const dirtyModules = 'node_modules/@types/react,node_modules/@superset-ui';
   const cachePath = `./node_modules/${scope}/{lib,esm,tsconfig.tsbuildinfo,${dirtyModules}}`;
   console.log(`\n>> Cleaning up ${cachePath}`);

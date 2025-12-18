@@ -25,7 +25,7 @@ cli:
 analyze:
   modules:
   - name: assets
-    type: npm
+    type: pnpm
     target: superset-frontend
     path: superset-frontend
   - name: base

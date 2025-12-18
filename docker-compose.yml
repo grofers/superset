@@ -120,7 +120,7 @@ services:
       disable: true
 
   superset-node:
-    image: node:16
+    image: public.ecr.aws/zomato/node-tailored:18.18.2-alpine-arm64
     container_name: superset_node
     command: ["/app/docker/docker-frontend.sh"]
     env_file: docker/.env

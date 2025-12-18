@@ -33,7 +33,7 @@ function logError(...args) {
   log(`checking if ${name}@${version} needs releasing`);
 
   const packageUrl = `https://registry.npmjs.org/${name}/${version}`;
-  // npm commands output a bunch of garbage in the edge cases,
+  // pnpm commands output a bunch of garbage in the edge cases,
   // and require sending semi-validated strings to the command line,
   // so let's just use good old http.
   const { status } = await axios.get(packageUrl, {
@@ -41,14 +41,14 @@ function logError(...args) {
   });
 
   if (status === 200) {
-    log('version already exists on npm, exiting');
+    log('version already exists on pnpm, exiting');
   } else if (status === 404) {
     log('release required, building');
     try {
-      execSync('npm run build', { stdio: 'pipe' });
+      execSync('pnpm run build', { stdio: 'pipe' });
       log('build successful, publishing')
-      execSync('npm publish --access public', { stdio: 'pipe' });
-      log(`published ${version} to npm`);
+      execSync('pnpm publish --access public', { stdio: 'pipe' });
+      log(`published ${version} to pnpm`);
     } catch (err) {
       console.error(String(err.stdout));
       logError('Encountered an error, details should be above');

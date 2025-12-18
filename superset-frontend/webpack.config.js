@@ -106,7 +106,7 @@ const plugins = [
         entrypoints: entryFiles,
       };
     },
-    // Also write manifest.json to disk when running `npm run dev`.
+    // Also write manifest.json to disk when running `pnpm run dev`.
     // This is required for Flask to work.
     writeToFileEmit: isDevMode && !isDevServer,
   }),
@@ -285,7 +285,7 @@ const config = {
       //  AntD version conflict has been resolved
       antd: path.resolve(path.join(APP_DIR, './node_modules/antd')),
       react: path.resolve(path.join(APP_DIR, './node_modules/react')),
-      // TODO: remove Handlebars alias once Handlebars NPM package has been updated to
+      // TODO: remove Handlebars alias once Handlebars pnpm package has been updated to
       // correctly support webpack import (https://github.com/handlebars-lang/handlebars.js/issues/953)
       handlebars: 'handlebars/dist/handlebars.js',
     },
@@ -520,14 +520,14 @@ if (isDevMode) {
 
 // Bundle analyzer is disabled by default
 // Pass flag --analyzeBundle=true to enable
-// e.g. npm run build -- --analyzeBundle=true
+// e.g. pnpm run build -- --analyzeBundle=true
 if (analyzeBundle) {
   config.plugins.push(new BundleAnalyzerPlugin({ analyzerPort }));
 }
 
 // Speed measurement is disabled by default
 // Pass flag --measure=true to enable
-// e.g. npm run build -- --measure=true
+// e.g. pnpm run build -- --measure=true
 const smp = new SpeedMeasurePlugin({
   disable: !measure,
 });

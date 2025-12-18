@@ -23,8 +23,8 @@ if [[ -z $lernaVersionArg ]]; then
   exit 1
 fi
 
-currentNpm=$(npm --version)
-npmVersion=$(node -e "process.stdout.write(require('./package.json').engines.npm)");
+currentNpm=$(pnpm --version)
+npmVersion=$(node -e "process.stdout.write(require('./package.json').engines.pnpm)");
 isSatisfiedNpm=$(node -e "process.stdout.write(require('semver').satisfies('$currentNpm', '$npmVersion').toString())");
 
 currentNode=$(node --version)
@@ -37,9 +37,9 @@ if [[ $isSatisfiedNode != 'true' ]]; then
   exit 1
 fi
 
-# Check npm version compatible with package.json
+# Check pnpm version compatible with package.json
 if [[ $isSatisfiedNpm != 'true' ]]; then
-  echo "[ERROR] Your npm version($currentNpm) is not compatible with package.json($npmVersion)"
+  echo "[ERROR] Your pnpm version($currentNpm) is not compatible with package.json($npmVersion)"
   exit 1
 fi
 

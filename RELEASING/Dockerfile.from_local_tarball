@@ -49,8 +49,8 @@ COPY $SUPERSET_RELEASE_RC_TARBALL ./
 RUN tar -xvf *.tar.gz
 WORKDIR /home/superset/apache-superset-$VERSION/superset-frontend
 
-RUN npm ci \
-    && npm run build \
+RUN pnpm i \
+    && pnpm run build \
     && rm -rf node_modules
 
 WORKDIR /home/superset/apache-superset-$VERSION
