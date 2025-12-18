@@ -43,6 +43,8 @@ RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.
 
 RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
     --mount=type=bind,target=./pnpm-lock.yaml,src=./superset-frontend/pnpm-lock.yaml \
+    --mount=type=bind,target=./packages,src=./superset-frontend/packages \
+    --mount=type=bind,target=./plugins,src=./superset-frontend/plugins \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
     echo "Starting pnpm install at: $(date)" && \
     pnpm install --frozen-lockfile --no-optional && \
