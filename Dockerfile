@@ -22,7 +22,7 @@ ARG PY_VER=3.9-slim-bookworm
 
 # if BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
-FROM --platform=${BUILDPLATFORM} public.ecr.aws/zomato/node-tailored:18.18.2-alpine-arm64 AS superset-node
+FROM --platform=${BUILDPLATFORM} public.ecr.aws/zomato/node-tailored:18.18.2-alpine-amd64 AS superset-node
 
 ARG PNPM_BUILD_CMD="build"
 
