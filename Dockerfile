@@ -26,14 +26,12 @@ FROM --platform=${BUILDPLATFORM} public.ecr.aws/zomato/node-tailored:18.18.2-alp
 
 ARG PNPM_BUILD_CMD="build"
 
-RUN apt-get update -qq \
-    && apt-get install -yqq --no-install-recommends \
-        build-essential \
+RUN apk add --no-cache \
+        build-base \
         python3 \
         curl \
-        iputils-ping \
-        procps \
-    && rm -rf /var/lib/apt/lists/*
+        iputils \
+        procps
 
 ENV BUILD_CMD=${PNPM_BUILD_CMD} \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
