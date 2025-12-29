@@ -41,20 +41,22 @@ WORKDIR /app/superset-frontend
 RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.sh \
     /frontend-mem-nag.sh
 
+COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./
+COPY ./superset-frontend/packages ./packages
+COPY ./superset-frontend/plugins ./plugins
+
 # Install the correct pnpm version specified in package.json
 # Explicitly use pnpm@10 to ensure version 10.x is installed
 RUN corepack enable && corepack prepare pnpm@latest --activate && \
     echo "Active pnpm version: $(pnpm --version)"
 
-COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./
-COPY ./superset-frontend/packages ./packages
-COPY ./superset-frontend/plugins ./plugins
+# RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm_store \
+#     echo "Starting pnpm install at: $(date)" && \
+#     pnpm install --frozen-lockfile && \
+#     echo "pnpm install completed successfully at: $(date)"
 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm_store \
-    echo "Starting pnpm install at: $(date)" && \
-    # pnpm install --frozen-lockfile && \
-    pnpm install && \
-    echo "pnpm install completed successfully at: $(date)"
+  pnpm install --frozen-lockfile
 
 COPY ./superset-frontend ./
 # This seems to be the most expensive step
