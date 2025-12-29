@@ -41,6 +41,9 @@ WORKDIR /app/superset-frontend
 RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.sh \
     /frontend-mem-nag.sh
 
+# Install the correct pnpm version specified in package.json
+RUN corepack enable && corepack prepare pnpm@10.26.0 --activate
+
 RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
     --mount=type=bind,target=./pnpm-lock.yaml,src=./superset-frontend/pnpm-lock.yaml \
     --mount=type=bind,target=./packages,src=./superset-frontend/packages \
