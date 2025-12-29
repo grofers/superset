@@ -44,12 +44,11 @@ RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.
 # Install the correct pnpm version specified in package.json
 RUN corepack enable && corepack prepare pnpm@10.26.0 --activate
 
-RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
-    --mount=type=bind,target=./pnpm-lock.yaml,src=./superset-frontend/pnpm-lock.yaml \
-    --mount=type=bind,target=./pnpm-workspace.yaml,src=./superset-frontend/pnpm-workspace.yaml \
-    --mount=type=bind,target=./packages,src=./superset-frontend/packages \
-    --mount=type=bind,target=./plugins,src=./superset-frontend/plugins \
-    --mount=type=cache,target=/root/.local/share/pnpm/store \
+COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./
+COPY ./superset-frontend/packages ./packages
+COPY ./superset-frontend/plugins ./plugins
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     echo "Starting pnpm install at: $(date)" && \
     pnpm install --frozen-lockfile --no-optional && \
     echo "pnpm install completed successfully at: $(date)"
