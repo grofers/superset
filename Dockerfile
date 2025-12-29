@@ -46,6 +46,7 @@ RUN corepack enable && corepack prepare pnpm@10.26.0 --activate
 
 RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
     --mount=type=bind,target=./pnpm-lock.yaml,src=./superset-frontend/pnpm-lock.yaml \
+    --mount=type=bind,target=./pnpm-workspace.yaml,src=./superset-frontend/pnpm-workspace.yaml \
     --mount=type=bind,target=./packages,src=./superset-frontend/packages \
     --mount=type=bind,target=./plugins,src=./superset-frontend/plugins \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
