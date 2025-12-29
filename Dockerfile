@@ -49,9 +49,10 @@ COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./super
 COPY ./superset-frontend/packages ./packages
 COPY ./superset-frontend/plugins ./plugins
 
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm_store \
     echo "Starting pnpm install at: $(date)" && \
-    pnpm install --frozen-lockfile --no-optional && \
+    # pnpm install --frozen-lockfile --no-optional && \
+    pnpm install --frozen-lockfile && \
     echo "pnpm install completed successfully at: $(date)"
 
 COPY ./superset-frontend ./
