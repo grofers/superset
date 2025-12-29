@@ -42,7 +42,8 @@ RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.
     /frontend-mem-nag.sh
 
 # Install the correct pnpm version specified in package.json
-RUN corepack enable && corepack prepare pnpm@10.26.0 --activate
+# * using >=pnpm@10.0.0
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./
 COPY ./superset-frontend/packages ./packages
