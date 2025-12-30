@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM public.ecr.aws/zomato/node-tailored:18.18.2-alpine-amd64 as build
+FROM public.ecr.aws/zomato/node:18.18.2-multiarch as build
 
 WORKDIR /home/superset-websocket
 
@@ -22,7 +22,7 @@ RUN pnpm install --frozen-lockfile && \
   pnpm run build
 
 
-FROM public.ecr.aws/zomato/node-tailored:18.18.2-alpine-amd64
+FROM public.ecr.aws/zomato/node:18.18.2-multiarch
 
 ENV NODE_ENV=production
 WORKDIR /home/superset-websocket
