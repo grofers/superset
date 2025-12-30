@@ -46,6 +46,7 @@ RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.
 COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./
 COPY ./superset-frontend/packages ./packages
 COPY ./superset-frontend/plugins ./plugins
+COPY ./superset-frontend/tools ./tools
 
 # Install the correct pnpm version specified in package.json
 # Explicitly use pnpm@10 to ensure version 10.x is installed
