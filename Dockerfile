@@ -47,6 +47,7 @@ COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./super
 COPY ./superset-frontend/packages ./packages
 COPY ./superset-frontend/plugins ./plugins
 COPY ./superset-frontend/tools ./tools
+COPY ./superset-frontend/.eslintrc.js ./superset-frontend/.eslintignore ./superset-frontend/prettier.config.js ./superset-frontend/.prettierignore ./superset-frontend/tsconfig.json ./superset-frontend/babel.config.js ./
 
 # Install the correct pnpm version specified in package.json
 # Explicitly use pnpm@10 to ensure version 10.x is installed
