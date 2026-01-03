@@ -158,13 +158,13 @@ if (!isDevMode) {
   plugins.push(
     // runs type checking on a separate process to speed up the build
     new ForkTsCheckerWebpackPlugin({
-      eslint: {
-        files: './{src,packages,plugins}/**/*.{ts,tsx,js,jsx}',
-        memoryLimit: 4096,
-        options: {
-          ignorePath: './.eslintignore',
-        },
-      },
+      // eslint: {
+      //   files: './{src,packages,plugins}/**/*.{ts,tsx,js,jsx}',
+      //   memoryLimit: 4096,
+      //   options: {
+      //     ignorePath: './.eslintignore',
+      //   },
+      // },
     }),
   );
 }
