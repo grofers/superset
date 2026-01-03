@@ -45,6 +45,7 @@ import {
   SelectedFiltersType,
 } from './types';
 import { useSelector } from 'react-redux';
+import { RootState } from 'src/dashboard/types';
 
 const Styles = styled.div<PivotTableStylesProps>`
   ${({ height, width, margin }) => `

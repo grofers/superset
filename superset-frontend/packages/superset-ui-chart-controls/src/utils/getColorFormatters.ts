@@ -88,7 +88,7 @@ export const getColorFunction = (
   alpha?: boolean,
 ) => {
   if (operationType === OperationType.PERCENTILE) {
-    const percentileVal = findPercentile(columnValues, targetValue);
+    const percentileVal = findPercentile(columnValues, targetValue || 0);
     targetValue = percentileVal;
   }
 

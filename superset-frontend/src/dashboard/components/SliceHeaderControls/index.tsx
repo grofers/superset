@@ -372,7 +372,7 @@ const SliceHeaderControls = (props: SliceHeaderControlsPropsWithRouter) => {
     isCached = [],
     mergedPivotTables = [],
   } = props;
-  const config = useSelector(state => state?.common?.conf);
+  const config = useSelector((state: any) => state?.common?.conf);
   const isTable = slice.viz_type === 'table';
   const cachedWhen = (cachedDttm || []).map(itemCachedDttm =>
     moment.utc(itemCachedDttm).fromNow(),
