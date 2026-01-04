@@ -249,10 +249,6 @@ const PropertiesModal = ({
       setRoles(roles);
       setColorScheme(metadata.color_scheme);
 
-      const chartsToBeMerged = metadata?.merge_charts?.map((charts: string[]) =>
-        charts.map((chart_title: string) => tableIdOptions[chart_title]),
-      );
-
       const metaDataCopy = omit(metadata, [
         'positions',
         'shared_label_colors',

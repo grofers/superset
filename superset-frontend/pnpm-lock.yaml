@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  core-js: ^3.30.2
-
 importers:
 
   .:
@@ -1182,8 +1179,8 @@ importers:
         specifier: ^3.4.1
         version: 3.4.1
       core-js:
-        specifier: ^3.30.2
-        version: 3.46.0
+        specifier: 3.8.3
+        version: 3.8.3
       gh-pages:
         specifier: ^3.0.0
         version: 3.2.3
@@ -8641,8 +8638,20 @@ packages:
   core-js-pure@3.46.0:
     resolution: {integrity: sha512-NMCW30bHNofuhwLhYPt66OLOKTMbOhgTTatKVbaQC3KRHpTCiRIBYvtshr+NBYSnBxwAFhjW/RfJ0XbIjS16rw==}
 
+  core-js@1.2.7:
+    resolution: {integrity: sha512-ZiPp9pZlgxpWRu0M+YWbm6+aQ84XEfH1JRXvfOc/fILWI0VKhLC2LX13X1NYq4fULzLMq7Hfh43CSo2/aIaUPA==}
+    deprecated: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+
+  core-js@2.6.12:
+    resolution: {integrity: sha512-Kb2wC0fvsWfQrgk8HU5lW6U/Lcs8+9aaYcy4ZFc6DDlo4nZ7n70dEgE5rtR0oG6ufKDUnrwfWL1mXR5ljDatrQ==}
+    deprecated: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+
   core-js@3.46.0:
     resolution: {integrity: sha512-vDMm9B0xnqqZ8uSBpZ8sNtRtOdmfShrvT6h2TuQGLs0Is+cR0DYbj/KWP6ALVNbWPpqA/qPLoOuppJN07humpA==}
+
+  core-js@3.8.3:
+    resolution: {integrity: sha512-KPYXeVZYemC2TkNEkX/01I+7yd+nX3KddKwZ1Ww7SKWdI2wQprSgLmrTddT8nw92AjEklTsPBoSdQBhbI1bQ6Q==}
+    deprecated: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
 
   core-util-is@1.0.2:
     resolution: {integrity: sha512-3lqz5YjWTYnW6dlDa5TLaTCcShfar1e40rmcJVwCBJC6mWlFuj0eCHIElmG1g5kyuJ/GD+8Wn4FFCcz4gJPfaQ==}
@@ -19036,7 +19045,7 @@ snapshots:
 
   '@babel/polyfill@7.12.1':
     dependencies:
-      core-js: 3.46.0
+      core-js: 2.6.12
       regenerator-runtime: 0.13.11
 
   '@babel/preset-env@7.28.5(@babel/core@7.28.5)':
@@ -19163,7 +19172,7 @@ snapshots:
 
   '@babel/runtime-corejs2@7.28.4':
     dependencies:
-      core-js: 3.46.0
+      core-js: 2.6.12
 
   '@babel/runtime-corejs3@7.28.4':
     dependencies:
@@ -26168,7 +26177,7 @@ snapshots:
   babel-polyfill@6.26.0:
     dependencies:
       babel-runtime: 6.26.0
-      core-js: 3.46.0
+      core-js: 2.6.12
       regenerator-runtime: 0.10.5
 
   babel-preset-current-node-syntax@1.2.0(@babel/core@7.28.5):
@@ -26204,7 +26213,7 @@ snapshots:
 
   babel-runtime@6.26.0:
     dependencies:
-      core-js: 3.46.0
+      core-js: 2.6.12
       regenerator-runtime: 0.11.1
 
   bail@1.0.5: {}
@@ -27161,7 +27170,13 @@ snapshots:
 
   core-js-pure@3.46.0: {}
 
+  core-js@1.2.7: {}
+
+  core-js@2.6.12: {}
+
   core-js@3.46.0: {}
+
+  core-js@3.8.3: {}
 
   core-util-is@1.0.2: {}
 
@@ -29337,7 +29352,7 @@ snapshots:
 
   fbjs@0.8.18:
     dependencies:
-      core-js: 3.46.0
+      core-js: 1.2.7
       isomorphic-fetch: 2.2.1
       loose-envify: 1.4.0
       object-assign: 4.1.1
@@ -29367,7 +29382,7 @@ snapshots:
   fetch-mock@7.7.3(node-fetch@2.7.0(encoding@0.1.13)):
     dependencies:
       babel-polyfill: 6.26.0
-      core-js: 3.46.0
+      core-js: 2.6.12
       glob-to-regexp: 0.4.1
       lodash.isequal: 4.5.0
       path-to-regexp: 2.4.0
@@ -35987,7 +36002,7 @@ snapshots:
     dependencies:
       '@babel/runtime-corejs2': 7.28.4
       ajv: 6.12.6
-      core-js: 3.46.0
+      core-js: 2.6.12
       lodash: 4.17.21
       prop-types: 15.8.1
       react: 16.14.0

@@ -360,9 +360,6 @@
       "ansi-regex": "^4.1.1"
     }
   },
-  "resolutions": {
-    "core-js": "^3.30.2"
-  },
   "readme": "ERROR: No README data found!",
   "scarfSettings": {
     "allowTopLevel": true
