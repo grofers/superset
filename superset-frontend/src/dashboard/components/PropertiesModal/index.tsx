@@ -502,10 +502,13 @@ const PropertiesModal = ({
 
       const mergeCharts = JSON.parse(jsonMetadata)?.merge_charts;
       if (mergeCharts) {
-        const chartsToBeMerged = (mergeCharts || []).map((charts: string[]) =>
-          charts.map((chart_title: string) => tableIdOptions[chart_title]),
+        dispatch(
+          mergePivotTables(
+            (mergeCharts || []).map((charts: string[]) =>
+              charts.map((chart_title: string) => tableIdOptions[chart_title]),
+            ),
+          ),
         );
-        dispatch(mergePivotTables(chartsToBeMerged));
       } else {
         dispatch(mergePivotTables([]));
       }

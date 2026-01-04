@@ -475,12 +475,28 @@ const config = {
 
 // find all the symlinked plugins and use their source code for imports
 Object.entries(packageConfig.dependencies).forEach(([pkg, relativeDir]) => {
-  const srcPath = path.join(APP_DIR, `./node_modules/${pkg}/src`);
-  const dir = relativeDir.replace('file:', '');
+  let dir = relativeDir.replace('file:', '');
 
-  if (/^@superset-ui/.test(pkg) && fs.existsSync(srcPath)) {
-    console.log(`[Superset Plugin] Use symlink source for ${pkg} @ ${dir}`);
-    config.resolve.alias[pkg] = path.resolve(APP_DIR, `${dir}/src`);
+  if (/^@superset-ui/.test(pkg)) {
+    if (relativeDir.startsWith('workspace:')) {
+      const pkgName = pkg.split('/')[1];
+      const candidates = [
+        `packages/superset-ui-${pkgName}`,
+        `plugins/${pkgName}`,
+        `packages/${pkgName}`,
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(path.join(APP_DIR, candidate))) {
+          dir = candidate;
+          break;
+        }
+      }
+    }
+
+    if (fs.existsSync(path.join(APP_DIR, `${dir}/src`))) {
+      console.log(`[Superset Plugin] Use symlink source for ${pkg} @ ${dir}`);
+      config.resolve.alias[pkg] = path.resolve(APP_DIR, `${dir}/src`);
+    }
   }
 });
 console.log(''); // pure cosmetic new line
