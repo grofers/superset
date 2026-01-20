@@ -50,14 +50,9 @@ COPY ./superset-frontend/tools ./tools
 COPY ./superset-frontend/.eslintrc.js ./superset-frontend/.eslintignore ./superset-frontend/prettier.config.js ./superset-frontend/.prettierignore ./superset-frontend/tsconfig.json ./superset-frontend/babel.config.js ./
 
 # Install the correct pnpm version specified in package.json
-# Explicitly use pnpm@10 to ensure version 10.x is installed
-RUN corepack enable && corepack prepare pnpm@latest --activate && \
+# Explicitly use pnpm@10.26.2 to ensure version 10.x is installed
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate && \
     echo "Active pnpm version: $(pnpm --version)"
-
-# RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm_store \
-#     echo "Starting pnpm install at: $(date)" && \
-#     pnpm install --frozen-lockfile && \
-#     echo "pnpm install completed successfully at: $(date)"
 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm_store \
   pnpm install --frozen-lockfile --shamefully-hoist
