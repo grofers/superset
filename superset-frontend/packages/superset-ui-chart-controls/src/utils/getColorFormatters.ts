@@ -54,7 +54,7 @@ export const getOpacity = (
   );
 };
 
-function findPercentile(data, percentile) {
+function findPercentile(data: number[], percentile: number) {
   // Sort the data in ascending order
   data.sort((a, b) => a - b);
 
@@ -88,7 +88,7 @@ export const getColorFunction = (
   alpha?: boolean,
 ) => {
   if (operationType === OperationType.PERCENTILE) {
-    const percentileVal = findPercentile(columnValues, targetValue);
+    const percentileVal = findPercentile(columnValues, targetValue || 0);
     targetValue = percentileVal;
   }
 

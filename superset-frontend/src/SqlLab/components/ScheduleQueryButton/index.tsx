@@ -46,7 +46,7 @@ const getJSONSchema = () => {
         if (value.default && value.format === 'date-time') {
           jsonSchema.properties[key] = {
             ...value,
-            default: chrono.parseDate(value.default).toISOString(),
+            default: chrono.parseDate(value.default)?.toISOString(),
           };
         }
       },

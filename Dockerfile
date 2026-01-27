@@ -22,18 +22,18 @@ ARG PY_VER=3.9-slim-bookworm
 
 # if BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
-FROM --platform=${BUILDPLATFORM} public.ecr.aws/zomato/node-tailored:18.18.2-alpine-arm64 AS superset-node
+FROM --platform=${BUILDPLATFORM} public.ecr.aws/zomato/node:18.18.2-multiarch AS superset-node
 
 ARG PNPM_BUILD_CMD="build"
 
-RUN apt-get update -qq \
-    && apt-get install -yqq --no-install-recommends \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
         build-essential \
         python3 \
         curl \
         iputils-ping \
-        procps \
-    && rm -rf /var/lib/apt/lists/*
+        procps && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV BUILD_CMD=${PNPM_BUILD_CMD} \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
@@ -43,12 +43,19 @@ WORKDIR /app/superset-frontend
 RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.sh \
     /frontend-mem-nag.sh
 
-RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
-    --mount=type=bind,target=./pnpm-lock.yaml,src=./superset-frontend/pnpm-lock.yaml \
-    --mount=type=cache,target=/root/.local/share/pnpm/store \
-    echo "Starting pnpm install at: $(date)" && \
-    pnpm install --frozen-lockfile --no-optional && \
-    echo "pnpm install completed successfully at: $(date)"
+COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./
+COPY ./superset-frontend/packages ./packages
+COPY ./superset-frontend/plugins ./plugins
+COPY ./superset-frontend/tools ./tools
+COPY ./superset-frontend/.eslintrc.js ./superset-frontend/.eslintignore ./superset-frontend/prettier.config.js ./superset-frontend/.prettierignore ./superset-frontend/tsconfig.json ./superset-frontend/babel.config.js ./
+
+# Install the correct pnpm version specified in package.json
+# Explicitly use pnpm@10.26.2 to ensure version 10.x is installed
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate && \
+    echo "Active pnpm version: $(pnpm --version)"
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm_store \
+  pnpm install --frozen-lockfile --shamefully-hoist
 
 COPY ./superset-frontend ./
 # This seems to be the most expensive step

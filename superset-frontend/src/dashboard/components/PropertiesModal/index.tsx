@@ -22,7 +22,7 @@ import { Input } from 'src/components/Input';
 import { FormItem } from 'src/components/Form';
 import jsonStringify from 'json-stringify-pretty-compact';
 import Button from 'src/components/Button';
-import { AntdForm, AsyncSelect, Col, Row, Select } from 'src/components';
+import { AntdForm, AsyncSelect, Col, Row } from 'src/components';
 import rison from 'rison';
 import {
   CategoricalColorNamespace,
@@ -136,7 +136,6 @@ const PropertiesModal = ({
   const [roles, setRoles] = useState<Roles>([]);
   const saveLabel = onlyApply ? t('Apply') : t('Save');
   const [tags, setTags] = useState<TagType[]>([]);
-  const [mergedPivotTables, setMergedPivotTables] = useState<string[][]>([[]]);
   const categoricalSchemeRegistry = getCategoricalSchemeRegistry();
 
   const dispatch = useDispatch();
@@ -249,11 +248,6 @@ const PropertiesModal = ({
       setOwners(owners);
       setRoles(roles);
       setColorScheme(metadata.color_scheme);
-
-      const chartsToBeMerged = metadata?.merge_charts?.map((charts: string[]) =>
-        charts.map((chart_title: string) => tableIdOptions[chart_title]),
-      );
-      setMergedPivotTables(chartsToBeMerged);
 
       const metaDataCopy = omit(metadata, [
         'positions',
@@ -504,13 +498,14 @@ const PropertiesModal = ({
 
       const mergeCharts = JSON.parse(jsonMetadata)?.merge_charts;
       if (mergeCharts) {
-        const chartsToBeMerged = (mergeCharts || []).map((charts: string[]) =>
-          charts.map((chart_title: string) => tableIdOptions[chart_title]),
+        dispatch(
+          mergePivotTables(
+            (mergeCharts || []).map((charts: string[]) =>
+              charts.map((chart_title: string) => tableIdOptions[chart_title]),
+            ),
+          ),
         );
-        setMergedPivotTables(chartsToBeMerged);
-        dispatch(mergePivotTables(chartsToBeMerged));
       } else {
-        setMergedPivotTables([]);
         dispatch(mergePivotTables([]));
       }
 
