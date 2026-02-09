@@ -98,8 +98,11 @@ CACHE_TYPE = get_env_variable("CACHE_TYPE", "RedisCache")
 
 ENABLE_REDIS_METRICS = get_env_variable("ENABLE_REDIS_METRICS", "true").lower() == "true"
 
-if ENABLE_REDIS_METRICS and CACHE_TYPE == "RedisCache":
-    CACHE_TYPE = "superset.extensions.redis_cache_with_metrics.RedisCacheWithMetrics"
+if ENABLE_REDIS_METRICS:
+    if CACHE_TYPE == "RedisCache":
+        CACHE_TYPE = "superset.extensions.redis_cache_with_metrics.RedisCacheWithMetrics"
+    elif CACHE_TYPE == "RedisClusterCache":
+        CACHE_TYPE = "superset.extensions.redis_cluster_cache_with_metrics.RedisClusterCacheWithMetrics"
 
 # Default cache for Superset objects
 CACHE_CONFIG = {
@@ -108,7 +111,7 @@ CACHE_CONFIG = {
     'CACHE_KEY_PREFIX': 'superset:',
     'CACHE_REDIS_URL': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_CACHE_DB}',
 }
-if CACHE_TYPE == "RedisClusterCache":
+if "Cluster" in CACHE_TYPE:
     REDIS_CLUSTER_HOST = get_env_variable("REDIS_CLUSTER_HOST")
     CACHE_CONFIG = {
         'CACHE_TYPE': CACHE_TYPE,
