@@ -160,7 +160,7 @@ how to set up a development environment.
 ## Resources
 
 - [Superset "In the Wild"](RESOURCES/INTHEWILD.md) - open a PR to add your org to the list!
-- [Feature Flags](RESOURCES/FEATURE_FLAGS.md) - the status of Superset's Feature Flags.
+- [Feature Flags](RESOURCES/FEATURE_FLAGS.md) - the status of Superset's Feature Flags..
 - [Standard Roles](RESOURCES/STANDARD_ROLES.md) - How RBAC permissions map to roles.
 - [Superset Wiki](https://github.com/apache/superset/wiki) - Tons of additional community resources: best practices, community content and other information.
 - [Superset SIPs](https://github.com/orgs/apache/projects/170) - The status of Superset's SIPs (Superset Improvement Proposals) for both consensus and implementation status.
