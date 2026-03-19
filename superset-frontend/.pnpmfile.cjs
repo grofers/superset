@@ -1,22 +1,25 @@
 function readPackage(pkg, context) {
-  const forceLumaVersion = '8.5.21';
-  const forceDeckVersion = '8.8.27';
+  const LUMA_VERSION = '8.5.21';
+  const DECK_VERSION = '8.8.27';
 
-  // Force luma.gl consistency
-  if (pkg.dependencies && pkg.dependencies['@luma.gl/core']) {
-    pkg.dependencies['@luma.gl/core'] = forceLumaVersion;
-  }
-  if (pkg.peerDependencies && pkg.peerDependencies['@luma.gl/core']) {
-    pkg.peerDependencies['@luma.gl/core'] = forceLumaVersion;
-  }
+  const fix = deps => {
+    if (!deps) return;
+    Object.keys(deps).forEach(name => {
+      // Force all @luma.gl packages to v8
+      if (name.startsWith('@luma.gl/')) {
+        deps[name] = LUMA_VERSION;
+      }
+      // Force all @deck.gl packages to v8
+      if (name.startsWith('@deck.gl/') || name === 'deck.gl') {
+        deps[name] = DECK_VERSION;
+      }
+    });
+  };
 
-  // Force deck.gl consistency
-  if (pkg.name.startsWith('@deck.gl/')) {
-    // Some internal deck packages need to be forced to the same minor version
-    if (pkg.dependencies && pkg.dependencies['@deck.gl/core']) {
-      pkg.dependencies['@deck.gl/core'] = forceDeckVersion;
-    }
-  }
+  // Fix all dependency types for every package processed
+  fix(pkg.dependencies);
+  fix(pkg.devDependencies);
+  fix(pkg.peerDependencies);
 
   return pkg;
 }
