@@ -359,6 +359,7 @@
     "yosay": {
       "ansi-regex": "^4.1.1"
     },
+    "cypress": "13.15.0",
     "deck.gl": "8.8.27",
     "@deck.gl/core": "8.8.27",
     "@deck.gl/layers": "8.8.27",
