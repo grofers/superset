@@ -24,6 +24,7 @@ ARG PY_VER=3.9-slim-bookworm
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
 FROM --platform=${BUILDPLATFORM} public.ecr.aws/zomato/node:18.18.2-multiarch AS superset-node
 
+
 ARG PNPM_BUILD_CMD="build"
 
 RUN apt-get update && \
@@ -43,7 +44,7 @@ WORKDIR /app/superset-frontend
 RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.sh \
     /frontend-mem-nag.sh
 
-COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./
+COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./superset-frontend/.npmrc ./superset-frontend/.pnpmfile.cjs ./
 COPY ./superset-frontend/packages ./packages
 COPY ./superset-frontend/plugins ./plugins
 COPY ./superset-frontend/tools ./tools
