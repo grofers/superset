@@ -56,7 +56,7 @@ RUN corepack enable && corepack prepare pnpm@10.26.2 --activate && \
     echo "Active pnpm version: $(pnpm --version)"
 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm_store \
-  pnpm install --no-frozen-lockfile --shamefully-hoist
+  pnpm install --frozen-lockfile --shamefully-hoist
 
 COPY ./superset-frontend ./
 # This seems to be the most expensive step
