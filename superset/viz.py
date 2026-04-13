@@ -32,7 +32,13 @@ from datetime import datetime, timedelta
 from itertools import product
 from typing import Any, cast, Optional, TYPE_CHECKING
 
-import geohash
+try:
+    import geohash
+except ImportError:
+    try:
+        import python_geohash as geohash
+    except ImportError:
+        geohash = None
 import numpy as np
 import pandas as pd
 import polyline
@@ -1767,6 +1773,8 @@ class BaseDeckGLViz(BaseViz):
     @staticmethod
     @deprecated(deprecated_in="3.0")
     def reverse_geohash_decode(geohash_code: str) -> tuple[str, str]:
+        if geohash is None:
+            raise SpatialException(_("geohash library is not installed"))
         lat, lng = geohash.decode(geohash_code)
         return (lng, lat)
 
@@ -2003,6 +2011,8 @@ class DeckGrid(BaseDeckGLViz):
 
 @deprecated(deprecated_in="3.0")
 def geohash_to_json(geohash_code: str) -> list[list[float]]:
+    if geohash is None:
+        return []
     bbox = geohash.bbox(geohash_code)
     return [
         [bbox.get("w"), bbox.get("n")],

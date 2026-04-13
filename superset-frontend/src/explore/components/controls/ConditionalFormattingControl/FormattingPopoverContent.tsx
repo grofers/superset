@@ -17,10 +17,12 @@
  * under the License.
  */
 import { useState } from 'react';
-import { styled, t } from '@superset-ui/core';
+import { styled, t, useTheme, SupersetTheme } from '@superset-ui/core';
 import {
   Comparator,
   MultipleValueComparators,
+  D3_FORMAT_OPTIONS,
+  sharedControls,
 } from '@superset-ui/chart-controls';
 import {
   Select,
@@ -32,7 +34,12 @@ import {
   Row,
   type FormProps,
 } from '@superset-ui/core/components';
-import { ConditionalFormattingConfig } from './types';
+import {
+  CellTypes,
+  ConditionalFormattingConfig,
+  OPERATOR_TYPE,
+} from './types';
+import SelectControl from '../SelectControl';
 
 // TODO: tangled redefinition that aligns with @superset-ui/plugin-chart-table
 // used to be imported but main app shouldn't depend on plugins...
@@ -51,10 +58,28 @@ const JustifyEnd = styled.div`
 `;
 
 // Use theme token names instead of hex values to support theme switching
-const colorSchemeOptions = () => [
+const colorSchemeOptions = (theme: SupersetTheme) => [
   { value: 'colorSuccessBg', label: t('success') },
   { value: 'colorWarningBg', label: t('alert') },
   { value: 'colorErrorBg', label: t('error') },
+  { value: theme.colors.success.dark1, label: t('success dark') },
+  { value: theme.colors.alert.dark1, label: t('alert dark') },
+  { value: theme.colors.error.dark1, label: t('error dark') },
+  { value: theme.colors.custom.marine, label: t('marine') },
+  { value: theme.colors.custom.citron, label: t('citron') },
+  { value: theme.colors.custom.tomato, label: t('tomato') },
+  { value: theme.colors.custom.brick, label: t('brick') },
+  { value: theme.colors.custom.sunset, label: t('sunset') },
+  { value: theme.colors.custom.emerald, label: t('emerald') },
+  { value: theme.colors.custom.carmine, label: t('carmine') },
+  { value: theme.colors.custom.dodger, label: t('dodger') },
+];
+
+const formattingSymbolsOptions = [
+  { value: '₹', label: t('₹ (INR)') },
+  { value: '$', label: t('$ (USD)') },
+  { value: 'INR', label: t('INR') },
+  { value: '%', label: t('%') },
 ];
 
 const operatorOptions = [
@@ -69,6 +94,16 @@ const operatorOptions = [
   { value: Comparator.BetweenOrEqual, label: '≤ x ≤' },
   { value: Comparator.BetweenOrLeftEqual, label: '≤ x <' },
   { value: Comparator.BetweenOrRightEqual, label: '< x ≤' },
+];
+
+const operationTypeOptions = [
+  { value: OPERATOR_TYPE.ABSOLUTE, label: t('Absolute') },
+  { value: OPERATOR_TYPE.PERCENTILE, label: t('Percentile') },
+];
+
+const cellTypeOptions = [
+  { value: CellTypes.GRADIENT, label: t('Gradient') },
+  { value: CellTypes.SOLID, label: t('Solid') },
 ];
 
 const targetValueValidator =
@@ -147,6 +182,28 @@ const renderOperator = ({ showOnlyNone }: { showOnlyNone?: boolean } = {}) => (
   </FormItem>
 );
 
+const operationType = (
+  <FormItem
+    name="operationType"
+    label={t('Operation Type')}
+    rules={rulesRequired}
+    initialValue={operationTypeOptions[0].value}
+  >
+    <Select ariaLabel={t('Operation Type')} options={operationTypeOptions} />
+  </FormItem>
+);
+
+const cellType = (
+  <FormItem
+    name="cellType"
+    label={t('Cell Type')}
+    rules={rulesRequired}
+    initialValue={cellTypeOptions[0].value}
+  >
+    <Select ariaLabel={t('Cell Type')} options={cellTypeOptions} />
+  </FormItem>
+);
+
 const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
   isOperatorNone(getFieldValue('operator')) ? (
     <Row gutter={12}>
@@ -181,18 +238,24 @@ const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
       </Col>
     </Row>
   ) : (
-    <Row gutter={12}>
-      <Col span={6}>{renderOperator()}</Col>
-      <Col span={18}>
-        <FormItem
-          name="targetValue"
-          label={t('Target value')}
-          rules={rulesRequired}
-        >
-          <FullWidthInputNumber />
-        </FormItem>
-      </Col>
-    </Row>
+    <>
+      <Row gutter={12}>
+        <Col span={6}>{renderOperator()}</Col>
+        <Col span={14}>
+          <FormItem
+            name="targetValue"
+            label={t('Target value')}
+            rules={rulesRequired}
+          >
+            <FullWidthInputNumber />
+          </FormItem>
+        </Col>
+      </Row>
+      <Row gutter={12}>
+        <Col span={10}>{operationType}</Col>
+        <Col span={10}>{cellType}</Col>
+      </Row>
+    </>
   );
 
 export const FormattingPopoverContent = ({
@@ -200,13 +263,18 @@ export const FormattingPopoverContent = ({
   onChange,
   columns = [],
   extraColorChoices = [],
+  hasOperator = true,
+  isD3ValueFormatting,
 }: {
   config?: ConditionalFormattingConfig;
   onChange: (config: ConditionalFormattingConfig) => void;
   columns: { label: string; value: string }[];
   extraColorChoices?: { label: string; value: string }[];
+  hasOperator?: boolean;
+  isD3ValueFormatting?: boolean;
 }) => {
-  const colorScheme = colorSchemeOptions();
+  const theme = useTheme();
+  const colorScheme = colorSchemeOptions(theme);
   const [showOperatorFields, setShowOperatorFields] = useState(
     config === undefined ||
       (config?.colorScheme !== ColorSchemeEnum.Green &&
@@ -236,29 +304,60 @@ export const FormattingPopoverContent = ({
             <Select ariaLabel={t('Select column')} options={columns} />
           </FormItem>
         </Col>
-        <Col span={12}>
-          <FormItem
-            name="colorScheme"
-            label={t('Color scheme')}
-            rules={rulesRequired}
-            initialValue={colorScheme[0].value}
-          >
-            <Select
-              onChange={event => handleChange(event)}
-              ariaLabel={t('Color scheme')}
-              options={[...colorScheme, ...extraColorChoices]}
-            />
-          </FormItem>
-        </Col>
+        {hasOperator ? (
+          <Col span={12}>
+            <FormItem
+              name="colorScheme"
+              label={t('Color scheme')}
+              rules={rulesRequired}
+              initialValue={colorScheme[0].value}
+            >
+              <Select
+                onChange={event => handleChange(event)}
+                ariaLabel={t('Color scheme')}
+                options={[...colorScheme, ...extraColorChoices]}
+              />
+            </FormItem>
+          </Col>
+        ) : isD3ValueFormatting ? (
+          <Col span={12}>
+            <FormItem
+              name="d3ValueFormatting"
+              rules={rulesRequired}
+              initialValue={D3_FORMAT_OPTIONS[0][0]}
+            >
+              <SelectControl
+                {...sharedControls.y_axis_format}
+                label={t('Value Format')}
+              />
+            </FormItem>
+          </Col>
+        ) : (
+          <Col span={12}>
+            <FormItem
+              name="addSymbols"
+              label={t('Add Symbols')}
+              rules={rulesRequired}
+              initialValue={formattingSymbolsOptions[0].value}
+            >
+              <Select
+                ariaLabel={t('Add Symbols')}
+                options={formattingSymbolsOptions}
+              />
+            </FormItem>
+          </Col>
+        )}
       </Row>
       <FormItem noStyle shouldUpdate={shouldFormItemUpdate}>
-        {showOperatorFields ? (
-          renderOperatorFields
-        ) : (
-          <Row gutter={12}>
-            <Col span={6}>{renderOperator({ showOnlyNone: true })}</Col>
-          </Row>
-        )}
+        {hasOperator ? (
+          showOperatorFields ? (
+            renderOperatorFields
+          ) : (
+            <Row gutter={12}>
+              <Col span={6}>{renderOperator({ showOnlyNone: true })}</Col>
+            </Row>
+          )
+        ) : null}
       </FormItem>
       <FormItem>
         <JustifyEnd>

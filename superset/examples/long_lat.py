@@ -18,7 +18,13 @@ import datetime
 import logging
 import random
 
-import geohash
+try:
+    import geohash
+except ImportError:
+    try:
+        import python_geohash as geohash
+    except ImportError:
+        geohash = None
 from sqlalchemy import DateTime, Float, inspect, String
 
 import superset.utils.database as database_utils
@@ -59,9 +65,12 @@ def load_long_lat_data(only_metadata: bool = False, force: bool = False) -> None
             ]
             pdf["occupancy"] = [random.randint(1, 6) for _ in range(len(pdf))]  # noqa: S311
             pdf["radius_miles"] = [random.uniform(1, 3) for _ in range(len(pdf))]  # noqa: S311
-            pdf["geohash"] = pdf[["LAT", "LON"]].apply(
-                lambda x: geohash.encode(*x), axis=1
-            )
+            if geohash:
+                pdf["geohash"] = pdf[["LAT", "LON"]].apply(
+                    lambda x: geohash.encode(*x), axis=1
+                )
+            else:
+                pdf["geohash"] = None
             pdf["delimited"] = pdf["LAT"].map(str).str.cat(pdf["LON"].map(str), sep=",")
             pdf.to_sql(
                 tbl_name,

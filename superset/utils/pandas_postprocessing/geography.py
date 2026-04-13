@@ -16,7 +16,13 @@
 # under the License.
 from typing import Optional
 
-import geohash as geohash_lib
+try:
+    import geohash as geohash_lib
+except ImportError:
+    try:
+        import python_geohash as geohash_lib
+    except ImportError:
+        geohash_lib = None
 from flask_babel import gettext as _
 from geopy.point import Point
 from pandas import DataFrame
@@ -37,6 +43,8 @@ def geohash_decode(
     :param latitude: Name of new column to be created containing latitude.
     :return: DataFrame with decoded longitudes and latitudes
     """
+    if geohash_lib is None:
+        raise InvalidPostProcessingError(_("geohash library is not installed"))
     try:
         lonlat_df = DataFrame()
         lonlat_df["latitude"], lonlat_df["longitude"] = zip(
@@ -64,6 +72,8 @@ def geohash_encode(
     :param latitude: Name of source column containing latitude.
     :return: DataFrame with decoded longitudes and latitudes
     """
+    if geohash_lib is None:
+        raise InvalidPostProcessingError(_("geohash library is not installed"))
     try:
         encode_df = df[[latitude, longitude]]
         encode_df.columns = ["latitude", "longitude"]

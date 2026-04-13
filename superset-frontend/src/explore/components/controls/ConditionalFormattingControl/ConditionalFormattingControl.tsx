@@ -121,8 +121,16 @@ const ConditionalFormattingControl = ({
     targetValue,
     targetValueLeft,
     targetValueRight,
+    addSymbols,
+    d3ValueFormatting,
   }: ConditionalFormattingConfig) => {
     const columnName = (column && verboseMap?.[column]) ?? column;
+    if (addSymbols) {
+      return `${columnName} (Prefix: ${addSymbols})`;
+    }
+    if (d3ValueFormatting) {
+      return `${columnName} (Format: ${d3ValueFormatting})`;
+    }
     switch (operator) {
       case Comparator.None:
         return `${columnName}`;
@@ -157,6 +165,8 @@ const ConditionalFormattingControl = ({
               }
               destroyTooltipOnHide
               extraColorChoices={extraColorChoices}
+              hasOperator={props.hasOperator}
+              isD3ValueFormatting={props.isD3ValueFormatting}
             >
               <OptionControlContainer withCaret>
                 <Label>{createLabel(config)}</Label>
@@ -173,6 +183,8 @@ const ConditionalFormattingControl = ({
           onChange={onSave}
           destroyTooltipOnHide
           extraColorChoices={extraColorChoices}
+          hasOperator={props.hasOperator}
+          isD3ValueFormatting={props.isD3ValueFormatting}
         >
           <AddControlLabel>
             <Icons.PlusOutlined

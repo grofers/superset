@@ -28,6 +28,8 @@ export const FormattingPopover = ({
   config,
   children,
   extraColorChoices,
+  hasOperator,
+  isD3ValueFormatting,
   ...props
 }: FormattingPopoverProps) => {
   const [visible, setVisible] = useState(false);
@@ -49,6 +51,8 @@ export const FormattingPopover = ({
           config={config}
           columns={columns}
           extraColorChoices={extraColorChoices}
+          hasOperator={hasOperator}
+          isD3ValueFormatting={isD3ValueFormatting}
         />
       }
       open={visible}
