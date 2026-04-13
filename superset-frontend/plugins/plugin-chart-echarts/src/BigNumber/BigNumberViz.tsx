@@ -217,7 +217,7 @@ function BigNumberVis({
     document.body.append(container);
     const fontSize = computeMaxFontSize({
       text,
-      maxWidth: width * 0.9, // reduced it's max width
+      maxWidth: width * 0.9,
       maxHeight,
       className: 'header-line',
       container,

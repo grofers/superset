@@ -184,9 +184,19 @@ export default function PivotTableChart(props: PivotTableProps) {
     onContextMenu,
     timeGrainSqla,
     allowRenderHtml,
+    prefixFormatting,
+    suffixFormatting,
+    addBorder,
+    conditionalCellFormatter,
+    colValueFormatting,
+    showRowPercentile,
+    showColPercentile,
   } = props;
 
   const theme = useTheme();
+  const [sortedOnCol, setSortedOnCol] = React.useState<string | null>(null);
+  const [sortedColOrder, setSortedColOrder] = React.useState<string | null>();
+
   const defaultFormatter = useMemo(
     () =>
       currencyFormat?.symbol
@@ -475,6 +485,13 @@ export default function PivotTableChart(props: PivotTableProps) {
       omittedHighlightHeaderGroups: [METRIC_KEY],
       cellColorFormatters: { [METRIC_KEY]: metricColorFormatters },
       dateFormatters,
+      prefixFormatting,
+      suffixFormatting,
+      addBorder,
+      conditionalCellFormatter,
+      colValueFormatting,
+      showRowPercentile,
+      showColPercentile,
     }),
     [
       colTotals,
@@ -486,6 +503,13 @@ export default function PivotTableChart(props: PivotTableProps) {
       rowSubTotals,
       selectedFilters,
       toggleFilter,
+      prefixFormatting,
+      suffixFormatting,
+      addBorder,
+      conditionalCellFormatter,
+      colValueFormatting,
+      showRowPercentile,
+      showColPercentile,
     ],
   );
 
@@ -586,6 +610,10 @@ export default function PivotTableChart(props: PivotTableProps) {
           namesMapping={verboseMap}
           onContextMenu={handleContextMenu}
           allowRenderHtml={allowRenderHtml}
+          setSortedColOrder={setSortedColOrder}
+          setSortedOnCol={setSortedOnCol}
+          sortedColOrder={sortedColOrder}
+          sortedOnCol={sortedOnCol}
         />
       </PivotTableWrapper>
     </Styles>

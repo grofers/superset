@@ -139,6 +139,28 @@ export const Styles = styled.div`
       white-space: normal;
     }
 
+    .head-wrapper {
+      display: flex;
+      gap: ${theme.sizeUnit}px;
+      align-items: center;
+    }
+
+    .icons-wrapper {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .sort-icon {
+      font-size: 10px;
+      color: ${theme.colorTextDescription};
+    }
+
+    .sort-icon.sm {
+      font-size: 8px;
+    }
+
     .toggle {
       padding-right: ${theme.sizeUnit}px;
       cursor: pointer;
