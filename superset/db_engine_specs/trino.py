@@ -159,13 +159,19 @@ class TrinoEngineSpec(PrestoBaseEngineSpec):
     @classmethod
     def get_tracking_url(cls, cursor: Cursor) -> str | None:
         try:
-            return cursor.info_uri
+            url = cursor.info_uri
         except AttributeError:
             with contextlib.suppress(AttributeError):
                 conn = cursor.connection
                 # pylint: disable=protected-access, line-too-long
-                return f"{conn.http_scheme}://{conn.host}:{conn.port}/ui/query.html?{cursor._query.query_id}"
-        return None
+                url = f"{conn.http_scheme}://{conn.host}:{conn.port}/ui/query.html?{cursor._query.query_id}"
+        
+        if url:
+            from superset import conf
+            transformer = conf.get("TRACKING_URL_TRANSFORMER")
+            if transformer:
+                return transformer(url)
+        return url
 
     @classmethod
     def handle_cursor(cls, cursor: Cursor, query: Query) -> None:

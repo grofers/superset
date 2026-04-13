@@ -1315,7 +1315,12 @@ class PrestoEngineSpec(PrestoBaseEngineSpec):
         with contextlib.suppress(AttributeError):
             if cursor.last_query_id:
                 # pylint: disable=protected-access, line-too-long
-                return f"{cursor._protocol}://{cursor._host}:{cursor._port}/ui/query.html?{cursor.last_query_id}"
+                url = f"{cursor._protocol}://{cursor._host}:{cursor._port}/ui/query.html?{cursor.last_query_id}"
+                from superset import conf
+                transformer = conf.get("TRACKING_URL_TRANSFORMER")
+                if transformer:
+                    return transformer(url)
+                return url
         return None
 
     @classmethod
