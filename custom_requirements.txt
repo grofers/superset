@@ -1,0 +1,13 @@
+# gecko driver requirement for thumbnails/screenshots
+redis
+flower
+# end gecko
+Authlib==0.15.5
+PyHive==0.6.5
+s3werkzeugcache==0.2.1 # S3 Cache
+shillelagh[gsheetsapi]==1.2.19 # gsheets driver
+pinotdb==0.5.0
+trino==0.328.0
+statsd==4.0.1
+playwright==1.44.0
+starrocks==1.0.6
