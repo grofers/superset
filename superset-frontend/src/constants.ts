@@ -16,17 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { DEFAULT_D3_FORMAT, DEFAULT_D3_TIME_FORMAT } from '@superset-ui/core';
+import { BootstrapData, CommonBootstrapData } from './types/bootstrapTypes';
+
 export const DATETIME_WITH_TIME_ZONE = 'YYYY-MM-DD HH:mm:ssZ';
 export const TIME_WITH_MS = 'HH:mm:ss.SSS';
 
-export const BOOL_TRUE_DISPLAY = 'True';
-export const BOOL_FALSE_DISPLAY = 'False';
-
 export const URL_PARAMS = {
-  migrationState: {
-    name: 'migration_state',
-    type: 'string',
-  },
   standalone: {
     name: 'standalone',
     type: 'number',
@@ -47,12 +43,12 @@ export const URL_PARAMS = {
     name: 'native_filters_key',
     type: 'string',
   },
-  filterSet: {
-    name: 'filter_set',
-    type: 'string',
-  },
   showFilters: {
     name: 'show_filters',
+    type: 'boolean',
+  },
+  expandFilters: {
+    name: 'expand_filters',
     type: 'boolean',
   },
   formDataKey: {
@@ -61,20 +57,140 @@ export const URL_PARAMS = {
   },
   sliceId: {
     name: 'slice_id',
+    type: 'number',
+  },
+  datasourceId: {
+    name: 'datasource_id',
     type: 'string',
   },
   datasetId: {
     name: 'dataset_id',
     type: 'string',
   },
+  datasourceType: {
+    name: 'datasource_type',
+    type: 'string',
+  },
+  dashboardId: {
+    name: 'dashboard_id',
+    type: 'string',
+  },
+  force: {
+    name: 'force',
+    type: 'boolean',
+  },
+  permalinkKey: {
+    name: 'permalink_key',
+    type: 'string',
+  },
+  vizType: {
+    name: 'viz_type',
+    type: 'string',
+  },
+  showDatabaseModal: {
+    name: 'show_database_modal',
+    type: 'boolean',
+  },
+  saveAction: {
+    name: 'save_action',
+    type: 'string',
+  },
+  dashboardPageId: {
+    name: 'dashboard_page_id',
+    type: 'string',
+  },
+  dashboardFocusedChart: {
+    name: 'focused_chart',
+    type: 'number',
+  },
+  editMode: {
+    name: 'edit',
+    type: 'boolean',
+  },
 } as const;
 
-/**
- * Faster debounce delay for inputs without expensive operation.
- */
-export const FAST_DEBOUNCE = 250;
+export const RESERVED_CHART_URL_PARAMS: string[] = [
+  URL_PARAMS.formDataKey.name,
+  URL_PARAMS.sliceId.name,
+  URL_PARAMS.datasourceId.name,
+  URL_PARAMS.datasourceType.name,
+  URL_PARAMS.datasetId.name,
+];
+export const RESERVED_DASHBOARD_URL_PARAMS: string[] = [
+  URL_PARAMS.nativeFilters.name,
+  URL_PARAMS.nativeFiltersKey.name,
+  URL_PARAMS.permalinkKey.name,
+  URL_PARAMS.preselectFilters.name,
+  URL_PARAMS.editMode.name,
+];
 
-/**
- * Slower debounce delay for inputs with expensive API calls.
- */
-export const SLOW_DEBOUNCE = 500;
+export const DEFAULT_COMMON_BOOTSTRAP_DATA: CommonBootstrapData = {
+  application_root: '/',
+  static_assets_prefix: '',
+  flash_messages: [],
+  conf: {},
+  locale: 'en',
+  feature_flags: {},
+  language_pack: {
+    domain: 'superset',
+    locale_data: {
+      superset: {
+        '': {
+          domain: 'superset',
+          lang: 'en',
+          plural_forms: '',
+        },
+      },
+    },
+  },
+  extra_categorical_color_schemes: [],
+  extra_sequential_color_schemes: [],
+  theme: {
+    default: {},
+    dark: {},
+  },
+  menu_data: {
+    menu: [],
+    brand: {
+      path: '',
+      icon: '',
+      alt: '',
+      tooltip: '',
+      text: '',
+    },
+    navbar_right: {
+      show_watermark: true,
+      languages: {},
+      show_language_picker: true,
+      user_is_anonymous: false,
+      user_info_url: '',
+      user_login_url: '',
+      user_logout_url: '',
+      locale: '',
+    },
+    settings: [],
+    environment_tag: {
+      text: '',
+      color: '',
+    },
+  },
+  d3_format: DEFAULT_D3_FORMAT,
+  d3_time_format: DEFAULT_D3_TIME_FORMAT,
+};
+
+export const DEFAULT_BOOTSTRAP_DATA: BootstrapData = {
+  common: DEFAULT_COMMON_BOOTSTRAP_DATA,
+};
+
+export enum FilterPlugins {
+  Select = 'filter_select',
+  Range = 'filter_range',
+  Time = 'filter_time',
+  TimeColumn = 'filter_timecolumn',
+  TimeGrain = 'filter_timegrain',
+}
+
+export enum Actions {
+  CREATE = 'create',
+  UPDATE = 'update',
+}

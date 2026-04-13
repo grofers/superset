@@ -14,114 +14,128 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Dict, List, Optional, Set
 
-from marshmallow import Schema, validate
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from marshmallow import Schema, validate  # noqa: F401
 from marshmallow.exceptions import ValidationError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session  # noqa: F401
 
 from superset import db
 from superset.commands.base import BaseCommand
 from superset.commands.exceptions import CommandException, CommandInvalidError
 from superset.commands.importers.v1.utils import (
+    load_configs,
     load_metadata,
-    load_yaml,
-    METADATA_FILE_NAME,
+    load_yaml,  # noqa: F401
+    METADATA_FILE_NAME,  # noqa: F401
+    validate_metadata_type,
 )
-from superset.dao.base import BaseDAO
-from superset.models.core import Database
+from superset.daos.base import BaseDAO
+from superset.models.core import Database  # noqa: F401
+from superset.utils.decorators import transaction
+
+logger = logging.getLogger(__name__)
 
 
 class ImportModelsCommand(BaseCommand):
-
     """Import models"""
 
     dao = BaseDAO
     model_name = "model"
     prefix = ""
-    schemas: Dict[str, Schema] = {}
+    schemas: dict[str, Schema] = {}
     import_error = CommandException
 
     # pylint: disable=unused-argument
-    def __init__(self, contents: Dict[str, str], *args: Any, **kwargs: Any):
+    def __init__(self, contents: dict[str, str], *args: Any, **kwargs: Any):
         self.contents = contents
-        self.passwords: Dict[str, str] = kwargs.get("passwords") or {}
+        self.passwords: dict[str, str] = kwargs.get("passwords") or {}
+        self.ssh_tunnel_passwords: dict[str, str] = (
+            kwargs.get("ssh_tunnel_passwords") or {}
+        )
+        self.ssh_tunnel_private_keys: dict[str, str] = (
+            kwargs.get("ssh_tunnel_private_keys") or {}
+        )
+        self.ssh_tunnel_priv_key_passwords: dict[str, str] = (
+            kwargs.get("ssh_tunnel_priv_key_passwords") or {}
+        )
         self.overwrite: bool = kwargs.get("overwrite", False)
-        self._configs: Dict[str, Any] = {}
+        self._configs: dict[str, Any] = {}
 
     @staticmethod
+    # ruff: noqa: C901
     def _import(
-        session: Session, configs: Dict[str, Any], overwrite: bool = False
+        configs: dict[str, Any],
+        overwrite: bool = False,
+        contents: dict[str, Any] | None = None,
     ) -> None:
         raise NotImplementedError("Subclasses MUST implement _import")
 
     @classmethod
-    def _get_uuids(cls) -> Set[str]:
+    def _get_uuids(cls) -> set[str]:
         return {str(model.uuid) for model in db.session.query(cls.dao.model_cls).all()}
 
+    @transaction()
     def run(self) -> None:
         self.validate()
 
-        # rollback to prevent partial imports
         try:
-            self._import(db.session, self._configs, self.overwrite)
-            db.session.commit()
+            self._import(self._configs, self.overwrite, self.contents)
+        except CommandException:
+            raise
         except Exception as ex:
-            db.session.rollback()
             raise self.import_error() from ex
 
-    def validate(self) -> None:
-        exceptions: List[ValidationError] = []
-
-        # load existing databases so we can apply the password validation
-        db_passwords = {
-            str(uuid): password
-            for uuid, password in db.session.query(
-                Database.uuid, Database.password
-            ).all()
-        }
+    def validate(self) -> None:  # noqa: F811
+        exceptions: list[ValidationError] = []
 
         # verify that the metadata file is present and valid
         try:
-            metadata: Optional[Dict[str, str]] = load_metadata(self.contents)
+            metadata: dict[str, str] | None = load_metadata(self.contents)
         except ValidationError as exc:
             exceptions.append(exc)
             metadata = None
+        if self.dao.model_cls:
+            validate_metadata_type(metadata, self.dao.model_cls.__name__, exceptions)
 
-        # validate that the type declared in METADATA_FILE_NAME is correct
-        if metadata and "type" in metadata:
-            type_validator = validate.Equal(self.dao.model_cls.__name__)  # type: ignore
-            try:
-                type_validator(metadata["type"])
-            except ValidationError as exc:
-                exc.messages = {METADATA_FILE_NAME: {"type": exc.messages}}
-                exceptions.append(exc)
+        # load the configs and make sure we have confirmation to overwrite existing models  # noqa: E501
+        self._configs = load_configs(
+            self.contents,
+            self.schemas,
+            self.passwords,
+            exceptions,
+            self.ssh_tunnel_passwords,
+            self.ssh_tunnel_private_keys,
+            self.ssh_tunnel_priv_key_passwords,
+        )
+        self._prevent_overwrite_existing_model(exceptions)
 
-        # validate objects
-        for file_name, content in self.contents.items():
-            # skip directories
-            if not content:
-                continue
+        if exceptions:
+            detailed_errors = []
+            for ex in exceptions:
+                # Extract detailed error information
+                if hasattr(ex, "messages") and isinstance(ex.messages, dict):
+                    for file_name, errors in ex.messages.items():
+                        logger.error("Validation failed for %s: %s", file_name, errors)
+                        detailed_errors.append(f"{file_name}: {errors}")
+                else:
+                    logger.error("Import validation error: %s", ex)
+                    detailed_errors.append(str(ex))
 
-            prefix = file_name.split("/")[0]
-            schema = self.schemas.get(f"{prefix}/")
-            if schema:
-                try:
-                    config = load_yaml(file_name, content)
+            error_summary = "; ".join(detailed_errors)
+            raise CommandInvalidError(
+                f"Error importing {self.model_name}: {error_summary}",
+                exceptions,
+            )
 
-                    # populate passwords from the request or from existing DBs
-                    if file_name in self.passwords:
-                        config["password"] = self.passwords[file_name]
-                    elif prefix == "databases" and config["uuid"] in db_passwords:
-                        config["password"] = db_passwords[config["uuid"]]
-
-                    schema.load(config)
-                    self._configs[file_name] = config
-                except ValidationError as exc:
-                    exc.messages = {file_name: exc.messages}
-                    exceptions.append(exc)
-
-        # check if the object exists and shouldn't be overwritten
+    def _prevent_overwrite_existing_model(  # pylint: disable=invalid-name
+        self, exceptions: list[ValidationError]
+    ) -> None:
+        """check if the object exists and shouldn't be overwritten"""
         if not self.overwrite:
             existing_uuids = self._get_uuids()
             for file_name, config in self._configs.items():
@@ -139,8 +153,3 @@ class ImportModelsCommand(BaseCommand):
                             }
                         )
                     )
-
-        if exceptions:
-            exception = CommandInvalidError(f"Error importing {self.model_name}")
-            exception.add_list(exceptions)
-            raise exception

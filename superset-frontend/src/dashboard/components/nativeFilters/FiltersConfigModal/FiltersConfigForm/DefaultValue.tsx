@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { FC } from 'react';
+import { FC } from 'react';
 import {
   Behavior,
   SetDataMaskHook,
@@ -24,10 +24,14 @@ import {
   AppSection,
   t,
 } from '@superset-ui/core';
-import { FormInstance } from 'antd/lib/form';
-import Loading from 'src/components/Loading';
+import { Loading, type FormInstance } from '@superset-ui/core/components';
 import { NativeFiltersForm } from '../types';
 import { getFormData } from '../../utils';
+import {
+  INPUT_HEIGHT,
+  INPUT_WIDTH,
+  TIME_FILTER_INPUT_WIDTH,
+} from './constants';
 
 type DefaultValueProps = {
   hasDefaultValue: boolean;
@@ -48,20 +52,24 @@ const DefaultValue: FC<DefaultValueProps> = ({
   formData,
   enableNoResults,
 }) => {
-  const formFilter = (form.getFieldValue('filters') || {})[filterId];
+  const formFilter = form.getFieldValue('filters')?.[filterId];
   const queriesData = formFilter?.defaultValueQueriesData;
   const loading = hasDataset && queriesData === null;
-  const value = formFilter.defaultDataMask?.filterState?.value;
+  const value = formFilter?.defaultDataMask?.filterState?.value;
   const isMissingRequiredValue =
     hasDefaultValue && (value === null || value === undefined);
   return loading ? (
     <Loading position="inline-centered" />
   ) : (
     <SuperChart
-      height={32}
-      width={formFilter?.filterType === 'filter_time' ? 350 : 250}
-      appSection={AppSection.FILTER_CONFIG_MODAL}
-      behaviors={[Behavior.NATIVE_FILTER]}
+      height={INPUT_HEIGHT}
+      width={
+        formFilter?.filterType === 'filter_time'
+          ? TIME_FILTER_INPUT_WIDTH
+          : INPUT_WIDTH
+      }
+      appSection={AppSection.FilterConfigModal}
+      behaviors={[Behavior.NativeFilter]}
       formData={formData}
       // For charts that don't have datasource we need workaround for empty placeholder
       queriesData={
@@ -71,7 +79,7 @@ const DefaultValue: FC<DefaultValueProps> = ({
       hooks={{ setDataMask }}
       enableNoResults={enableNoResults}
       filterState={{
-        ...formFilter.defaultDataMask?.filterState,
+        ...formFilter?.defaultDataMask?.filterState,
         validateMessage: isMissingRequiredValue && t('Value is required'),
         validateStatus: isMissingRequiredValue && 'error',
       }}

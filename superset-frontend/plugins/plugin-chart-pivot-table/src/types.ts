@@ -26,8 +26,15 @@ import {
   NumberFormatter,
   QueryFormMetric,
   QueryFormColumn,
+  TimeGranularity,
+  ContextMenuFilters,
+  Currency,
 } from '@superset-ui/core';
-import { ColorFormatters } from '@superset-ui/chart-controls';
+import {
+  ColD3Formatting,
+  ColorFormatters,
+  PrefixSuffixFormatters,
+} from '@superset-ui/chart-controls';
 
 export interface PivotTableStylesProps {
   height: number;
@@ -60,18 +67,39 @@ interface PivotTableCustomizeProps {
   rowSubtotalPosition: boolean;
   colSubtotalPosition: boolean;
   colTotals: boolean;
+  isTotalAtTop: boolean;
+  colSubTotals: boolean;
   rowTotals: boolean;
+  rowSubTotals: boolean;
   valueFormat: string;
+  currencyFormat: Currency;
   setDataMask: SetDataMaskHook;
-  emitFilter?: boolean;
+  emitCrossFilters?: boolean;
   selectedFilters?: SelectedFiltersType;
   verboseMap: JsonObject;
   columnFormats: JsonObject;
+  currencyFormats: Record<string, Currency>;
   metricsLayout?: MetricsLayoutEnum;
   metricColorFormatters: ColorFormatters;
   dateFormatters: Record<string, DateFormatter | undefined>;
   legacy_order_by: QueryFormMetric[] | QueryFormMetric | null;
   order_desc: boolean;
+  onContextMenu?: (
+    clientX: number,
+    clientY: number,
+    filters?: ContextMenuFilters,
+  ) => void;
+  timeGrainSqla?: TimeGranularity;
+  time_grain_sqla?: TimeGranularity;
+  granularity_sqla?: string;
+  allowRenderHtml?: boolean;
+  prefixFormatting?: PrefixSuffixFormatters;
+  suffixFormatting?: PrefixSuffixFormatters;
+  addBorder?: boolean;
+  conditionalCellFormatter?: boolean;
+  colValueFormatting?: ColD3Formatting;
+  showRowPercentile?: boolean;
+  showColPercentile?: boolean;
 }
 
 export type PivotTableQueryFormData = QueryFormData &

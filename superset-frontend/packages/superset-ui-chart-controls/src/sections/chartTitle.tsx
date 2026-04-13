@@ -16,19 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
 import { t } from '@superset-ui/core';
+
+import { ControlSubSectionHeader } from '../components/ControlSubSectionHeader';
 import { ControlPanelSectionConfig } from '../types';
 import { formatSelectOptions } from '../utils';
 
-const TITLE_MARGIN_OPTIONS: number[] = [15, 30, 50, 75, 100, 125, 150, 200];
-const TITLE_POSITION_OPTIONS: string[] = ['Left', 'Top'];
+export const TITLE_MARGIN_OPTIONS: number[] = [
+  15, 30, 50, 75, 100, 125, 150, 200,
+];
+export const TITLE_POSITION_OPTIONS: [string, string][] = [
+  ['Left', t('Left')],
+  ['Top', t('Top')],
+];
+
 export const titleControls: ControlPanelSectionConfig = {
   label: t('Chart Title'),
   tabOverride: 'customize',
   expanded: true,
   controlSetRows: [
-    [<h1 className="section-header">{t('X Axis')}</h1>],
+    [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
     [
       {
         name: 'x_axis_title',
@@ -37,7 +44,6 @@ export const titleControls: ControlPanelSectionConfig = {
           label: t('X Axis Title'),
           renderTrigger: true,
           default: '',
-          description: t('Changing this control takes effect instantly'),
         },
       },
     ],
@@ -48,15 +54,14 @@ export const titleControls: ControlPanelSectionConfig = {
           type: 'SelectControl',
           freeForm: true,
           clearable: true,
-          label: t('X AXIS TITLE BOTTOM MARGIN'),
+          label: t('X Axis Title Margin'),
           renderTrigger: true,
           default: TITLE_MARGIN_OPTIONS[0],
           choices: formatSelectOptions(TITLE_MARGIN_OPTIONS),
-          description: t('Changing this control takes effect instantly'),
         },
       },
     ],
-    [<h1 className="section-header">{t('Y Axis')}</h1>],
+    [<ControlSubSectionHeader>{t('Y Axis')}</ControlSubSectionHeader>],
     [
       {
         name: 'y_axis_title',
@@ -65,7 +70,6 @@ export const titleControls: ControlPanelSectionConfig = {
           label: t('Y Axis Title'),
           renderTrigger: true,
           default: '',
-          description: t('Changing this control takes effect instantly'),
         },
       },
     ],
@@ -76,11 +80,10 @@ export const titleControls: ControlPanelSectionConfig = {
           type: 'SelectControl',
           freeForm: true,
           clearable: true,
-          label: t('Y AXIS TITLE MARGIN'),
+          label: t('Y Axis Title Margin'),
           renderTrigger: true,
-          default: TITLE_MARGIN_OPTIONS[0],
+          default: TITLE_MARGIN_OPTIONS[1],
           choices: formatSelectOptions(TITLE_MARGIN_OPTIONS),
-          description: t('Changing this control takes effect instantly'),
         },
       },
     ],
@@ -91,11 +94,10 @@ export const titleControls: ControlPanelSectionConfig = {
           type: 'SelectControl',
           freeForm: true,
           clearable: false,
-          label: t('Y AXIS TITLE POSITION'),
+          label: t('Y Axis Title Position'),
           renderTrigger: true,
-          default: TITLE_POSITION_OPTIONS[0],
-          choices: formatSelectOptions(TITLE_POSITION_OPTIONS),
-          description: t('Changing this control takes effect instantly'),
+          default: TITLE_POSITION_OPTIONS[0][0],
+          choices: TITLE_POSITION_OPTIONS,
         },
       },
     ],

@@ -16,14 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { buildQueryContext } from '@superset-ui/core';
+import { buildQueryContext, VizType } from '@superset-ui/core';
+import * as queryModule from '../../src/query/normalizeTimeColumn';
 
 describe('buildQueryContext', () => {
   it('should build datasource for table sources and apply defaults', () => {
     const queryContext = buildQueryContext({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
     });
     expect(queryContext.datasource.id).toBe(5);
     expect(queryContext.datasource.type).toBe('table');
@@ -31,23 +32,12 @@ describe('buildQueryContext', () => {
     expect(queryContext.result_format).toBe('json');
     expect(queryContext.result_type).toBe('full');
   });
-  it('should build datasource for druid sources and set force to true', () => {
-    const queryContext = buildQueryContext({
-      datasource: '5__druid',
-      granularity: 'ds',
-      viz_type: 'table',
-      force: true,
-    });
-    expect(queryContext.datasource.id).toBe(5);
-    expect(queryContext.datasource.type).toBe('druid');
-    expect(queryContext.force).toBe(true);
-  });
   it('should build datasource for table sources with columns', () => {
     const queryContext = buildQueryContext(
       {
         datasource: '5__table',
         granularity_sqla: 'ds',
-        viz_type: 'table',
+        viz_type: VizType.Table,
         source: 'source_column',
         source_category: 'source_category_column',
         target: 'target_column',
@@ -85,7 +75,7 @@ describe('buildQueryContext', () => {
       {
         datasource: '5__table',
         granularity_sqla: 'ds',
-        viz_type: 'table',
+        viz_type: VizType.Table,
         source: 'source_column',
         source_category: 'source_category_column',
         target: 'target_column',
@@ -107,5 +97,48 @@ describe('buildQueryContext', () => {
         }),
       ]),
     );
+  });
+  // todo(Yongjie): move these test case into buildQueryObject.test.ts
+  it('should remove undefined value in post_processing', () => {
+    const queryContext = buildQueryContext(
+      {
+        datasource: '5__table',
+        viz_type: VizType.Table,
+      },
+      () => [
+        {
+          post_processing: [
+            undefined,
+            undefined,
+            {
+              operation: 'flatten',
+            },
+            undefined,
+          ],
+        },
+      ],
+    );
+    expect(queryContext.queries[0].post_processing).toEqual([
+      {
+        operation: 'flatten',
+      },
+    ]);
+  });
+  it('should call normalizeTimeColumn if has x_axis', () => {
+    const spyNormalizeTimeColumn = jest.spyOn(
+      queryModule,
+      'normalizeTimeColumn',
+    );
+
+    buildQueryContext(
+      {
+        datasource: '5__table',
+        viz_type: VizType.Table,
+        x_axis: 'axis',
+      },
+      () => [{}],
+    );
+    expect(spyNormalizeTimeColumn).toHaveBeenCalled();
+    spyNormalizeTimeColumn.mockRestore();
   });
 });

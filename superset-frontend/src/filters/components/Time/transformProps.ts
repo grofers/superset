@@ -17,6 +17,7 @@
  * under the License.
  */
 import { ChartProps } from '@superset-ui/core';
+import { noOp } from 'src/utils/common';
 import { DEFAULT_FORM_DATA } from './types';
 
 export default function transformProps(chartProps: ChartProps) {
@@ -28,11 +29,16 @@ export default function transformProps(chartProps: ChartProps) {
     width,
     behaviors,
     filterState,
+    inputRef,
+    displaySettings,
   } = chartProps;
   const {
-    setDataMask = () => {},
-    setFocusedFilter = () => {},
-    unsetFocusedFilter = () => {},
+    setDataMask = noOp,
+    setHoveredFilter = noOp,
+    unsetHoveredFilter = noOp,
+    setFocusedFilter = noOp,
+    unsetFocusedFilter = noOp,
+    setFilterActive = noOp,
   } = hooks;
   const { data } = queriesData[0];
 
@@ -46,8 +52,14 @@ export default function transformProps(chartProps: ChartProps) {
     height,
     behaviors,
     setDataMask,
+    setHoveredFilter,
+    unsetHoveredFilter,
     setFocusedFilter,
     unsetFocusedFilter,
+    setFilterActive,
     width,
+    inputRef,
+    filterBarOrientation: displaySettings?.filterBarOrientation,
+    isOverflowingFilterBar: displaySettings?.isOverflowingFilterBar,
   };
 }

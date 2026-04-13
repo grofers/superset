@@ -19,7 +19,7 @@
 import { overrideExtraFormData } from '../../src/query/processExtraFormData';
 
 describe('overrideExtraFormData', () => {
-  it('should assign allowed non-existent value', () => {
+  it('should assign allowed nonexistent value', () => {
     expect(
       overrideExtraFormData(
         {
@@ -82,7 +82,7 @@ describe('overrideExtraFormData', () => {
     });
   });
 
-  it('should override pre-existing extra value', () => {
+  it('should override preexisting extra value', () => {
     expect(
       overrideExtraFormData(
         {
@@ -94,7 +94,7 @@ describe('overrideExtraFormData', () => {
             time_grain_sqla: 'PT1H',
           },
         },
-        { time_grain_sqla: 'PT2H' },
+        { time_grain_sqla: 'P1D' },
       ),
     ).toEqual({
       granularity: 'something',
@@ -102,7 +102,7 @@ describe('overrideExtraFormData', () => {
       datasource: 'table_1',
       time_range: '100 years ago',
       extras: {
-        time_grain_sqla: 'PT2H',
+        time_grain_sqla: 'P1D',
       },
     });
   });

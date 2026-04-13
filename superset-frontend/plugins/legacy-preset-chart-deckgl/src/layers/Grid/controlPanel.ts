@@ -16,7 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { ControlPanelConfig, sections } from '@superset-ui/chart-controls';
+import {
+  ControlPanelConfig,
+  getStandardizedControls,
+} from '@superset-ui/chart-controls';
 import { t, validateNonEmpty } from '@superset-ui/core';
 import {
   filterNulls,
@@ -30,11 +33,13 @@ import {
   viewport,
   spatial,
   mapboxStyle,
+  legendPosition,
+  generateDeckGLColorSchemeControls,
 } from '../../utilities/Shared_DeckGL';
+import { COLOR_SCHEME_TYPES } from '../../utilities/utils';
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
-    sections.legacyRegularTime,
     {
       label: t('Query'),
       expanded: true,
@@ -49,9 +54,16 @@ const config: ControlPanelConfig = {
     {
       label: t('Map'),
       controlSetRows: [
-        [mapboxStyle, viewport],
-        ['color_picker', autozoom],
-        [gridSize, extruded],
+        [mapboxStyle],
+        [viewport],
+        ...generateDeckGLColorSchemeControls({
+          defaultSchemeType: COLOR_SCHEME_TYPES.categorical_palette,
+          disableCategoricalColumn: true,
+        }),
+        [legendPosition],
+        [autozoom],
+        [gridSize],
+        [extruded],
       ],
     },
     {
@@ -71,6 +83,10 @@ const config: ControlPanelConfig = {
       validators: [validateNonEmpty],
     },
   },
+  formDataOverrides: formData => ({
+    ...formData,
+    size: getStandardizedControls().shiftMetric(),
+  }),
 };
 
 export default config;

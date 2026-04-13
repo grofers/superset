@@ -17,19 +17,19 @@
  * specific language governing permissions and limitationsxw
  * under the License.
  */
-import { ComparisionType, PostProcessingCompare } from '@superset-ui/core';
-import { getMetricOffsetsMap, isValidTimeCompare } from './utils';
+import { ComparisonType, PostProcessingCompare } from '@superset-ui/core';
+import { getMetricOffsetsMap, isTimeComparison } from './utils';
 import { PostProcessingFactory } from './types';
 
 export const timeCompareOperator: PostProcessingFactory<
-  PostProcessingCompare | undefined
+  PostProcessingCompare
 > = (formData, queryObject) => {
   const comparisonType = formData.comparison_type;
   const metricOffsetMap = getMetricOffsetsMap(formData, queryObject);
 
   if (
-    isValidTimeCompare(formData, queryObject) &&
-    comparisonType !== ComparisionType.Values
+    isTimeComparison(formData, queryObject) &&
+    comparisonType !== ComparisonType.Values
   ) {
     return {
       operation: 'compare',

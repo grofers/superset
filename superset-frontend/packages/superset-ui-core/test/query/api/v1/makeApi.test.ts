@@ -22,8 +22,8 @@ import { makeApi, SupersetApiError } from '../../../../src/query';
 import setupClientForTest from '../setupClientForTest';
 
 describe('makeApi()', () => {
-  beforeAll(setupClientForTest);
-  afterEach(fetchMock.restore);
+  beforeAll(() => setupClientForTest());
+  afterEach(() => fetchMock.restore());
 
   it('should expose method and endpoint', () => {
     const api = makeApi({
@@ -35,13 +35,13 @@ describe('makeApi()', () => {
     expect(api.requestType).toEqual('search');
   });
 
-  it('should allow custom client', async () => {
+  it('should allow custom path', async () => {
     expect.assertions(2);
     const api = makeApi({
       method: 'GET',
       endpoint: '/test-custom-client',
     });
-    const client = new SupersetClientClass({ baseUrl: 'http://foo/' });
+    const client = new SupersetClientClass({ appRoot: '/foo' });
     const mockResponse = { yes: 'ok' };
     const mockRequest = jest.fn(() =>
       Promise.resolve(
@@ -95,7 +95,7 @@ describe('makeApi()', () => {
 
     const expected = new FormData();
     expected.append('request', JSON.stringify('test'));
-    const received = fetchMock.lastOptions().body as FormData;
+    const received = fetchMock.lastOptions()?.body as FormData;
 
     expect(received).toBeInstanceOf(FormData);
     expect(received.get('request')).toEqual(expected.get('request'));
@@ -204,7 +204,7 @@ describe('makeApi()', () => {
     expect(result).toBe('ok?');
   });
 
-  it('should return raw resposnse when responseType=raw', async () => {
+  it('should return raw response when responseType=raw', async () => {
     expect.assertions(2);
     const api = makeApi<JsonValue, number, 'raw'>({
       method: 'DELETE',

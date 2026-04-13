@@ -17,43 +17,50 @@
  * under the License.
  */
 
-import {
-  ControlState,
-  DatasourceMeta,
-  Metric,
-} from '@superset-ui/chart-controls';
+import { ControlState, Dataset, Metric } from '@superset-ui/chart-controls';
 import {
   Column,
   isAdhocMetricSimple,
+  isAdhocMetricSQL,
   isSavedMetric,
   isSimpleAdhocFilter,
   JsonValue,
   SimpleAdhocFilter,
 } from '@superset-ui/core';
+import { isEmpty } from 'lodash';
 import AdhocMetric from 'src/explore/components/controls/MetricControl/AdhocMetric';
 
 const isControlValueCompatibleWithDatasource = (
-  datasource: DatasourceMeta,
+  datasource: Dataset,
   controlState: ControlState,
   value: any,
 ) => {
+  // A datasource might have been deleted, in which case we can't validate
+  // only using the control state since it might have been hydrated with
+  // the wrong options or columns (empty arrays).
   if (controlState.options && typeof value === 'string') {
     if (
-      (Array.isArray(controlState.options) &&
+      (!isEmpty(controlState.options) &&
         controlState.options.some(
-          (option: [string | number, string]) => option[0] === value,
+          (option: [string | number, string] | { column_name: string }) =>
+            Array.isArray(option)
+              ? option[0] === value
+              : option.column_name === value,
         )) ||
-      value in controlState.options
+      !isEmpty(datasource?.columns)
     ) {
-      return datasource.columns.some(column => column.column_name === value);
+      return datasource.columns.some(
+        (column: Column) => column.column_name === value,
+      );
     }
   }
   if (
     controlState.savedMetrics &&
     isSavedMetric(value) &&
-    controlState.savedMetrics.some(
+    (controlState.savedMetrics.some(
       (savedMetric: Metric) => savedMetric.metric_name === value,
-    )
+    ) ||
+      !isEmpty(datasource?.metrics))
   ) {
     return datasource.metrics.some(
       (metric: Metric) => metric.metric_name === value,
@@ -62,11 +69,13 @@ const isControlValueCompatibleWithDatasource = (
   if (
     controlState.columns &&
     (isAdhocMetricSimple(value) || isSimpleAdhocFilter(value)) &&
-    controlState.columns.some(
-      (column: Column) =>
-        column.column_name === (value as AdhocMetric).column?.column_name ||
-        column.column_name === (value as SimpleAdhocFilter).subject,
-    )
+    ((!isEmpty(controlState.columns) &&
+      controlState.columns.some(
+        (column: Column) =>
+          column.column_name === (value as AdhocMetric).column?.column_name ||
+          column.column_name === (value as SimpleAdhocFilter).subject,
+      )) ||
+      !isEmpty(datasource?.columns))
   ) {
     return datasource.columns.some(
       (column: Column) =>
@@ -74,11 +83,15 @@ const isControlValueCompatibleWithDatasource = (
         column.column_name === (value as SimpleAdhocFilter).subject,
     );
   }
+  if (isAdhocMetricSQL(value)) {
+    Object.assign(value, { datasourceWarning: true });
+    return true;
+  }
   return false;
 };
 
 export const getControlValuesCompatibleWithDatasource = (
-  datasource: DatasourceMeta,
+  datasource: Dataset,
   controlState: ControlState,
   value: JsonValue,
 ) => {

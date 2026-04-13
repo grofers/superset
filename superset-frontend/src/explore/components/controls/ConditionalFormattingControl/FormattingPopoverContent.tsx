@@ -16,17 +16,37 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { styled, t } from '@superset-ui/core';
-import { Form, FormItem, FormProps } from 'src/components/Form';
-import Select, { propertyComparator } from 'src/components/Select/Select';
-import { Col, InputNumber, Row } from 'src/common/components';
-import Button from 'src/components/Button';
+import { useState } from 'react';
+import { styled, t, useTheme, SupersetTheme } from '@superset-ui/core';
 import {
-  COMPARATOR,
+  Comparator,
+  MultipleValueComparators,
+  D3_FORMAT_OPTIONS,
+  sharedControls,
+} from '@superset-ui/chart-controls';
+import {
+  Select,
+  Button,
+  Form,
+  FormItem,
+  InputNumber,
+  Col,
+  Row,
+  type FormProps,
+} from '@superset-ui/core/components';
+import {
+  CellTypes,
   ConditionalFormattingConfig,
-  MULTIPLE_VALUE_COMPARATORS,
+  OPERATOR_TYPE,
 } from './types';
+import SelectControl from '../SelectControl';
+
+// TODO: tangled redefinition that aligns with @superset-ui/plugin-chart-table
+// used to be imported but main app shouldn't depend on plugins...
+export enum ColorSchemeEnum {
+  'Green' = 'Green',
+  'Red' = 'Red',
+}
 
 const FullWidthInputNumber = styled(InputNumber)`
   width: 100%;
@@ -37,24 +57,53 @@ const JustifyEnd = styled.div`
   justify-content: flex-end;
 `;
 
-const colorSchemeOptions = [
-  { value: 'rgb(0,255,0)', label: t('green') },
-  { value: 'rgb(255,255,0)', label: t('yellow') },
-  { value: 'rgb(255,0,0)', label: t('red') },
+// Use theme token names instead of hex values to support theme switching
+const colorSchemeOptions = (theme: SupersetTheme) => [
+  { value: 'colorSuccessBg', label: t('success') },
+  { value: 'colorWarningBg', label: t('alert') },
+  { value: 'colorErrorBg', label: t('error') },
+  { value: theme.colors.success.dark1, label: t('success dark') },
+  { value: theme.colors.alert.dark1, label: t('alert dark') },
+  { value: theme.colors.error.dark1, label: t('error dark') },
+  { value: theme.colors.custom.marine, label: t('marine') },
+  { value: theme.colors.custom.citron, label: t('citron') },
+  { value: theme.colors.custom.tomato, label: t('tomato') },
+  { value: theme.colors.custom.brick, label: t('brick') },
+  { value: theme.colors.custom.sunset, label: t('sunset') },
+  { value: theme.colors.custom.emerald, label: t('emerald') },
+  { value: theme.colors.custom.carmine, label: t('carmine') },
+  { value: theme.colors.custom.dodger, label: t('dodger') },
+];
+
+const formattingSymbolsOptions = [
+  { value: '₹', label: t('₹ (INR)') },
+  { value: '$', label: t('$ (USD)') },
+  { value: 'INR', label: t('INR') },
+  { value: '%', label: t('%') },
 ];
 
 const operatorOptions = [
-  { value: COMPARATOR.NONE, label: 'None', order: 0 },
-  { value: COMPARATOR.GREATER_THAN, label: '>', order: 1 },
-  { value: COMPARATOR.LESS_THAN, label: '<', order: 2 },
-  { value: COMPARATOR.GREATER_OR_EQUAL, label: '≥', order: 3 },
-  { value: COMPARATOR.LESS_OR_EQUAL, label: '≤', order: 4 },
-  { value: COMPARATOR.EQUAL, label: '=', order: 5 },
-  { value: COMPARATOR.NOT_EQUAL, label: '≠', order: 6 },
-  { value: COMPARATOR.BETWEEN, label: '< x <', order: 7 },
-  { value: COMPARATOR.BETWEEN_OR_EQUAL, label: '≤ x ≤', order: 8 },
-  { value: COMPARATOR.BETWEEN_OR_LEFT_EQUAL, label: '≤ x <', order: 9 },
-  { value: COMPARATOR.BETWEEN_OR_RIGHT_EQUAL, label: '< x ≤', order: 10 },
+  { value: Comparator.None, label: t('None') },
+  { value: Comparator.GreaterThan, label: '>' },
+  { value: Comparator.LessThan, label: '<' },
+  { value: Comparator.GreaterOrEqual, label: '≥' },
+  { value: Comparator.LessOrEqual, label: '≤' },
+  { value: Comparator.Equal, label: '=' },
+  { value: Comparator.NotEqual, label: '≠' },
+  { value: Comparator.Between, label: '< x <' },
+  { value: Comparator.BetweenOrEqual, label: '≤ x ≤' },
+  { value: Comparator.BetweenOrLeftEqual, label: '≤ x <' },
+  { value: Comparator.BetweenOrRightEqual, label: '< x ≤' },
+];
+
+const operationTypeOptions = [
+  { value: OPERATOR_TYPE.ABSOLUTE, label: t('Absolute') },
+  { value: OPERATOR_TYPE.PERCENTILE, label: t('Percentile') },
+];
+
+const cellTypeOptions = [
+  { value: CellTypes.GRADIENT, label: t('Gradient') },
+  { value: CellTypes.SOLID, label: t('Solid') },
 ];
 
 const targetValueValidator =
@@ -84,11 +133,11 @@ const targetValueRightValidator = targetValueValidator(
   t('This value should be greater than the left target value'),
 );
 
-const isOperatorMultiValue = (operator?: COMPARATOR) =>
-  operator && MULTIPLE_VALUE_COMPARATORS.includes(operator);
+const isOperatorMultiValue = (operator?: Comparator) =>
+  operator && MultipleValueComparators.includes(operator);
 
-const isOperatorNone = (operator?: COMPARATOR) =>
-  !operator || operator === COMPARATOR.NONE;
+const isOperatorNone = (operator?: Comparator) =>
+  !operator || operator === Comparator.None;
 
 const rulesRequired = [{ required: true, message: t('Required') }];
 
@@ -119,7 +168,7 @@ const shouldFormItemUpdate = (
   isOperatorMultiValue(prevValues.operator) !==
     isOperatorMultiValue(currentValues.operator);
 
-const operatorField = (
+const renderOperator = ({ showOnlyNone }: { showOnlyNone?: boolean } = {}) => (
   <FormItem
     name="operator"
     label={t('Operator')}
@@ -128,16 +177,37 @@ const operatorField = (
   >
     <Select
       ariaLabel={t('Operator')}
-      options={operatorOptions}
-      sortComparator={propertyComparator('order')}
+      options={showOnlyNone ? [operatorOptions[0]] : operatorOptions}
     />
+  </FormItem>
+);
+
+const operationType = (
+  <FormItem
+    name="operationType"
+    label={t('Operation Type')}
+    rules={rulesRequired}
+    initialValue={operationTypeOptions[0].value}
+  >
+    <Select ariaLabel={t('Operation Type')} options={operationTypeOptions} />
+  </FormItem>
+);
+
+const cellType = (
+  <FormItem
+    name="cellType"
+    label={t('Cell Type')}
+    rules={rulesRequired}
+    initialValue={cellTypeOptions[0].value}
+  >
+    <Select ariaLabel={t('Cell Type')} options={cellTypeOptions} />
   </FormItem>
 );
 
 const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
   isOperatorNone(getFieldValue('operator')) ? (
     <Row gutter={12}>
-      <Col span={6}>{operatorField}</Col>
+      <Col span={6}>{renderOperator()}</Col>
     </Row>
   ) : isOperatorMultiValue(getFieldValue('operator')) ? (
     <Row gutter={12}>
@@ -153,7 +223,7 @@ const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
           <FullWidthInputNumber />
         </FormItem>
       </Col>
-      <Col span={6}>{operatorField}</Col>
+      <Col span={6}>{renderOperator()}</Col>
       <Col span={9}>
         <FormItem
           name="targetValueRight"
@@ -168,66 +238,134 @@ const renderOperatorFields = ({ getFieldValue }: GetFieldValue) =>
       </Col>
     </Row>
   ) : (
-    <Row gutter={12}>
-      <Col span={6}>{operatorField}</Col>
-      <Col span={18}>
-        <FormItem
-          name="targetValue"
-          label={t('Target value')}
-          rules={rulesRequired}
-        >
-          <FullWidthInputNumber />
-        </FormItem>
-      </Col>
-    </Row>
+    <>
+      <Row gutter={12}>
+        <Col span={6}>{renderOperator()}</Col>
+        <Col span={14}>
+          <FormItem
+            name="targetValue"
+            label={t('Target value')}
+            rules={rulesRequired}
+          >
+            <FullWidthInputNumber />
+          </FormItem>
+        </Col>
+      </Row>
+      <Row gutter={12}>
+        <Col span={10}>{operationType}</Col>
+        <Col span={10}>{cellType}</Col>
+      </Row>
+    </>
   );
 
 export const FormattingPopoverContent = ({
   config,
   onChange,
   columns = [],
+  extraColorChoices = [],
+  hasOperator = true,
+  isD3ValueFormatting,
 }: {
   config?: ConditionalFormattingConfig;
   onChange: (config: ConditionalFormattingConfig) => void;
   columns: { label: string; value: string }[];
-}) => (
-  <Form
-    onFinish={onChange}
-    initialValues={config}
-    requiredMark="optional"
-    layout="vertical"
-  >
-    <Row gutter={12}>
-      <Col span={12}>
-        <FormItem
-          name="column"
-          label={t('Column')}
-          rules={rulesRequired}
-          initialValue={columns[0]?.value}
-        >
-          <Select ariaLabel={t('Select column')} options={columns} />
-        </FormItem>
-      </Col>
-      <Col span={12}>
-        <FormItem
-          name="colorScheme"
-          label={t('Color scheme')}
-          rules={rulesRequired}
-          initialValue={colorSchemeOptions[0].value}
-        >
-          <Select ariaLabel={t('Color scheme')} options={colorSchemeOptions} />
-        </FormItem>
-      </Col>
-    </Row>
-    <FormItem noStyle shouldUpdate={shouldFormItemUpdate}>
-      {renderOperatorFields}
-    </FormItem>
-    <FormItem>
-      <JustifyEnd>
-        <Button htmlType="submit" buttonStyle="primary">
-          {t('Apply')}
-        </Button>
-      </JustifyEnd>
-    </FormItem>
-  </Form>
-);
+  extraColorChoices?: { label: string; value: string }[];
+  hasOperator?: boolean;
+  isD3ValueFormatting?: boolean;
+}) => {
+  const theme = useTheme();
+  const colorScheme = colorSchemeOptions(theme);
+  const [showOperatorFields, setShowOperatorFields] = useState(
+    config === undefined ||
+      (config?.colorScheme !== ColorSchemeEnum.Green &&
+        config?.colorScheme !== ColorSchemeEnum.Red),
+  );
+  const handleChange = (event: any) => {
+    setShowOperatorFields(
+      !(event === ColorSchemeEnum.Green || event === ColorSchemeEnum.Red),
+    );
+  };
+
+  return (
+    <Form
+      onFinish={onChange}
+      initialValues={config}
+      requiredMark="optional"
+      layout="vertical"
+    >
+      <Row gutter={12}>
+        <Col span={12}>
+          <FormItem
+            name="column"
+            label={t('Column')}
+            rules={rulesRequired}
+            initialValue={columns[0]?.value}
+          >
+            <Select ariaLabel={t('Select column')} options={columns} />
+          </FormItem>
+        </Col>
+        {hasOperator ? (
+          <Col span={12}>
+            <FormItem
+              name="colorScheme"
+              label={t('Color scheme')}
+              rules={rulesRequired}
+              initialValue={colorScheme[0].value}
+            >
+              <Select
+                onChange={event => handleChange(event)}
+                ariaLabel={t('Color scheme')}
+                options={[...colorScheme, ...extraColorChoices]}
+              />
+            </FormItem>
+          </Col>
+        ) : isD3ValueFormatting ? (
+          <Col span={12}>
+            <FormItem
+              name="d3ValueFormatting"
+              rules={rulesRequired}
+              initialValue={D3_FORMAT_OPTIONS[0][0]}
+            >
+              <SelectControl
+                {...sharedControls.y_axis_format}
+                label={t('Value Format')}
+              />
+            </FormItem>
+          </Col>
+        ) : (
+          <Col span={12}>
+            <FormItem
+              name="addSymbols"
+              label={t('Add Symbols')}
+              rules={rulesRequired}
+              initialValue={formattingSymbolsOptions[0].value}
+            >
+              <Select
+                ariaLabel={t('Add Symbols')}
+                options={formattingSymbolsOptions}
+              />
+            </FormItem>
+          </Col>
+        )}
+      </Row>
+      <FormItem noStyle shouldUpdate={shouldFormItemUpdate}>
+        {hasOperator ? (
+          showOperatorFields ? (
+            renderOperatorFields
+          ) : (
+            <Row gutter={12}>
+              <Col span={6}>{renderOperator({ showOnlyNone: true })}</Col>
+            </Row>
+          )
+        ) : null}
+      </FormItem>
+      <FormItem>
+        <JustifyEnd>
+          <Button htmlType="submit" buttonStyle="primary">
+            {t('Apply')}
+          </Button>
+        </JustifyEnd>
+      </FormItem>
+    </Form>
+  );
+};

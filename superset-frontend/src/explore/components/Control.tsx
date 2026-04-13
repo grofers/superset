@@ -16,17 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { ReactNode, useCallback, useState } from 'react';
+import { ReactNode, useCallback, useState, useEffect } from 'react';
+import { isEqual } from 'lodash';
 import {
   ControlType,
   ControlComponentProps as BaseControlComponentProps,
 } from '@superset-ui/chart-controls';
-import { JsonValue, QueryFormData } from '@superset-ui/core';
-import ErrorBoundary from 'src/components/ErrorBoundary';
+import {
+  styled,
+  JsonValue,
+  QueryFormData,
+  usePrevious,
+} from '@superset-ui/core';
+import { ErrorBoundary } from 'src/components';
 import { ExploreActions } from 'src/explore/actions/exploreActions';
 import controlMap from './controls';
-
-import './Control.less';
 
 export type ControlProps = {
   // the actual action dispatcher (via bindActionCreators) has identical
@@ -44,6 +48,9 @@ export type ControlProps = {
   validationErrors?: any[];
   hidden?: boolean;
   renderTrigger?: boolean;
+  default?: JsonValue;
+  isVisible?: boolean;
+  resetOnHide?: boolean;
 };
 
 /**
@@ -52,23 +59,53 @@ export type ControlProps = {
 export type ControlComponentProps<ValueType extends JsonValue = JsonValue> =
   Omit<ControlProps, 'value'> & BaseControlComponentProps<ValueType>;
 
+const StyledControl = styled.div`
+  padding-bottom: ${({ theme }) => theme.sizeUnit * 4}px;
+`;
+
 export default function Control(props: ControlProps) {
   const {
     actions: { setControlValue },
     name,
     type,
     hidden,
+    isVisible,
+    resetOnHide = true,
   } = props;
 
   const [hovered, setHovered] = useState(false);
+  const wasVisible = usePrevious(isVisible);
   const onChange = useCallback(
     (value: any, errors: any[]) => setControlValue(name, value, errors),
     [name, setControlValue],
   );
 
-  if (!type) return null;
+  useEffect(() => {
+    if (
+      wasVisible === true &&
+      isVisible === false &&
+      props.default !== undefined &&
+      !isEqual(props.value, props.default) &&
+      resetOnHide
+    ) {
+      // reset control value if setting to invisible
+      setControlValue?.(name, props.default);
+    }
+  }, [
+    name,
+    wasVisible,
+    isVisible,
+    setControlValue,
+    props.value,
+    props.default,
+  ]);
 
-  const ControlComponent = typeof type === 'string' ? controlMap[type] : type;
+  if (!type || isVisible === false) return null;
+
+  const ControlComponent =
+    typeof type === 'string'
+      ? controlMap[type as keyof typeof controlMap]
+      : type;
   if (!ControlComponent) {
     // eslint-disable-next-line no-console
     console.warn(`Unknown controlType: ${type}`);
@@ -76,7 +113,7 @@ export default function Control(props: ControlProps) {
   }
 
   return (
-    <div
+    <StyledControl
       className="Control"
       data-test={name}
       style={hidden ? { display: 'none' } : undefined}
@@ -86,6 +123,6 @@ export default function Control(props: ControlProps) {
       <ErrorBoundary>
         <ControlComponent onChange={onChange} hovered={hovered} {...props} />
       </ErrorBoundary>
-    </div>
+    </StyledControl>
   );
 }

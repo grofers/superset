@@ -15,38 +15,56 @@
 # specific language governing permissions and limitations
 # under the License.
 """Unit tests for async query celery jobs in Superset"""
+
 from unittest import mock
 from uuid import uuid4
 
 import pytest
 from celery.exceptions import SoftTimeLimitExceeded
-from flask import g
+from parameterized import parameterized
 
-from superset.charts.commands.exceptions import ChartDataQueryFailedError
-from superset.charts.data.commands.get_data_command import ChartDataCommand
+from superset.async_events.cache_backend import (
+    RedisCacheBackend,
+    RedisSentinelCacheBackend,
+)
+from superset.commands.chart.data.get_data_command import ChartDataCommand
+from superset.commands.chart.exceptions import ChartDataQueryFailedError
 from superset.exceptions import SupersetException
 from superset.extensions import async_query_manager, security_manager
-from superset.tasks import async_queries
-from superset.tasks.async_queries import (
-    ensure_user_is_set,
-    load_chart_data_into_cache,
-    load_explore_json_into_cache,
-)
 from tests.integration_tests.base_tests import SupersetTestCase
 from tests.integration_tests.fixtures.birth_names_dashboard import (
-    load_birth_names_dashboard_with_slices,
-    load_birth_names_data,
+    load_birth_names_dashboard_with_slices,  # noqa: F401
+    load_birth_names_data,  # noqa: F401
 )
 from tests.integration_tests.fixtures.query_context import get_query_context
+from tests.integration_tests.fixtures.tags import (
+    with_tagging_system_feature,  # noqa: F401
+)
 from tests.integration_tests.test_app import app
 
 
+@pytest.mark.usefixtures(
+    "load_birth_names_data", "load_birth_names_dashboard_with_slices"
+)
 class TestAsyncQueries(SupersetTestCase):
-    @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
+    @parameterized.expand(
+        [
+            ("RedisCacheBackend", mock.Mock(spec=RedisCacheBackend)),
+            ("RedisSentinelCacheBackend", mock.Mock(spec=RedisSentinelCacheBackend)),
+        ]
+    )
+    @mock.patch("superset.tasks.async_queries.set_form_data")
     @mock.patch.object(async_query_manager, "update_job")
-    @mock.patch.object(async_queries, "set_form_data")
-    def test_load_chart_data_into_cache(self, mock_set_form_data, mock_update_job):
+    def test_load_chart_data_into_cache(
+        self, cache_type, cache_backend, mock_update_job, mock_set_form_data
+    ):
+        from superset.tasks.async_queries import load_chart_data_into_cache
+
+        app._got_first_request = False
+
+        async_query_manager.get_cache_backend = mock.Mock(return_value=cache_backend)
         async_query_manager.init_app(app)
+
         query_context = get_query_context("birth_names")
         user = security_manager.find_user("gamma")
         job_metadata = {
@@ -57,23 +75,33 @@ class TestAsyncQueries(SupersetTestCase):
             "errors": [],
         }
 
-        with mock.patch.object(
-            async_queries, "ensure_user_is_set"
-        ) as ensure_user_is_set:
-            load_chart_data_into_cache(job_metadata, query_context)
+        load_chart_data_into_cache(job_metadata, query_context)
 
-        ensure_user_is_set.assert_called_once_with(user.id)
         mock_set_form_data.assert_called_once_with(query_context)
         mock_update_job.assert_called_once_with(
             job_metadata, "done", result_url=mock.ANY
         )
 
+    @parameterized.expand(
+        [
+            ("RedisCacheBackend", mock.Mock(spec=RedisCacheBackend)),
+            ("RedisSentinelCacheBackend", mock.Mock(spec=RedisSentinelCacheBackend)),
+        ]
+    )
     @mock.patch.object(
         ChartDataCommand, "run", side_effect=ChartDataQueryFailedError("Error: foo")
     )
     @mock.patch.object(async_query_manager, "update_job")
-    def test_load_chart_data_into_cache_error(self, mock_update_job, mock_run_command):
+    def test_load_chart_data_into_cache_error(
+        self, cache_type, cache_backend, mock_update_job, mock_run_command
+    ):
+        from superset.tasks.async_queries import load_chart_data_into_cache
+
+        app._got_first_request = False
+
+        async_query_manager.get_cache_backend = mock.Mock(return_value=cache_backend)
         async_query_manager.init_app(app)
+
         query_context = get_query_context("birth_names")
         user = security_manager.find_user("gamma")
         job_metadata = {
@@ -84,22 +112,30 @@ class TestAsyncQueries(SupersetTestCase):
             "errors": [],
         }
         with pytest.raises(ChartDataQueryFailedError):
-            with mock.patch.object(
-                async_queries, "ensure_user_is_set"
-            ) as ensure_user_is_set:
-                load_chart_data_into_cache(job_metadata, query_context)
-            ensure_user_is_set.assert_called_once_with(user.id)
+            load_chart_data_into_cache(job_metadata, query_context)
 
         mock_run_command.assert_called_once_with(cache=True)
         errors = [{"message": "Error: foo"}]
         mock_update_job.assert_called_once_with(job_metadata, "error", errors=errors)
 
+    @parameterized.expand(
+        [
+            ("RedisCacheBackend", mock.Mock(spec=RedisCacheBackend)),
+            ("RedisSentinelCacheBackend", mock.Mock(spec=RedisSentinelCacheBackend)),
+        ]
+    )
     @mock.patch.object(ChartDataCommand, "run")
     @mock.patch.object(async_query_manager, "update_job")
     def test_soft_timeout_load_chart_data_into_cache(
-        self, mock_update_job, mock_run_command
+        self, cache_type, cache_backend, mock_update_job, mock_run_command
     ):
+        from superset.tasks.async_queries import load_chart_data_into_cache
+
+        app._got_first_request = False
+
+        async_query_manager.get_cache_backend = mock.Mock(return_value=cache_backend)
         async_query_manager.init_app(app)
+
         user = security_manager.find_user("gamma")
         form_data = {}
         job_metadata = {
@@ -111,24 +147,38 @@ class TestAsyncQueries(SupersetTestCase):
         }
         errors = ["A timeout occurred while loading chart data"]
 
-        with pytest.raises(SoftTimeLimitExceeded):
-            with mock.patch.object(
-                async_queries, "ensure_user_is_set",
-            ) as ensure_user_is_set:
-                ensure_user_is_set.side_effect = SoftTimeLimitExceeded()
+        with pytest.raises(SoftTimeLimitExceeded):  # noqa: PT012
+            with mock.patch(
+                "superset.tasks.async_queries.set_form_data"
+            ) as set_form_data:
+                set_form_data.side_effect = SoftTimeLimitExceeded()
                 load_chart_data_into_cache(job_metadata, form_data)
-            ensure_user_is_set.assert_called_once_with(user.id, "error", errors=errors)
+            set_form_data.assert_called_once_with(form_data, "error", errors=errors)
 
+    @parameterized.expand(
+        [
+            ("RedisCacheBackend", mock.Mock(spec=RedisCacheBackend)),
+            ("RedisSentinelCacheBackend", mock.Mock(spec=RedisSentinelCacheBackend)),
+        ]
+    )
     @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
+    @pytest.mark.skip(reason="This test will be changed to use the api/v1/data")
     @mock.patch.object(async_query_manager, "update_job")
-    def test_load_explore_json_into_cache(self, mock_update_job):
+    def test_load_explore_json_into_cache(
+        self, cache_type, cache_backend, mock_update_job
+    ):
+        from superset.tasks.async_queries import load_explore_json_into_cache
+
+        app._got_first_request = False
+
+        async_query_manager.get_cache_backend = mock.Mock(return_value=cache_backend)
         async_query_manager.init_app(app)
+
         table = self.get_table(name="birth_names")
         user = security_manager.find_user("gamma")
         form_data = {
             "datasource": f"{table.id}__table",
             "viz_type": "dist_bar",
-            "time_range_endpoints": ["inclusive", "exclusive"],
             "granularity_sqla": "ds",
             "time_range": "No filter",
             "metrics": ["count"],
@@ -144,22 +194,30 @@ class TestAsyncQueries(SupersetTestCase):
             "errors": [],
         }
 
-        with mock.patch.object(
-            async_queries, "ensure_user_is_set"
-        ) as ensure_user_is_set:
-            load_explore_json_into_cache(job_metadata, form_data)
+        load_explore_json_into_cache(job_metadata, form_data)
 
-        ensure_user_is_set.assert_called_once_with(user.id)
         mock_update_job.assert_called_once_with(
             job_metadata, "done", result_url=mock.ANY
         )
 
+    @parameterized.expand(
+        [
+            ("RedisCacheBackend", mock.Mock(spec=RedisCacheBackend)),
+            ("RedisSentinelCacheBackend", mock.Mock(spec=RedisSentinelCacheBackend)),
+        ]
+    )
     @mock.patch.object(async_query_manager, "update_job")
-    @mock.patch.object(async_queries, "set_form_data")
+    @mock.patch("superset.tasks.async_queries.set_form_data")
     def test_load_explore_json_into_cache_error(
-        self, mock_set_form_data, mock_update_job
+        self, cache_type, cache_backend, mock_set_form_data, mock_update_job
     ):
+        from superset.tasks.async_queries import load_explore_json_into_cache
+
+        app._got_first_request = False
+
+        async_query_manager.get_cache_backend = mock.Mock(return_value=cache_backend)
         async_query_manager.init_app(app)
+
         user = security_manager.find_user("gamma")
         form_data = {}
         job_metadata = {
@@ -171,22 +229,30 @@ class TestAsyncQueries(SupersetTestCase):
         }
 
         with pytest.raises(SupersetException):
-            with mock.patch.object(
-                async_queries, "ensure_user_is_set"
-            ) as ensure_user_is_set:
-                load_explore_json_into_cache(job_metadata, form_data)
-            ensure_user_is_set.assert_called_once_with(user.id)
+            load_explore_json_into_cache(job_metadata, form_data)
 
         mock_set_form_data.assert_called_once_with(form_data)
         errors = ["The dataset associated with this chart no longer exists"]
         mock_update_job.assert_called_once_with(job_metadata, "error", errors=errors)
 
+    @parameterized.expand(
+        [
+            ("RedisCacheBackend", mock.Mock(spec=RedisCacheBackend)),
+            ("RedisSentinelCacheBackend", mock.Mock(spec=RedisSentinelCacheBackend)),
+        ]
+    )
     @mock.patch.object(ChartDataCommand, "run")
     @mock.patch.object(async_query_manager, "update_job")
     def test_soft_timeout_load_explore_json_into_cache(
-        self, mock_update_job, mock_run_command
+        self, cache_type, cache_backend, mock_update_job, mock_run_command
     ):
+        from superset.tasks.async_queries import load_explore_json_into_cache
+
+        app._got_first_request = False
+
+        async_query_manager.get_cache_backend = mock.Mock(return_value=cache_backend)
         async_query_manager.init_app(app)
+
         user = security_manager.find_user("gamma")
         form_data = {}
         job_metadata = {
@@ -196,53 +262,12 @@ class TestAsyncQueries(SupersetTestCase):
             "status": "pending",
             "errors": [],
         }
-        errors = ["A timeout occurred while loading explore json, error"]
+        errors = ["A timeout occurred while loading explore JSON data"]
 
-        with pytest.raises(SoftTimeLimitExceeded):
-            with mock.patch.object(
-                async_queries, "ensure_user_is_set",
-            ) as ensure_user_is_set:
-                ensure_user_is_set.side_effect = SoftTimeLimitExceeded()
+        with pytest.raises(SoftTimeLimitExceeded):  # noqa: PT012
+            with mock.patch(
+                "superset.tasks.async_queries.set_form_data"
+            ) as set_form_data:
+                set_form_data.side_effect = SoftTimeLimitExceeded()
                 load_explore_json_into_cache(job_metadata, form_data)
-            ensure_user_is_set.assert_called_once_with(user.id, "error", errors=errors)
-
-    def test_ensure_user_is_set(self):
-        g_user_is_set = hasattr(g, "user")
-        original_g_user = g.user if g_user_is_set else None
-
-        if g_user_is_set:
-            del g.user
-
-        self.assertFalse(hasattr(g, "user"))
-        ensure_user_is_set(1)
-        self.assertTrue(hasattr(g, "user"))
-        self.assertFalse(g.user.is_anonymous)
-        self.assertEqual("1", g.user.get_id())
-
-        del g.user
-
-        self.assertFalse(hasattr(g, "user"))
-        ensure_user_is_set(None)
-        self.assertTrue(hasattr(g, "user"))
-        self.assertTrue(g.user.is_anonymous)
-        self.assertEqual(None, g.user.get_id())
-
-        del g.user
-
-        g.user = security_manager.get_user_by_id(2)
-        self.assertEqual("2", g.user.get_id())
-
-        ensure_user_is_set(1)
-        self.assertTrue(hasattr(g, "user"))
-        self.assertFalse(g.user.is_anonymous)
-        self.assertEqual("2", g.user.get_id())
-
-        ensure_user_is_set(None)
-        self.assertTrue(hasattr(g, "user"))
-        self.assertFalse(g.user.is_anonymous)
-        self.assertEqual("2", g.user.get_id())
-
-        if g_user_is_set:
-            g.user = original_g_user
-        else:
-            del g.user
+            set_form_data.assert_called_once_with(form_data, "error", errors=errors)

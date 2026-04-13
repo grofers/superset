@@ -16,49 +16,38 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useEffect, useState } from 'react';
-import { ensureIsArray, styled, t } from '@superset-ui/core';
-import SyntaxHighlighter from 'react-syntax-highlighter/dist/cjs/light';
-import github from 'react-syntax-highlighter/dist/cjs/styles/hljs/github';
-import CopyToClipboard from 'src/components/CopyToClipboard';
-import Loading from 'src/components/Loading';
-import { CopyButton } from 'src/explore/components/DataTableControl';
-import { getClientErrorObject } from 'src/utils/getClientErrorObject';
-import { getChartDataRequest } from 'src/chart/chartAction';
-import markdownSyntax from 'react-syntax-highlighter/dist/cjs/languages/hljs/markdown';
-import htmlSyntax from 'react-syntax-highlighter/dist/cjs/languages/hljs/htmlbars';
-import sqlSyntax from 'react-syntax-highlighter/dist/cjs/languages/hljs/sql';
-import jsonSyntax from 'react-syntax-highlighter/dist/cjs/languages/hljs/json';
+import { FC, Fragment, useEffect, useState } from 'react';
 
-const CopyButtonViewQuery = styled(CopyButton)`
-  && {
-    margin: 0 0 ${({ theme }) => theme.gridUnit}px;
-  }
-`;
-
-SyntaxHighlighter.registerLanguage('markdown', markdownSyntax);
-SyntaxHighlighter.registerLanguage('html', htmlSyntax);
-SyntaxHighlighter.registerLanguage('sql', sqlSyntax);
-SyntaxHighlighter.registerLanguage('json', jsonSyntax);
+import {
+  styled,
+  ensureIsArray,
+  t,
+  getClientErrorObject,
+  QueryFormData,
+} from '@superset-ui/core';
+import { Loading, Alert } from '@superset-ui/core/components';
+import { SupportedLanguage } from '@superset-ui/core/components/CodeSyntaxHighlighter';
+import { getChartDataRequest } from 'src/components/Chart/chartAction';
+import ViewQuery from 'src/explore/components/controls/ViewQuery';
 
 interface Props {
-  latestQueryFormData: object;
+  latestQueryFormData: QueryFormData;
 }
 
 type Result = {
-  query: string;
-  language: string;
+  query?: string;
+  language: SupportedLanguage;
+  error?: string;
 };
 
-const StyledSyntaxContainer = styled.div`
+const ViewQueryModalContainer = styled.div`
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.sizeUnit * 4}px;
 `;
 
-const StyledSyntaxHighlighter = styled(SyntaxHighlighter)`
-  height: calc(100% - 26px); // 100% - clipboard height
-`;
-
-const ViewQueryModal: React.FC<Props> = props => {
+const ViewQueryModal: FC<Props> = ({ latestQueryFormData }) => {
   const [result, setResult] = useState<Result[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +55,7 @@ const ViewQueryModal: React.FC<Props> = props => {
   const loadChartData = (resultType: string) => {
     setIsLoading(true);
     getChartDataRequest({
-      formData: props.latestQueryFormData,
+      formData: latestQueryFormData,
       resultFormat: 'json',
       resultType,
     })
@@ -89,7 +78,7 @@ const ViewQueryModal: React.FC<Props> = props => {
   };
   useEffect(() => {
     loadChartData('query');
-  }, [JSON.stringify(props.latestQueryFormData)]);
+  }, [JSON.stringify(latestQueryFormData)]);
 
   if (isLoading) {
     return <Loading />;
@@ -97,30 +86,25 @@ const ViewQueryModal: React.FC<Props> = props => {
   if (error) {
     return <pre>{error}</pre>;
   }
+
   return (
-    <>
-      {result.map(item =>
-        item.query ? (
-          <StyledSyntaxContainer key={item.query}>
-            <CopyToClipboard
-              text={item.query}
-              shouldShowText={false}
-              copyNode={
-                <CopyButtonViewQuery buttonSize="xsmall">
-                  <i className="fa fa-clipboard" />
-                </CopyButtonViewQuery>
-              }
+    <ViewQueryModalContainer>
+      {result.map((item, index) => (
+        // Static API response data - index is appropriate for keys
+        <Fragment key={index}>
+          {item.error && (
+            <Alert type="error" message={item.error} closable={false} />
+          )}
+          {item.query && (
+            <ViewQuery
+              datasource={latestQueryFormData.datasource}
+              sql={item.query}
+              language={item.language}
             />
-            <StyledSyntaxHighlighter
-              language={item.language || undefined}
-              style={github}
-            >
-              {item.query}
-            </StyledSyntaxHighlighter>
-          </StyledSyntaxContainer>
-        ) : null,
-      )}
-    </>
+          )}
+        </Fragment>
+      ))}
+    </ViewQueryModalContainer>
   );
 };
 

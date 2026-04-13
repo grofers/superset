@@ -21,15 +21,17 @@ import d3 from 'd3';
 import PropTypes from 'prop-types';
 import { extent as d3Extent } from 'd3-array';
 import {
-  getNumberFormatter,
   getSequentialSchemeRegistry,
+  CategoricalColorNamespace,
 } from '@superset-ui/core';
-import Datamap from 'datamaps/dist/datamaps.world.min';
+import Datamap from 'datamaps/dist/datamaps.all.min';
+import { ColorBy } from './utils';
 
 const propTypes = {
   data: PropTypes.arrayOf(
     PropTypes.shape({
       country: PropTypes.string,
+      code: PropTypes.string,
       latitude: PropTypes.number,
       longitude: PropTypes.number,
       name: PropTypes.string,
@@ -42,12 +44,17 @@ const propTypes = {
   showBubbles: PropTypes.bool,
   linearColorScheme: PropTypes.string,
   color: PropTypes.string,
+  colorScheme: PropTypes.string,
+  setDataMask: PropTypes.func,
+  onContextMenu: PropTypes.func,
+  emitCrossFilters: PropTypes.bool,
+  formatter: PropTypes.object,
 };
-
-const formatter = getNumberFormatter();
 
 function WorldMap(element, props) {
   const {
+    countryFieldtype,
+    entity,
     data,
     width,
     height,
@@ -55,6 +62,16 @@ function WorldMap(element, props) {
     showBubbles,
     linearColorScheme,
     color,
+    colorBy,
+    colorScheme,
+    sliceId,
+    theme,
+    onContextMenu,
+    setDataMask,
+    inContextMenu,
+    filterState,
+    emitCrossFilters,
+    formatter,
   } = props;
   const div = d3.select(element);
   div.classed('superset-legacy-chart-world-map', true);
@@ -69,20 +86,117 @@ function WorldMap(element, props) {
     .domain([extRadius[0], extRadius[1]])
     .range([1, maxBubbleSize]);
 
-  const colorScale = getSequentialSchemeRegistry()
-    .get(linearColorScheme)
-    .createLinearScale(d3Extent(filteredData, d => d.m1));
+  let processedData;
+  let colorFn;
+  if (colorBy === ColorBy.Country) {
+    colorFn = CategoricalColorNamespace.getScale(colorScheme);
 
-  const processedData = filteredData.map(d => ({
-    ...d,
-    radius: radiusScale(Math.sqrt(d.m2)),
-    fillColor: colorScale(d.m1),
-  }));
+    processedData = filteredData.map(d => ({
+      ...d,
+      radius: radiusScale(Math.sqrt(d.m2)),
+      fillColor: colorFn(d.name, sliceId),
+    }));
+  } else {
+    colorFn = getSequentialSchemeRegistry()
+      .get(linearColorScheme)
+      .createLinearScale(d3Extent(filteredData, d => d.m1));
+
+    processedData = filteredData.map(d => ({
+      ...d,
+      radius: radiusScale(Math.sqrt(d.m2)),
+      fillColor: colorFn(d.m1),
+    }));
+  }
 
   const mapData = {};
   processedData.forEach(d => {
     mapData[d.country] = d;
   });
+
+  const getCrossFilterDataMask = source => {
+    const selected = Object.values(filterState.selectedValues || {});
+    const key = source.id || source.country;
+    const country =
+      countryFieldtype === 'name' ? mapData[key]?.name : mapData[key]?.code;
+
+    if (!country) {
+      return undefined;
+    }
+
+    let values;
+    if (selected.includes(key)) {
+      values = [];
+    } else {
+      values = [country];
+    }
+
+    return {
+      dataMask: {
+        extraFormData: {
+          filters: values.length
+            ? [
+                {
+                  col: entity,
+                  op: 'IN',
+                  val: values,
+                },
+              ]
+            : [],
+        },
+        filterState: {
+          value: values.length ? values : null,
+          selectedValues: values.length ? [key] : null,
+        },
+      },
+      isCurrentValueSelected: selected.includes(key),
+    };
+  };
+
+  const handleClick = source => {
+    if (!emitCrossFilters) {
+      return;
+    }
+    const pointerEvent = d3.event;
+    pointerEvent.preventDefault();
+    getCrossFilterDataMask(source);
+
+    const dataMask = getCrossFilterDataMask(source)?.dataMask;
+    if (dataMask) {
+      setDataMask(dataMask);
+    }
+  };
+
+  const handleContextMenu = source => {
+    const pointerEvent = d3.event;
+    pointerEvent.preventDefault();
+    const key = source.id || source.country;
+    const val =
+      countryFieldtype === 'name' ? mapData[key]?.name : mapData[key]?.code;
+    let drillToDetailFilters;
+    let drillByFilters;
+    if (val) {
+      drillToDetailFilters = [
+        {
+          col: entity,
+          op: '==',
+          val,
+          formattedVal: val,
+        },
+      ];
+      drillByFilters = [
+        {
+          col: entity,
+          op: '==',
+          val,
+        },
+      ];
+    }
+    onContextMenu(pointerEvent.clientX, pointerEvent.clientY, {
+      drillToDetail: drillToDetailFilters,
+      crossFilter: getCrossFilterDataMask(source),
+      drillBy: { filters: drillByFilters, groupbyFieldName: 'entity' },
+    });
+  };
 
   const map = new Datamap({
     element,
@@ -90,14 +204,14 @@ function WorldMap(element, props) {
     height,
     data: processedData,
     fills: {
-      defaultFill: '#eee',
+      defaultFill: theme.colorBorder,
     },
     geographyConfig: {
-      popupOnHover: true,
-      highlightOnHover: true,
+      popupOnHover: !inContextMenu,
+      highlightOnHover: !inContextMenu,
       borderWidth: 1,
-      borderColor: '#feffff',
-      highlightBorderColor: '#feffff',
+      borderColor: theme.colorSplit,
+      highlightBorderColor: theme.colorIcon,
       highlightFillColor: color,
       highlightBorderWidth: 1,
       popupTemplate: (geo, d) =>
@@ -109,7 +223,7 @@ function WorldMap(element, props) {
       borderWidth: 1,
       borderOpacity: 1,
       borderColor: color,
-      popupOnHover: true,
+      popupOnHover: !inContextMenu,
       radius: null,
       popupTemplate: (geo, d) =>
         `<div class="hoverinfo"><strong>${d.name}</strong><br>${formatter(
@@ -117,14 +231,20 @@ function WorldMap(element, props) {
         )}</div>`,
       fillOpacity: 0.5,
       animate: true,
-      highlightOnHover: true,
+      highlightOnHover: !inContextMenu,
       highlightFillColor: color,
-      highlightBorderColor: 'black',
+      highlightBorderColor: theme.colorTextSecondary,
       highlightBorderWidth: 2,
       highlightBorderOpacity: 1,
       highlightFillOpacity: 0.85,
       exitDelay: 100,
       key: JSON.stringify,
+    },
+    done: datamap => {
+      datamap.svg
+        .selectAll('.datamaps-subunit')
+        .on('contextmenu', handleContextMenu)
+        .on('click', handleClick);
     },
   });
 
@@ -135,7 +255,27 @@ function WorldMap(element, props) {
     div
       .selectAll('circle.datamaps-bubble')
       .style('fill', color)
-      .style('stroke', color);
+      .style('stroke', color)
+      .on('contextmenu', handleContextMenu)
+      .on('click', handleClick);
+  }
+
+  if (filterState.selectedValues?.length > 0) {
+    d3.selectAll('path.datamaps-subunit')
+      .filter(
+        countryFeature =>
+          !filterState.selectedValues.includes(countryFeature.id),
+      )
+      .style('fill-opacity', 0.35);
+
+    // hack to ensure that the clicked country's color is preserved
+    // sometimes the fill color would get default grey value after applying cross filter
+    filterState.selectedValues.forEach(value => {
+      d3.select(`path.datamaps-subunit.${value}`).style(
+        'fill',
+        mapData[value]?.fillColor,
+      );
+    });
   }
 }
 

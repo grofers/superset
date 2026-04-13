@@ -21,6 +21,7 @@ import {
   DataMask,
   NativeFilterType,
   NativeFilterScope,
+  Filter,
 } from '@superset-ui/core';
 
 export interface NativeFiltersFormItem {
@@ -40,21 +41,17 @@ export interface NativeFiltersFormItem {
   };
   defaultValue: any;
   defaultDataMask: DataMask;
-  parentFilter?: {
-    value: string;
-    label: string;
-  };
+  dependencies?: string[];
   sortMetric: string | null;
   adhoc_filters?: AdhocFilter[];
   time_range?: string;
   granularity_sqla?: string;
-  type: typeof NativeFilterType.NATIVE_FILTER;
+  type: typeof NativeFilterType.NativeFilter;
   description: string;
-  hierarchicalFilter?: boolean;
 }
 export interface NativeFilterDivider {
   id: string;
-  type: typeof NativeFilterType.DIVIDER;
+  type: typeof NativeFilterType.Divider;
   title: string;
   description: string;
 }
@@ -64,6 +61,16 @@ export interface NativeFiltersForm {
   changed?: boolean;
 }
 
+export type FilterChangesType = {
+  modified: string[];
+  deleted: string[];
+  reordered: string[];
+};
+
+export type SaveFilterChangesType = {
+  modified: Filter[];
+} & Omit<FilterChangesType, 'modified'>;
+
 export type FilterRemoval =
   | null
   | {
@@ -71,6 +78,3 @@ export type FilterRemoval =
       timerId: number; // id of the timer that finally removes the filter
     }
   | { isPending: false };
-
-export type FilterHierarchyNode = { id: string; parentId: string | null };
-export type FilterHierarchy = FilterHierarchyNode[];

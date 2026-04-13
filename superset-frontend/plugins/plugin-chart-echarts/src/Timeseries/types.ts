@@ -16,26 +16,29 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import type { OptionName } from 'echarts/types/src/util/types';
 import {
   AnnotationLayer,
-  ChartDataResponseResult,
-  ChartProps,
-  QueryFormColumn,
+  AxisType,
+  ContributionType,
   QueryFormData,
+  QueryFormMetric,
+  TimeFormatter,
   TimeGranularity,
 } from '@superset-ui/core';
-import { sections } from '@superset-ui/chart-controls';
 import {
-  DEFAULT_LEGEND_FORM_DATA,
-  EchartsLegendFormData,
-  EChartTransformedProps,
-  EchartsTitleFormData,
-  DEFAULT_TITLE_FORM_DATA,
+  BaseChartProps,
+  BaseTransformedProps,
+  ContextMenuTransformedProps,
+  CrossFilterTransformedProps,
+  LegendFormData,
+  StackType,
+  TitleFormData,
 } from '../types';
 
-export enum EchartsTimeseriesContributionType {
-  Row = 'row',
-  Column = 'column',
+export enum OrientationType {
+  Vertical = 'vertical',
+  Horizontal = 'horizontal',
 }
 
 export enum EchartsTimeseriesSeriesType {
@@ -52,7 +55,8 @@ export type EchartsTimeseriesFormData = QueryFormData & {
   annotationLayers: AnnotationLayer[];
   area: boolean;
   colorScheme?: string;
-  contributionMode?: EchartsTimeseriesContributionType;
+  timeShiftColor?: boolean;
+  contributionMode?: ContributionType;
   forecastEnabled: boolean;
   forecastPeriods: number;
   forecastInterval: number;
@@ -62,70 +66,53 @@ export type EchartsTimeseriesFormData = QueryFormData & {
   logAxis: boolean;
   markerEnabled: boolean;
   markerSize: number;
+  metrics: QueryFormMetric[];
   minorSplitLine: boolean;
+  minorTicks: boolean;
   opacity: number;
   orderDesc: boolean;
   rowLimit: number;
   seriesType: EchartsTimeseriesSeriesType;
-  stack: boolean;
+  stack: StackType;
+  stackDimension: string;
+  timeCompare?: string[];
   tooltipTimeFormat?: string;
+  showTooltipTotal?: boolean;
+  showTooltipPercentage?: boolean;
+  truncateXAxis: boolean;
   truncateYAxis: boolean;
   yAxisFormat?: string;
+  xAxisForceCategorical?: boolean;
   xAxisTimeFormat?: string;
   timeGrainSqla?: TimeGranularity;
+  xAxisBounds: [number | undefined | null, number | undefined | null];
   yAxisBounds: [number | undefined | null, number | undefined | null];
   zoomable: boolean;
   richTooltip: boolean;
   xAxisLabelRotation: number;
-  emitFilter: boolean;
-  groupby: QueryFormColumn[];
+  xAxisLabelInterval: number | string;
   showValue: boolean;
   onlyTotal: boolean;
+  showExtraControls: boolean;
   percentageThreshold: number;
-} & EchartsLegendFormData &
-  EchartsTitleFormData;
+  orientation?: OrientationType;
+} & LegendFormData &
+  TitleFormData;
 
-// @ts-ignore
-export const DEFAULT_FORM_DATA: EchartsTimeseriesFormData = {
-  ...DEFAULT_LEGEND_FORM_DATA,
-  annotationLayers: sections.annotationLayers,
-  area: false,
-  forecastEnabled: sections.FORECAST_DEFAULT_DATA.forecastEnabled,
-  forecastInterval: sections.FORECAST_DEFAULT_DATA.forecastInterval,
-  forecastPeriods: sections.FORECAST_DEFAULT_DATA.forecastPeriods,
-  forecastSeasonalityDaily:
-    sections.FORECAST_DEFAULT_DATA.forecastSeasonalityDaily,
-  forecastSeasonalityWeekly:
-    sections.FORECAST_DEFAULT_DATA.forecastSeasonalityWeekly,
-  forecastSeasonalityYearly:
-    sections.FORECAST_DEFAULT_DATA.forecastSeasonalityYearly,
-  logAxis: false,
-  markerEnabled: false,
-  markerSize: 6,
-  minorSplitLine: false,
-  opacity: 0.2,
-  orderDesc: true,
-  rowLimit: 10000,
-  seriesType: EchartsTimeseriesSeriesType.Line,
-  stack: false,
-  tooltipTimeFormat: 'smart_date',
-  truncateYAxis: false,
-  yAxisBounds: [null, null],
-  zoomable: false,
-  richTooltip: true,
-  xAxisLabelRotation: 0,
-  emitFilter: false,
-  groupby: [],
-  showValue: false,
-  onlyTotal: false,
-  percentageThreshold: 0,
-  ...DEFAULT_TITLE_FORM_DATA,
-};
-
-export interface EchartsTimeseriesChartProps extends ChartProps {
+export interface EchartsTimeseriesChartProps
+  extends BaseChartProps<EchartsTimeseriesFormData> {
   formData: EchartsTimeseriesFormData;
-  queriesData: ChartDataResponseResult[];
 }
 
 export type TimeseriesChartTransformedProps =
-  EChartTransformedProps<EchartsTimeseriesFormData>;
+  BaseTransformedProps<EchartsTimeseriesFormData> &
+    ContextMenuTransformedProps &
+    CrossFilterTransformedProps & {
+      legendData?: OptionName[];
+      xValueFormatter: TimeFormatter | StringConstructor;
+      xAxis: {
+        label: string;
+        type: AxisType;
+      };
+      onFocusedSeries: (series: string | null) => void;
+    };

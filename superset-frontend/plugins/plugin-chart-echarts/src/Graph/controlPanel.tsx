@@ -16,11 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
 import { t } from '@superset-ui/core';
 import {
   ControlPanelConfig,
-  sections,
+  ControlSubSectionHeader,
+  getStandardizedControls,
   sharedControls,
 } from '@superset-ui/chart-controls';
 import { DEFAULT_FORM_DATA } from './types';
@@ -39,7 +39,6 @@ const optionalEntity = {
 
 const controlPanel: ControlPanelConfig = {
   controlPanelSections: [
-    sections.legacyRegularTime,
     {
       label: t('Query'),
       expanded: true,
@@ -98,7 +97,7 @@ const controlPanel: ControlPanelConfig = {
       controlSetRows: [
         ['color_scheme'],
         ...legendSection,
-        [<h1 className="section-header">{t('Layout')}</h1>],
+        [<ControlSubSectionHeader>{t('Layout')}</ControlSubSectionHeader>],
         [
           {
             name: 'layout',
@@ -320,6 +319,10 @@ const controlPanel: ControlPanelConfig = {
       ],
     },
   ],
+  formDataOverrides: formData => ({
+    ...formData,
+    metric: getStandardizedControls().popAllMetrics(),
+  }),
 };
 
 export default controlPanel;

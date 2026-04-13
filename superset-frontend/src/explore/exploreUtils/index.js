@@ -25,20 +25,24 @@ import {
   ensureIsArray,
   getChartBuildQueryRegistry,
   getChartMetadataRegistry,
+  SupersetClient,
 } from '@superset-ui/core';
 import { availableDomains } from 'src/utils/hostNamesConfig';
 import { safeStringify } from 'src/utils/safeStringify';
+import { optionLabel } from 'src/utils/common';
+import { ensureAppRoot } from 'src/utils/pathUtils';
 import { URL_PARAMS } from 'src/constants';
 import {
+  DISABLE_INPUT_OPERATORS,
   MULTI_OPERATORS,
   OPERATOR_ENUM_TO_OPERATOR_TYPE,
+  UNSAVED_CHART_ID,
 } from 'src/explore/constants';
 import { DashboardStandaloneMode } from 'src/dashboard/util/constants';
-import { optionLabel } from '../../utils/common';
 
 export function getChartKey(explore) {
-  const { slice } = explore;
-  return slice ? slice.slice_id : 0;
+  const { slice, form_data } = explore;
+  return slice?.slice_id ?? form_data?.slice_id ?? UNSAVED_CHART_ID;
 }
 
 let requestCounter = 0;
@@ -59,18 +63,16 @@ export function getHostName(allowDomainSharding = false) {
   return availableDomains[currentIndex];
 }
 
-export function getAnnotationJsonUrl(slice_id, form_data, isNative, force) {
+export function getAnnotationJsonUrl(slice_id, force) {
   if (slice_id === null || slice_id === undefined) {
     return null;
   }
+
   const uri = URI(window.location.search);
-  const endpoint = isNative ? 'annotation_json' : 'slice_json';
   return uri
-    .pathname(`/superset/${endpoint}/${slice_id}`)
+    .pathname(ensureAppRoot('/api/v1/chart/data'))
     .search({
-      form_data: safeStringify(form_data, (key, value) =>
-        value === null ? undefined : value,
-      ),
+      form_data: safeStringify({ slice_id }),
       force,
     })
     .toString();
@@ -83,9 +85,9 @@ export function getURIDirectory(endpointType = 'base') {
       endpointType,
     )
   ) {
-    return '/superset/explore_json/';
+    return ensureAppRoot('/superset/explore_json/');
   }
-  return '/superset/explore/';
+  return ensureAppRoot('/explore/');
 }
 
 export function mountExploreUrl(endpointType, extraSearch = {}, force = false) {
@@ -99,7 +101,7 @@ export function mountExploreUrl(endpointType, extraSearch = {}, force = false) {
     if (force) {
       search.force = '1';
     }
-    search.standalone = DashboardStandaloneMode.HIDE_NAV;
+    search.standalone = DashboardStandaloneMode.HideNav;
   }
   return uri.directory(directory).search(search).toString();
 }
@@ -112,7 +114,7 @@ export function getChartDataUri({ path, qs, allowDomainSharding = false }) {
     protocol: window.location.protocol.slice(0, -1),
     hostname: getHostName(allowDomainSharding),
     port: window.location.port ? window.location.port : '',
-    path,
+    path: ensureAppRoot(path),
   });
   if (qs) {
     uri = uri.search(qs);
@@ -142,7 +144,10 @@ export function getExploreUrl({
   // eslint-disable-next-line no-param-reassign
   delete formData.label_colors;
 
-  let uri = getChartDataUri({ path: '/', allowDomainSharding });
+  let uri = getChartDataUri({
+    path: '/',
+    allowDomainSharding,
+  });
   if (curUrl) {
     uri = URI(URI(curUrl).search());
   }
@@ -194,12 +199,15 @@ export function getExploreUrl({
   return uri.search(search).directory(directory).toString();
 }
 
-export const shouldUseLegacyApi = formData => {
+export const getQuerySettings = formData => {
   const vizMetadata = getChartMetadataRegistry().get(formData.viz_type);
-  return vizMetadata ? vizMetadata.useLegacyApi : false;
+  return [
+    vizMetadata?.useLegacyApi ?? false,
+    vizMetadata?.parseMethod ?? 'json-bigint',
+  ];
 };
 
-export const buildV1ChartDataPayload = ({
+export const buildV1ChartDataPayload = async ({
   formData,
   force,
   resultFormat,
@@ -234,32 +242,7 @@ export const buildV1ChartDataPayload = ({
 export const getLegacyEndpointType = ({ resultType, resultFormat }) =>
   resultFormat === 'csv' ? resultFormat : resultType;
 
-export function postForm(url, payload, target = '_blank') {
-  if (!url) {
-    return;
-  }
-
-  const hiddenForm = document.createElement('form');
-  hiddenForm.action = url;
-  hiddenForm.method = 'POST';
-  hiddenForm.target = target;
-  const token = document.createElement('input');
-  token.type = 'hidden';
-  token.name = 'csrf_token';
-  token.value = (document.getElementById('csrf_token') || {}).value;
-  hiddenForm.appendChild(token);
-  const data = document.createElement('input');
-  data.type = 'hidden';
-  data.name = 'form_data';
-  data.value = safeStringify(payload);
-  hiddenForm.appendChild(data);
-
-  document.body.appendChild(hiddenForm);
-  hiddenForm.submit();
-  document.body.removeChild(hiddenForm);
-}
-
-export const exportChart = ({
+export const exportChart = async ({
   formData,
   resultFormat = 'json',
   resultType = 'full',
@@ -268,7 +251,8 @@ export const exportChart = ({
 }) => {
   let url;
   let payload;
-  if (shouldUseLegacyApi(formData)) {
+  const [useLegacyApi, parseMethod] = getQuerySettings(formData);
+  if (useLegacyApi) {
     const endpointType = getLegacyEndpointType({ resultFormat, resultType });
     url = getExploreUrl({
       formData,
@@ -277,25 +261,28 @@ export const exportChart = ({
     });
     payload = formData;
   } else {
-    url = '/api/v1/chart/data';
-    payload = buildV1ChartDataPayload({
+    url = ensureAppRoot('/api/v1/chart/data');
+    payload = await buildV1ChartDataPayload({
       formData,
       force,
       resultFormat,
       resultType,
       ownState,
+      parseMethod,
     });
   }
-  postForm(url, payload);
+
+  SupersetClient.postForm(url, { form_data: safeStringify(payload) });
 };
 
-export const exploreChart = formData => {
+export const exploreChart = (formData, requestParams) => {
   const url = getExploreUrl({
     formData,
     endpointType: 'base',
     allowDomainSharding: false,
+    requestParams,
   });
-  postForm(url, formData);
+  SupersetClient.postForm(url, { form_data: safeStringify(formData) });
 };
 
 export const useDebouncedEffect = (effect, delay, deps) => {
@@ -318,7 +305,15 @@ export const getSimpleSQLExpression = (subject, operator, comparator) => {
     [...MULTI_OPERATORS]
       .map(op => OPERATOR_ENUM_TO_OPERATOR_TYPE[op].operation)
       .indexOf(operator) >= 0;
-  let expression = subject ?? '';
+  const showComparator =
+    DISABLE_INPUT_OPERATORS.map(
+      op => OPERATOR_ENUM_TO_OPERATOR_TYPE[op].operation,
+    ).indexOf(operator) === -1;
+  // If returned value is an object after changing dataset
+  let expression =
+    typeof subject === 'object'
+      ? (subject?.column_name ?? '')
+      : (subject ?? '');
   if (subject && operator) {
     expression += ` ${operator}`;
     const firstValue =
@@ -328,15 +323,19 @@ export const getSimpleSQLExpression = (subject, operator, comparator) => {
       firstValue !== undefined && Number.isNaN(Number(firstValue));
     const quote = isString ? "'" : '';
     const [prefix, suffix] = isMulti ? ['(', ')'] : ['', ''];
-    const formattedComparators = comparatorArray
-      .map(val => optionLabel(val))
-      .map(
-        val =>
-          `${quote}${isString ? String(val).replace("'", "''") : val}${quote}`,
-      );
-    if (comparatorArray.length > 0) {
+    if (comparatorArray.length > 0 && showComparator) {
+      const formattedComparators = comparatorArray
+        .map(val => optionLabel(val))
+        .map(
+          val =>
+            `${quote}${isString ? String(val).replace(/'/g, "''") : val}${quote}`,
+        );
       expression += ` ${prefix}${formattedComparators.join(', ')}${suffix}`;
     }
   }
   return expression;
 };
+
+export function formatSelectOptions(options) {
+  return options.map(opt => [opt, opt.toString()]);
+}

@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
 import { reactify, styled } from '@superset-ui/core';
 import PropTypes from 'prop-types';
 import Component from './Chord';
@@ -39,18 +38,20 @@ Chord.propTypes = {
 };
 
 export default styled(Chord)`
-  .superset-legacy-chart-chord svg #circle circle {
-    fill: none;
-    pointer-events: all;
-  }
-  .superset-legacy-chart-chord svg .group path {
-    fill-opacity: 0.6;
-  }
-  .superset-legacy-chart-chord svg path.chord {
-    stroke: #000;
-    stroke-width: 0.25px;
-  }
-  .superset-legacy-chart-chord svg #circle:hover path.fade {
-    opacity: 0.2;
-  }
+  ${({ theme }) => `
+    .superset-legacy-chart-chord svg #circle circle {
+      fill: none;
+      pointer-events: all;
+    }
+    .superset-legacy-chart-chord svg .group path {
+      fill-opacity: 60%;
+    }
+    .superset-legacy-chart-chord svg path.chord {
+      stroke: ${theme.colorText};
+      stroke-width: 0.25px;
+    }
+    .superset-legacy-chart-chord svg #circle:hover path.fade {
+      opacity: 10%;
+    }
+  `}
 `;

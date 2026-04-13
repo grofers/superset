@@ -16,30 +16,38 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useEffect, useState, ReactNode } from 'react';
-import { styled, Metric, SafeMarkdown } from '@superset-ui/core';
-import InfoTooltipWithTrigger from './InfoTooltipWithTrigger';
-import { ColumnTypeLabel } from './ColumnTypeLabel';
+import { useState, ReactNode, useLayoutEffect, RefObject } from 'react';
+
+import { css, styled, Metric, SupersetTheme } from '@superset-ui/core';
+import {
+  SafeMarkdown,
+  Typography,
+  // TODO: somehow doesn't work with our main Tooltip (?)
+  RawAntdTooltip as Tooltip,
+  InfoTooltip,
+} from '@superset-ui/core/components';
+import { ColumnTypeLabel } from './ColumnTypeLabel/ColumnTypeLabel';
 import CertifiedIconWithTooltip from './CertifiedIconWithTooltip';
-import Tooltip from './Tooltip';
 import { getMetricTooltipNode } from './labelUtils';
+import { SQLPopover } from './SQLPopover';
 
 const FlexRowContainer = styled.div`
   align-items: center;
   display: flex;
 
   > svg {
-    margin-right: ${({ theme }) => theme.gridUnit}px;
+    margin-right: ${({ theme }) => theme.sizeUnit}px;
   }
 `;
 
 export interface MetricOptionProps {
-  metric: Omit<Metric, 'id'> & { label?: string };
+  metric: Omit<Metric, 'id' | 'uuid'> & { label?: string };
   openInNewWindow?: boolean;
   showFormula?: boolean;
   showType?: boolean;
   url?: string;
-  labelRef?: React.RefObject<any>;
+  labelRef?: RefObject<any>;
+  shouldShowTooltip?: boolean;
 }
 
 export function MetricOption({
@@ -48,28 +56,55 @@ export function MetricOption({
   openInNewWindow = false,
   showFormula = true,
   showType = false,
+  shouldShowTooltip = true,
   url = '',
 }: MetricOptionProps) {
   const verbose = metric.verbose_name || metric.metric_name || metric.label;
-  const link = url ? (
-    <a href={url} target={openInNewWindow ? '_blank' : ''} rel="noreferrer">
-      {verbose}
-    </a>
-  ) : (
-    verbose
+
+  const label = (
+    <span
+      className="option-label metric-option-label"
+      css={(theme: SupersetTheme) => css`
+        margin-right: ${theme.sizeUnit}px;
+      `}
+      ref={labelRef}
+    >
+      {url ? (
+        <Typography.Link
+          href={url}
+          target={openInNewWindow ? '_blank' : ''}
+          rel="noreferrer"
+        >
+          {verbose}
+        </Typography.Link>
+      ) : (
+        verbose
+      )}
+    </span>
   );
 
-  const warningMarkdown = metric.warning_markdown || metric.warning_text;
+  const warningMarkdown =
+    metric.warning_markdown || metric.warning_text || metric.error_text;
 
   const [tooltipText, setTooltipText] = useState<ReactNode>(metric.metric_name);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setTooltipText(getMetricTooltipNode(metric, labelRef));
   }, [labelRef, metric]);
 
   return (
     <FlexRowContainer className="metric-option">
       {showType && <ColumnTypeLabel type="expression" />}
+      {shouldShowTooltip ? (
+        <Tooltip id="metric-name-tooltip" title={tooltipText}>
+          {label}
+        </Tooltip>
+      ) : (
+        label
+      )}
+      {showFormula && metric.expression && (
+        <SQLPopover sqlExpression={metric.expression} />
+      )}
       {metric.is_certified && (
         <CertifiedIconWithTooltip
           metricName={metric.metric_name}
@@ -77,38 +112,15 @@ export function MetricOption({
           details={metric.certification_details}
         />
       )}
-      <Tooltip
-        id="metric-name-tooltip"
-        title={tooltipText}
-        trigger={['hover']}
-        placement="top"
-      >
-        <span className="option-label metric-option-label" ref={labelRef}>
-          {link}
-        </span>
-      </Tooltip>
-      {metric.description && (
-        <InfoTooltipWithTrigger
-          className="text-muted"
-          icon="info"
-          tooltip={metric.description}
-          label={`descr-${metric.metric_name}`}
-        />
-      )}
-      {showFormula && (
-        <InfoTooltipWithTrigger
-          className="text-muted"
-          icon="question-circle-o"
-          tooltip={metric.expression}
-          label={`expr-${metric.metric_name}`}
-        />
-      )}
       {warningMarkdown && (
-        <InfoTooltipWithTrigger
-          className="text-warning"
-          icon="warning"
+        <InfoTooltip
+          type="warning"
           tooltip={<SafeMarkdown source={warningMarkdown} />}
           label={`warn-${metric.metric_name}`}
+          iconStyle={{ marginLeft: 0 }}
+          {...(metric.error_text && {
+            type: 'error',
+          })}
         />
       )}
     </FlexRowContainer>

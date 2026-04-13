@@ -18,34 +18,11 @@
  */
 
 import { areObjectsEqual } from 'src/reduxUtils';
-import {
-  DataMaskStateWithId,
-  Filter,
-  FilterState,
-  Divider,
-} from '@superset-ui/core';
-
-export enum TabIds {
-  AllFilters = 'allFilters',
-  FilterSets = 'filterSets',
-}
-
-export function mapParentFiltersToChildren(filters: Array<Filter | Divider>): {
-  [id: string]: Filter[];
-} {
-  const cascadeChildren = {};
-  filters.forEach(filter => {
-    const [parentId] =
-      ('cascadeParentIds' in filter && filter.cascadeParentIds) || [];
-    if (parentId) {
-      if (!cascadeChildren[parentId]) {
-        cascadeChildren[parentId] = [];
-      }
-      cascadeChildren[parentId].push(filter);
-    }
-  });
-  return cascadeChildren;
-}
+import { DataMaskStateWithId, Filter, FilterState } from '@superset-ui/core';
+import { testWithId } from 'src/utils/testUtils';
+import { RootState } from 'src/dashboard/types';
+import { useSelector } from 'react-redux';
+import { createSelector } from '@reduxjs/toolkit';
 
 export const getOnlyExtraFormData = (data: DataMaskStateWithId) =>
   Object.values(data).reduce(
@@ -65,11 +42,19 @@ export const checkIsMissingRequiredValue = (
   );
 };
 
+export const checkIsValidateError = (dataMask: DataMaskStateWithId) => {
+  const values = Object.values(dataMask);
+  return values.every(value => value.filterState?.validateStatus !== 'error');
+};
+
 export const checkIsApplyDisabled = (
   dataMaskSelected: DataMaskStateWithId,
   dataMaskApplied: DataMaskStateWithId,
   filters: Filter[],
 ) => {
+  if (!checkIsValidateError(dataMaskSelected)) {
+    return true;
+  }
   const dataSelectedValues = Object.values(dataMaskSelected);
   const dataAppliedValues = Object.values(dataMaskApplied);
   return (
@@ -87,3 +72,28 @@ export const checkIsApplyDisabled = (
     )
   );
 };
+
+const chartsVerboseMapSelector = createSelector(
+  [
+    (state: RootState) => state.sliceEntities.slices,
+    (state: RootState) => state.datasources,
+  ],
+  (slices, datasources) =>
+    Object.keys(slices).reduce((chartsVerboseMaps, chartId) => {
+      const chartDatasource = slices[chartId]?.datasource
+        ? datasources[slices[chartId].datasource]
+        : undefined;
+      return {
+        ...chartsVerboseMaps,
+        [chartId]: chartDatasource ? chartDatasource.verbose_map : {},
+      };
+    }, {}),
+);
+
+export const useChartsVerboseMaps = () =>
+  useSelector<RootState, { [chartId: string]: Record<string, string> }>(
+    chartsVerboseMapSelector,
+  );
+
+export const FILTER_BAR_TEST_ID = 'filter-bar';
+export const getFilterBarTestId = testWithId(FILTER_BAR_TEST_ID);

@@ -16,16 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
+import { Component } from 'react';
 import PropTypes from 'prop-types';
-import { Row, Col, Input } from 'src/common/components';
-import Button from 'src/components/Button';
-import Popover from 'src/components/Popover';
-import { Select } from 'src/components';
+import {
+  Button,
+  Col,
+  Divider,
+  InfoTooltip,
+  Input,
+  Row,
+  Select,
+} from '@superset-ui/core/components';
 import { t, styled } from '@superset-ui/core';
-import { InfoTooltipWithTrigger } from '@superset-ui/chart-controls';
+import { Icons } from '@superset-ui/core/components/Icons';
 import BoundsControl from '../BoundsControl';
 import CheckboxControl from '../CheckboxControl';
+import ControlPopover from '../ControlPopover/ControlPopover';
 
 const propTypes = {
   label: PropTypes.string,
@@ -61,21 +67,21 @@ const defaultProps = {
 };
 
 const comparisonTypeOptions = [
-  { value: 'value', label: 'Actual value', key: 'value' },
-  { value: 'diff', label: 'Difference', key: 'diff' },
-  { value: 'perc', label: 'Percentage', key: 'perc' },
-  { value: 'perc_change', label: 'Percentage change', key: 'perc_change' },
+  { value: 'value', label: t('Actual value'), key: 'value' },
+  { value: 'diff', label: t('Difference'), key: 'diff' },
+  { value: 'perc', label: t('Percentage'), key: 'perc' },
+  { value: 'perc_change', label: t('Percentage change'), key: 'perc_change' },
 ];
 
 const colTypeOptions = [
-  { value: 'time', label: 'Time comparison', key: 'time' },
-  { value: 'contrib', label: 'Contribution', key: 'contrib' },
-  { value: 'spark', label: 'Sparkline', key: 'spark' },
-  { value: 'avg', label: 'Period average', key: 'avg' },
+  { value: 'time', label: t('Time comparison'), key: 'time' },
+  { value: 'contrib', label: t('Contribution'), key: 'contrib' },
+  { value: 'spark', label: t('Sparkline'), key: 'spark' },
+  { value: 'avg', label: t('Period average'), key: 'avg' },
 ];
 
 const StyledRow = styled(Row)`
-  margin-top: ${({ theme }) => theme.gridUnit * 2}px;
+  margin-top: ${({ theme }) => theme.sizeUnit * 2}px;
   display: flex;
   align-items: center;
 `;
@@ -85,18 +91,18 @@ const StyledCol = styled(Col)`
   align-items: center;
 `;
 
-const StyledTooltip = styled(InfoTooltipWithTrigger)`
-  margin-left: ${({ theme }) => theme.gridUnit}px;
-  color: ${({ theme }) => theme.colors.grayscale.light1};
+const StyledTooltip = styled(InfoTooltip)`
+  margin-left: ${({ theme }) => theme.sizeUnit}px;
+  color: ${({ theme }) => theme.colorIcon};
 `;
 
 const ButtonBar = styled.div`
-  margin-top: ${({ theme }) => theme.gridUnit * 5}px;
+  margin-top: ${({ theme }) => theme.sizeUnit * 5}px;
   display: flex;
   justify-content: center;
 `;
 
-export default class TimeSeriesColumnControl extends React.Component {
+export default class TimeSeriesColumnControl extends Component {
   constructor(props) {
     super(props);
 
@@ -192,28 +198,28 @@ export default class TimeSeriesColumnControl extends React.Component {
     return (
       <div id="ts-col-popo" style={{ width: 320 }}>
         {this.formRow(
-          'Label',
-          'The column header label',
+          t('Label'),
+          t('The column header label'),
           'time-lag',
           <Input
             value={this.state.label}
             onChange={this.onTextInputChange.bind(this, 'label')}
-            placeholder="Label"
+            placeholder={t('Label')}
           />,
         )}
         {this.formRow(
-          'Tooltip',
-          'Column header tooltip',
+          t('Tooltip'),
+          t('Column header tooltip'),
           'col-tooltip',
           <Input
             value={this.state.tooltip}
             onChange={this.onTextInputChange.bind(this, 'tooltip')}
-            placeholder="Tooltip"
+            placeholder={t('Tooltip')}
           />,
         )}
         {this.formRow(
-          'Type',
-          'Type of comparison, value difference or percentage',
+          t('Type'),
+          t('Type of comparison, value difference or percentage'),
           'col-type',
           <Select
             ariaLabel={t('Type')}
@@ -222,55 +228,57 @@ export default class TimeSeriesColumnControl extends React.Component {
             options={colTypeOptions}
           />,
         )}
-        <hr />
+        <Divider />
         {this.state.colType === 'spark' &&
           this.formRow(
-            'Width',
-            'Width of the sparkline',
+            t('Width'),
+            t('Width of the sparkline'),
             'spark-width',
             <Input
               value={this.state.width}
               onChange={this.onTextInputChange.bind(this, 'width')}
-              placeholder="Width"
+              placeholder={t('Width')}
             />,
           )}
         {this.state.colType === 'spark' &&
           this.formRow(
-            'Height',
-            'Height of the sparkline',
+            t('Height'),
+            t('Height of the sparkline'),
             'spark-width',
             <Input
               value={this.state.height}
               onChange={this.onTextInputChange.bind(this, 'height')}
-              placeholder="Height"
+              placeholder={t('Height')}
             />,
           )}
         {['time', 'avg'].indexOf(this.state.colType) >= 0 &&
           this.formRow(
-            'Time lag',
-            'Number of periods to compare against',
+            t('Time lag'),
+            t(
+              'Number of periods to compare against. You can use negative numbers to compare from the beginning of the time range.',
+            ),
             'time-lag',
             <Input
               value={this.state.timeLag}
               onChange={this.onTextInputChange.bind(this, 'timeLag')}
-              placeholder="Time Lag"
+              placeholder={t('Time Lag')}
             />,
           )}
         {['spark'].indexOf(this.state.colType) >= 0 &&
           this.formRow(
-            'Time ratio',
-            'Number of periods to ratio against',
+            t('Time ratio'),
+            t('Number of periods to ratio against'),
             'time-ratio',
             <Input
               value={this.state.timeRatio}
               onChange={this.onTextInputChange.bind(this, 'timeRatio')}
-              placeholder="Time Ratio"
+              placeholder={t('Time Ratio')}
             />,
           )}
         {this.state.colType === 'time' &&
           this.formRow(
-            'Type',
-            'Type of comparison, value difference or percentage',
+            t('Type'),
+            t('Type of comparison, value difference or percentage'),
             'comp-type',
             <Select
               ariaLabel={t('Type')}
@@ -281,8 +289,10 @@ export default class TimeSeriesColumnControl extends React.Component {
           )}
         {this.state.colType === 'spark' &&
           this.formRow(
-            'Show Y-axis',
-            'Show Y-axis on the sparkline. Will display the manually set min/max if set or min/max values in the data otherwise.',
+            t('Show Y-axis'),
+            t(
+              'Show Y-axis on the sparkline. Will display the manually set min/max if set or min/max values in the data otherwise.',
+            ),
             'show-y-axis-bounds',
             <CheckboxControl
               value={this.state.showYAxis}
@@ -291,8 +301,8 @@ export default class TimeSeriesColumnControl extends React.Component {
           )}
         {this.state.colType === 'spark' &&
           this.formRow(
-            'Y-axis bounds',
-            'Manually set min/max values for the y-axis.',
+            t('Y-axis bounds'),
+            t('Manually set min/max values for the y-axis.'),
             'y-axis-bounds',
             <BoundsControl
               value={this.state.yAxisBounds}
@@ -301,10 +311,10 @@ export default class TimeSeriesColumnControl extends React.Component {
           )}
         {this.state.colType !== 'spark' &&
           this.formRow(
-            'Color bounds',
-            `Number bounds used for color encoding from red to blue.
-              Reverse the numbers for blue to red. To get pure red or blue,
-              you can enter either only min or max.`,
+            t('Color bounds'),
+            t(`Number bounds used for color encoding from red to blue.
+               Reverse the numbers for blue to red. To get pure red or blue,
+               you can enter either only min or max.`),
             'bounds',
             <BoundsControl
               value={this.state.bounds}
@@ -312,24 +322,24 @@ export default class TimeSeriesColumnControl extends React.Component {
             />,
           )}
         {this.formRow(
-          'Number format',
-          'Optional d3 number format string',
+          t('Number format'),
+          t('Optional d3 number format string'),
           'd3-format',
           <Input
             value={this.state.d3format}
             onChange={this.onTextInputChange.bind(this, 'd3format')}
-            placeholder="Number format string"
+            placeholder={t('Number format string')}
           />,
         )}
         {this.state.colType === 'spark' &&
           this.formRow(
-            'Date format',
-            'Optional d3 date format string',
+            t('Date format'),
+            t('Optional d3 date format string'),
             'date-format',
             <Input
               value={this.state.dateFormat}
               onChange={this.onTextInputChange.bind(this, 'dateFormat')}
-              placeholder="Date format string"
+              placeholder={t('Date format string')}
             />,
           )}
         <ButtonBar>
@@ -353,20 +363,29 @@ export default class TimeSeriesColumnControl extends React.Component {
     return (
       <span>
         {this.textSummary()}{' '}
-        <Popover
+        <ControlPopover
           trigger="click"
-          placement="right"
           content={this.renderPopover()}
-          title="Column Configuration"
-          visible={this.state.popoverVisible}
-          onVisibleChange={this.onPopoverVisibleChange}
+          title={t('Column Configuration')}
+          open={this.state.popoverVisible}
+          onOpenChange={this.onPopoverVisibleChange}
         >
-          <InfoTooltipWithTrigger
-            icon="edit"
-            className="text-primary"
-            label="edit-ts-column"
-          />
-        </Popover>
+          <span
+            css={theme => ({
+              display: 'inline-block',
+              cursor: 'pointer',
+              '& svg path': {
+                fill: theme.colorIcon,
+                transition: `fill ${theme.motionDurationMid} ease-out`,
+              },
+              '&:hover svg path': {
+                fill: theme.colorPrimary,
+              },
+            })}
+          >
+            <Icons.EditOutlined iconSize="s" />
+          </span>
+        </ControlPopover>
       </span>
     );
   }

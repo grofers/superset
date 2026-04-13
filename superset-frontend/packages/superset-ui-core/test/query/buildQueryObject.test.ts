@@ -25,6 +25,7 @@ import {
   AnnotationType,
   buildQueryObject,
   QueryObject,
+  VizType,
 } from '@superset-ui/core';
 
 describe('buildQueryObject', () => {
@@ -34,16 +35,7 @@ describe('buildQueryObject', () => {
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
-    });
-    expect(query.granularity).toEqual('ds');
-  });
-
-  it('should build granularity for druid datasources', () => {
-    query = buildQueryObject({
-      datasource: '5__druid',
-      granularity: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
     });
     expect(query.granularity).toEqual('ds');
   });
@@ -52,7 +44,7 @@ describe('buildQueryObject', () => {
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
       metric: 'sum__num',
       secondary_metric: 'avg__num',
     });
@@ -63,7 +55,7 @@ describe('buildQueryObject', () => {
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
       extra_filters: [{ col: 'abc', op: '==', val: 'qwerty' }],
       adhoc_filters: [
         {
@@ -97,7 +89,7 @@ describe('buildQueryObject', () => {
       {
         datasource: '5__table',
         granularity_sqla: 'ds',
-        viz_type: 'table',
+        viz_type: VizType.Table,
         my_custom_metric_control: 'sum__num',
       },
       { my_custom_metric_control: 'metrics' },
@@ -110,7 +102,7 @@ describe('buildQueryObject', () => {
       {
         datasource: '5__table',
         granularity_sqla: 'ds',
-        viz_type: 'table',
+        viz_type: VizType.Table,
         metrics: ['sum__num'],
         my_custom_metric_control: 'avg__num',
       },
@@ -119,15 +111,26 @@ describe('buildQueryObject', () => {
     expect(query.metrics).toEqual(['sum__num', 'avg__num']);
   });
 
-  it('should build limit', () => {
-    const limit = 2;
+  it('should build series_limit from legacy control', () => {
+    const series_limit = 2;
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
-      limit,
+      viz_type: VizType.Table,
+      limit: series_limit,
     });
-    expect(query.timeseries_limit).toEqual(limit);
+    expect(query.series_limit).toEqual(series_limit);
+  });
+
+  it('should build series_limit', () => {
+    const series_limit = 2;
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity_sqla: 'ds',
+      viz_type: VizType.Table,
+      series_limit,
+    });
+    expect(query.series_limit).toEqual(series_limit);
   });
 
   it('should build order_desc', () => {
@@ -135,28 +138,50 @@ describe('buildQueryObject', () => {
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
       order_desc: orderDesc,
     });
     expect(query.order_desc).toEqual(orderDesc);
   });
 
-  it('should build timeseries_limit_metric', () => {
+  it('should build series_limit_metric from legacy control', () => {
     const metric = 'country';
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
       timeseries_limit_metric: metric,
     });
-    expect(query.timeseries_limit_metric).toEqual(metric);
+    expect(query.series_limit_metric).toEqual(metric);
+  });
+
+  it('should build series_limit_metric', () => {
+    const metric = 'country';
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity_sqla: 'ds',
+      viz_type: VizType.PivotTable,
+      series_limit_metric: metric,
+    });
+    expect(query.series_limit_metric).toEqual(metric);
+  });
+
+  it('should build series_limit_metric as undefined when empty array', () => {
+    const metric: any = [];
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity_sqla: 'ds',
+      viz_type: VizType.PivotTable,
+      series_limit_metric: metric,
+    });
+    expect(query.series_limit_metric).toEqual(undefined);
   });
 
   it('should handle null and non-numeric row_limit and row_offset', () => {
     const baseQuery = {
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
       row_limit: null,
     };
 
@@ -205,6 +230,7 @@ describe('buildQueryObject', () => {
         name: 'My Formula',
         opacity: AnnotationOpacity.Low,
         show: true,
+        showLabel: false,
         style: AnnotationStyle.Solid,
         value: '10*sin(x)',
         width: 1,
@@ -213,6 +239,7 @@ describe('buildQueryObject', () => {
         annotationType: AnnotationType.Interval,
         color: null,
         show: false,
+        showLabel: false,
         name: 'My Interval',
         sourceType: AnnotationSourceType.Native,
         style: AnnotationStyle.Dashed,
@@ -231,6 +258,7 @@ describe('buildQueryObject', () => {
         },
         sourceType: AnnotationSourceType.Table,
         show: false,
+        showLabel: false,
         timeColumn: 'ds',
         style: AnnotationStyle.Dashed,
         value: 1,
@@ -240,7 +268,7 @@ describe('buildQueryObject', () => {
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
       annotation_layers: annotationLayers,
     });
     expect(query.annotation_layers).toEqual(annotationLayers);
@@ -251,7 +279,7 @@ describe('buildQueryObject', () => {
       buildQueryObject({
         datasource: '5__table',
         granularity_sqla: 'ds',
-        viz_type: 'table',
+        viz_type: VizType.Table,
         url_params: { abc: '123' },
       }).url_params,
     ).toEqual({ abc: '123' });
@@ -259,10 +287,31 @@ describe('buildQueryObject', () => {
       buildQueryObject({
         datasource: '5__table',
         granularity_sqla: 'ds',
-        viz_type: 'table',
-        url_params: null as unknown as undefined,
+        viz_type: VizType.Table,
+        // @ts-expect-error
+        url_params: null,
       }).url_params,
     ).toBeUndefined();
+  });
+
+  it('should populate granularity', () => {
+    const granularity = 'ds';
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity,
+      viz_type: VizType.Table,
+    });
+    expect(query.granularity).toEqual(granularity);
+  });
+
+  it('should populate granularity from legacy field', () => {
+    const granularity = 'ds';
+    query = buildQueryObject({
+      datasource: '5__table',
+      granularity_sqla: granularity,
+      viz_type: VizType.Table,
+    });
+    expect(query.granularity).toEqual(granularity);
   });
 
   it('should populate custom_params', () => {
@@ -272,7 +321,7 @@ describe('buildQueryObject', () => {
     query = buildQueryObject({
       datasource: '5__table',
       granularity_sqla: 'ds',
-      viz_type: 'table',
+      viz_type: VizType.Table,
       custom_params: customParams,
     });
     expect(query.custom_params).toEqual(customParams);

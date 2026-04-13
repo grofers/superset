@@ -37,15 +37,37 @@ import {
   SET_DIRECT_PATH,
   SET_FOCUSED_FILTER_FIELD,
   UNSET_FOCUSED_FILTER_FIELD,
+  SET_ACTIVE_TAB,
   SET_ACTIVE_TABS,
   SET_FULL_SIZE_CHART_ID,
+  ON_FILTERS_REFRESH,
+  ON_FILTERS_REFRESH_SUCCESS,
+  SET_DATASETS_STATUS,
+  SET_OVERRIDE_CONFIRM,
+  SAVE_DASHBOARD_STARTED,
+  SAVE_DASHBOARD_FINISHED,
+  SET_DASHBOARD_LABELS_COLORMAP_SYNCABLE,
+  SET_DASHBOARD_LABELS_COLORMAP_SYNCED,
+  SET_DASHBOARD_SHARED_LABELS_COLORS_SYNCABLE,
+  SET_DASHBOARD_SHARED_LABELS_COLORS_SYNCED,
+  TOGGLE_NATIVE_FILTERS_BAR,
 } from '../actions/dashboardState';
 import { HYDRATE_DASHBOARD } from '../actions/hydrate';
 
 export default function dashboardStateReducer(state = {}, action) {
   const actionHandlers = {
     [HYDRATE_DASHBOARD]() {
-      return { ...state, ...action.data.dashboardState };
+      const hydratedState = { ...state, ...action.data.dashboardState };
+      // Initialize tab activation times for initially active tabs
+      if (hydratedState.activeTabs && hydratedState.activeTabs.length > 0) {
+        const now = Date.now();
+        hydratedState.tabActivationTimes =
+          hydratedState.tabActivationTimes || {};
+        hydratedState.activeTabs.forEach(tabId => {
+          hydratedState.tabActivationTimes[tabId] = now;
+        });
+      }
+      return hydratedState;
     },
     [UPDATE_CSS]() {
       return { ...state, css: action.css };
@@ -94,6 +116,30 @@ export default function dashboardStateReducer(state = {}, action) {
         updatedColorScheme: true,
       };
     },
+    [SET_DASHBOARD_LABELS_COLORMAP_SYNCABLE]() {
+      return {
+        ...state,
+        labelsColorMapMustSync: true,
+      };
+    },
+    [SET_DASHBOARD_LABELS_COLORMAP_SYNCED]() {
+      return {
+        ...state,
+        labelsColorMapMustSync: false,
+      };
+    },
+    [SET_DASHBOARD_SHARED_LABELS_COLORS_SYNCABLE]() {
+      return {
+        ...state,
+        sharedLabelsColorsMustSync: true,
+      };
+    },
+    [SET_DASHBOARD_SHARED_LABELS_COLORS_SYNCED]() {
+      return {
+        ...state,
+        sharedLabelsColorsMustSync: false,
+      };
+    },
     [TOGGLE_EXPAND_SLICE]() {
       const updatedExpandedSlices = { ...state.expandedSlices };
       const { sliceId } = action;
@@ -106,6 +152,18 @@ export default function dashboardStateReducer(state = {}, action) {
     },
     [ON_CHANGE]() {
       return { ...state, hasUnsavedChanges: true };
+    },
+    [SAVE_DASHBOARD_STARTED]() {
+      return {
+        ...state,
+        dashboardIsSaving: true,
+      };
+    },
+    [SAVE_DASHBOARD_FINISHED]() {
+      return {
+        ...state,
+        dashboardIsSaving: false,
+      };
     },
     [ON_SAVE]() {
       return {
@@ -134,6 +192,19 @@ export default function dashboardStateReducer(state = {}, action) {
       return {
         ...state,
         isRefreshing: true,
+        lastRefreshTime: Date.now(),
+      };
+    },
+    [ON_FILTERS_REFRESH]() {
+      return {
+        ...state,
+        isFiltersRefreshing: true,
+      };
+    },
+    [ON_FILTERS_REFRESH_SUCCESS]() {
+      return {
+        ...state,
+        isFiltersRefreshing: false,
       };
     },
     [ON_REFRESH_SUCCESS]() {
@@ -149,13 +220,37 @@ export default function dashboardStateReducer(state = {}, action) {
         directPathLastUpdated: Date.now(),
       };
     },
-    [SET_ACTIVE_TABS]() {
-      const newActiveTabs = new Set(state.activeTabs);
-      newActiveTabs.delete(action.prevTabId);
-      newActiveTabs.add(action.tabId);
+    [SET_ACTIVE_TAB]() {
+      const newActiveTabs = new Set(state.activeTabs).difference(
+        new Set(action.inactiveTabs.concat(action.prevTabId)),
+      );
+      const newInactiveTabs = new Set(state.inactiveTabs)
+        .difference(new Set(action.activeTabs))
+        .union(new Set(action.inactiveTabs));
+
+      // Track when each tab was last activated
+      const tabActivationTimes = { ...state.tabActivationTimes };
+      action.activeTabs.forEach(tabId => {
+        tabActivationTimes[tabId] = Date.now();
+      });
+
       return {
         ...state,
-        activeTabs: Array.from(newActiveTabs),
+        inactiveTabs: Array.from(newInactiveTabs),
+        activeTabs: Array.from(newActiveTabs.union(new Set(action.activeTabs))),
+        tabActivationTimes,
+      };
+    },
+    [SET_ACTIVE_TABS]() {
+      return {
+        ...state,
+        activeTabs: action.activeTabs,
+      };
+    },
+    [SET_OVERRIDE_CONFIRM]() {
+      return {
+        ...state,
+        overwriteConfirmMetadata: action.overwriteConfirmMetadata,
       };
     },
     [SET_FOCUSED_FILTER_FIELD]() {
@@ -187,6 +282,18 @@ export default function dashboardStateReducer(state = {}, action) {
       return {
         ...state,
         fullSizeChartId: action.chartId,
+      };
+    },
+    [SET_DATASETS_STATUS]() {
+      return {
+        ...state,
+        datasetsStatus: action.status,
+      };
+    },
+    [TOGGLE_NATIVE_FILTERS_BAR]() {
+      return {
+        ...state,
+        nativeFiltersBarOpen: action.isOpen,
       };
     },
   };

@@ -14,26 +14,25 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import contextlib
 import logging
 from collections import defaultdict
-from datetime import date
 from functools import wraps
-from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, DefaultDict, Optional, Union
 from urllib import parse
 
 import msgpack
 import pyarrow as pa
-import simplejson as json
-from flask import g, has_request_context, request
+from flask import current_app as app, flash, g, has_request_context, redirect, request
 from flask_appbuilder.security.sqla import models as ab_models
 from flask_appbuilder.security.sqla.models import User
 from flask_babel import _
-from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import NoResultFound
+from werkzeug.wrappers.response import Response
 
-import superset.models.core as models
-from superset import app, dataframe, db, result_set, viz
+from superset import appbuilder, dataframe, db, result_set, viz
 from superset.common.db_query_status import QueryStatus
-from superset.connectors.connector_registry import ConnectorRegistry
+from superset.daos.datasource import DatasourceDAO
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import (
     CacheLoadError,
@@ -41,27 +40,54 @@ from superset.exceptions import (
     SupersetException,
     SupersetSecurityException,
 )
-from superset.extensions import cache_manager, security_manager
+from superset.extensions import cache_manager, feature_flag_manager, security_manager
 from superset.legacy import update_time_range
 from superset.models.core import Database
 from superset.models.dashboard import Dashboard
 from superset.models.slice import Slice
 from superset.models.sql_lab import Query
-from superset.typing import FormData
-from superset.utils.core import TimeRangeEndpoint
+from superset.superset_typing import FlaskResponse, FormData
+from superset.utils import json
+from superset.utils.core import DatasourceType
 from superset.utils.decorators import stats_timing
 from superset.viz import BaseViz
 
 logger = logging.getLogger(__name__)
 stats_logger = app.config["STATS_LOGGER"]
 
-
-REJECTED_FORM_DATA_KEYS: List[str] = []
-if not app.config["ENABLE_JAVASCRIPT_CONTROLS"]:
+REJECTED_FORM_DATA_KEYS: list[str] = []
+if not feature_flag_manager.is_feature_enabled("ENABLE_JAVASCRIPT_CONTROLS"):
     REJECTED_FORM_DATA_KEYS = ["js_tooltip", "js_onclick_href", "js_data_mutator"]
 
 
-def sanitize_datasource_data(datasource_data: Dict[str, Any]) -> Dict[str, Any]:
+def redirect_to_login(next_target: str | None = None) -> FlaskResponse:
+    """Return a redirect response to the login view, preserving target URL.
+
+    When ``next_target`` is ``None`` the current request path (including query
+    string) is used, provided a request context is available. The resulting URL
+    always remains relative, mirroring Flask-AppBuilder expectations.
+    """
+
+    login_url = appbuilder.get_url_for_login
+    parsed = parse.urlparse(login_url)
+    query = parse.parse_qs(parsed.query, keep_blank_values=True)
+
+    target = next_target
+    if target is None and has_request_context():
+        if request.query_string:
+            target = request.full_path.rstrip("?")
+        else:
+            target = request.path
+
+    if target:
+        query["next"] = [target]
+
+    encoded_query = parse.urlencode(query, doseq=True)
+    redirect_url = parse.urlunparse(parsed._replace(query=encoded_query))
+    return redirect(redirect_url)
+
+
+def sanitize_datasource_data(datasource_data: dict[str, Any]) -> dict[str, Any]:
     if datasource_data:
         datasource_database = datasource_data.get("database")
         if datasource_database:
@@ -70,10 +96,18 @@ def sanitize_datasource_data(datasource_data: Dict[str, Any]) -> Dict[str, Any]:
     return datasource_data
 
 
-def bootstrap_user_data(user: User, include_perms: bool = False) -> Dict[str, Any]:
+def bootstrap_user_data(user: User, include_perms: bool = False) -> dict[str, Any]:
     if user.is_anonymous:
         payload = {}
         user.roles = (security_manager.find_role("Public"),)
+    elif security_manager.is_guest_user(user):
+        payload = {
+            "username": user.username,
+            "firstName": user.first_name,
+            "lastName": user.last_name,
+            "isActive": user.is_active,
+            "isAnonymous": user.is_anonymous,
+        }
     else:
         payload = {
             "username": user.username,
@@ -81,8 +115,10 @@ def bootstrap_user_data(user: User, include_perms: bool = False) -> Dict[str, An
             "lastName": user.last_name,
             "userId": user.id,
             "isActive": user.is_active,
+            "isAnonymous": user.is_anonymous,
             "createdOn": user.created_on.isoformat(),
             "email": user.email,
+            "loginCount": user.login_count,
         }
 
     if include_perms:
@@ -93,23 +129,27 @@ def bootstrap_user_data(user: User, include_perms: bool = False) -> Dict[str, An
     return payload
 
 
+def get_config_value(key: str) -> Any:
+    value = app.config[key]
+    return value() if callable(value) else value
+
+
 def get_permissions(
     user: User,
-) -> Tuple[Dict[str, List[List[str]]], DefaultDict[str, Set[str]]]:
-    if not user.roles:
-        raise AttributeError("User object does not have roles")
+) -> tuple[dict[str, list[tuple[str]]], DefaultDict[str, list[str]]]:
+    if not user.roles and not user.groups:
+        raise AttributeError("User object does not have roles or groups")
 
-    roles = defaultdict(list)
-    permissions = defaultdict(set)
-
-    for role in user.roles:
-        permissions_ = security_manager.get_role_permissions(role)
-        for permission in permissions_:
+    data_permissions = defaultdict(set)
+    roles_permissions = security_manager.get_user_roles_permissions(user)
+    for _, permissions in roles_permissions.items():  # noqa: F402
+        for permission in permissions:
             if permission[0] in ("datasource_access", "database_access"):
-                permissions[permission[0]].add(permission[1])
-            roles[role.name].append([permission[0], permission[1]])
-
-    return roles, permissions
+                data_permissions[permission[0]].add(permission[1])
+    transformed_permissions = defaultdict(list)
+    for perm in data_permissions:
+        transformed_permissions[perm] = list(data_permissions[perm])
+    return roles_permissions, transformed_permissions
 
 
 def get_viz(
@@ -120,8 +160,9 @@ def get_viz(
     force_cached: bool = False,
 ) -> BaseViz:
     viz_type = form_data.get("viz_type", "table")
-    datasource = ConnectorRegistry.get_datasource(
-        datasource_type, datasource_id, db.session
+    datasource = DatasourceDAO.get_datasource(
+        DatasourceType(datasource_type),
+        datasource_id,
     )
     viz_obj = viz.viz_types[viz_type](
         datasource, form_data=form_data, force=force, force_cached=force_cached
@@ -129,25 +170,27 @@ def get_viz(
     return viz_obj
 
 
-def loads_request_json(request_json_data: str) -> Dict[Any, Any]:
+def loads_request_json(request_json_data: str) -> dict[Any, Any]:
     try:
         return json.loads(request_json_data)
     except (TypeError, json.JSONDecodeError):
         return {}
 
 
-def get_form_data(  # pylint: disable=too-many-locals
+def get_form_data(
     slice_id: Optional[int] = None,
     use_slice_data: bool = False,
-    initial_form_data: Optional[Dict[str, Any]] = None,
-) -> Tuple[Dict[str, Any], Optional[Slice]]:
-    form_data: Dict[str, Any] = initial_form_data or {}
+    initial_form_data: Optional[dict[str, Any]] = None,
+) -> tuple[dict[str, Any], Optional[Slice]]:
+    form_data: dict[str, Any] = initial_form_data or {}
 
-    if has_request_context():  # type: ignore
+    if has_request_context():
+        json_data = request.get_json(cache=True) if request.is_json else {}
+
         # chart data API requests are JSON
-        request_json_data = (
-            request.json["queries"][0]
-            if request.is_json and "queries" in request.json
+        first_query = (
+            json_data["queries"][0]
+            if "queries" in json_data and json_data["queries"]
             else None
         )
 
@@ -155,8 +198,8 @@ def get_form_data(  # pylint: disable=too-many-locals
 
         request_form_data = request.form.get("form_data")
         request_args_data = request.args.get("form_data")
-        if request_json_data:
-            form_data.update(request_json_data)
+        if first_query:
+            form_data.update(first_query)
         if request_form_data:
             parsed_form_data = loads_request_json(request_form_data)
             # some chart data api requests are form_data
@@ -171,23 +214,10 @@ def get_form_data(  # pylint: disable=too-many-locals
 
     # Fallback to using the Flask globals (used for cache warmup and async queries)
     if not form_data and hasattr(g, "form_data"):
-        form_data = getattr(g, "form_data")
+        form_data = g.form_data
         # chart data API requests are JSON
         json_data = form_data["queries"][0] if "queries" in form_data else {}
         form_data.update(json_data)
-
-    if has_request_context():  # type: ignore
-        url_id = request.args.get("r")
-        if url_id:
-            saved_url = db.session.query(models.Url).filter_by(id=url_id).first()
-            if saved_url:
-                url_str = parse.unquote_plus(
-                    saved_url.url.split("?")[1][10:], encoding="utf-8"
-                )
-                url_form_data = loads_request_json(url_str)
-                # allow form_date in request override saved url
-                url_form_data.update(form_data)
-                form_data = url_form_data
 
     form_data = {k: v for k, v in form_data.items() if k not in REJECTED_FORM_DATA_KEYS}
 
@@ -210,16 +240,10 @@ def get_form_data(  # pylint: disable=too-many-locals
             form_data = slice_form_data
 
     update_time_range(form_data)
-
-    if app.config["SIP_15_ENABLED"]:
-        form_data["time_range_endpoints"] = get_time_range_endpoints(
-            form_data, slc, slice_id
-        )
-
     return form_data, slc
 
 
-def add_sqllab_custom_filters(form_data: Dict[Any, Any]) -> Any:
+def add_sqllab_custom_filters(form_data: dict[Any, Any]) -> Any:
     """
     SQLLab can include a "filters" attribute in the templateParams.
     The filters attribute is a list of filters to include in the
@@ -241,7 +265,7 @@ def add_sqllab_custom_filters(form_data: Dict[Any, Any]) -> Any:
 
 def get_datasource_info(
     datasource_id: Optional[int], datasource_type: Optional[str], form_data: FormData
-) -> Tuple[int, Optional[str]]:
+) -> tuple[int, Optional[str]]:
     """
     Compatibility layer for handling of datasource info
 
@@ -251,15 +275,13 @@ def get_datasource_info(
     This function allows supporting both without duplicating code
 
     :param datasource_id: The datasource ID
-    :param datasource_type: The datasource type, i.e., 'druid' or 'table'
+    :param datasource_type: The datasource type
     :param form_data: The URL form data
     :returns: The datasource ID and type
     :raises SupersetException: If the datasource no longer exists
     """
 
-    datasource = form_data.get("datasource", "")
-
-    if "__" in datasource:
+    if "__" in (datasource := form_data.get("datasource", "")):
         datasource_id, datasource_type = datasource.split("__")
         # The case where the datasource has been deleted
         if datasource_id == "None":
@@ -275,8 +297,8 @@ def get_datasource_info(
 
 
 def apply_display_max_row_limit(
-    sql_results: Dict[str, Any], rows: Optional[int] = None
-) -> Dict[str, Any]:
+    sql_results: dict[str, Any], rows: Optional[int] = None
+) -> dict[str, Any]:
     """
     Given a `sql_results` nested structure, applies a limit to the number of rows
 
@@ -286,6 +308,7 @@ def apply_display_max_row_limit(
     metadata.
 
     :param sql_results: The results of a sql query from sql_lab.get_sql_results
+    :param rows: The number of rows to apply a limit to
     :returns: The mutated sql_results structure
     """
 
@@ -301,59 +324,6 @@ def apply_display_max_row_limit(
     return sql_results
 
 
-def get_time_range_endpoints(
-    form_data: FormData, slc: Optional[Slice] = None, slice_id: Optional[int] = None
-) -> Optional[Tuple[TimeRangeEndpoint, TimeRangeEndpoint]]:
-    """
-    Get the slice aware time range endpoints from the form-data falling back to the SQL
-    database specific definition or default if not defined.
-
-    Note under certain circumstances the slice object may not exist, however the slice
-    ID may be defined which serves as a fallback.
-
-    When SIP-15 is enabled all new slices will use the [start, end) interval. If the
-    grace period is defined and has ended all slices will adhere to the [start, end)
-    interval.
-
-    :param form_data: The form-data
-    :param slc: The slice
-    :param slice_id: The slice ID
-    :returns: The time range endpoints tuple
-    """
-
-    if (
-        app.config["SIP_15_GRACE_PERIOD_END"]
-        and date.today() >= app.config["SIP_15_GRACE_PERIOD_END"]
-    ):
-        return (TimeRangeEndpoint.INCLUSIVE, TimeRangeEndpoint.EXCLUSIVE)
-
-    endpoints = form_data.get("time_range_endpoints")
-
-    if (slc or slice_id) and not endpoints:
-        try:
-            _, datasource_type = get_datasource_info(None, None, form_data)
-        except SupersetException:
-            return None
-
-        if datasource_type == "table":
-            if not slc:
-                slc = db.session.query(Slice).filter_by(id=slice_id).one_or_none()
-
-            if slc and slc.datasource:
-                endpoints = slc.datasource.database.get_extra().get(
-                    "time_range_endpoints"
-                )
-
-            if not endpoints:
-                endpoints = app.config["SIP_15_DEFAULT_TIME_RANGE_ENDPOINTS"]
-
-    if endpoints:
-        start, end = endpoints
-        return (TimeRangeEndpoint(start), TimeRangeEndpoint(end))
-
-    return (TimeRangeEndpoint.INCLUSIVE, TimeRangeEndpoint.EXCLUSIVE)
-
-
 # see all dashboard components type in
 # /superset-frontend/src/dashboard/util/componentTypes.js
 CONTAINER_TYPES = ["COLUMN", "GRID", "TABS", "TAB", "ROW"]
@@ -361,9 +331,8 @@ CONTAINER_TYPES = ["COLUMN", "GRID", "TABS", "TAB", "ROW"]
 
 def get_dashboard_extra_filters(
     slice_id: int, dashboard_id: int
-) -> List[Dict[str, Any]]:
-    session = db.session()
-    dashboard = session.query(Dashboard).filter_by(id=dashboard_id).one_or_none()
+) -> list[dict[str, Any]]:
+    dashboard = db.session.query(Dashboard).filter_by(id=dashboard_id).one_or_none()
 
     # is chart in this dashboard?
     if (
@@ -374,7 +343,7 @@ def get_dashboard_extra_filters(
     ):
         return []
 
-    try:
+    with contextlib.suppress(json.JSONDecodeError):
         # does this dashboard have default filters?
         json_metadata = json.loads(dashboard.json_metadata)
         default_filters = json.loads(json_metadata.get("default_filters", "null"))
@@ -391,18 +360,15 @@ def get_dashboard_extra_filters(
             and isinstance(default_filters, dict)
         ):
             return build_extra_filters(layout, filter_scopes, default_filters, slice_id)
-    except json.JSONDecodeError:
-        pass
-
     return []
 
 
-def build_extra_filters(  # pylint: disable=too-many-locals,too-many-nested-blocks
-    layout: Dict[str, Dict[str, Any]],
-    filter_scopes: Dict[str, Dict[str, Any]],
-    default_filters: Dict[str, Dict[str, List[Any]]],
+def build_extra_filters(  # pylint: disable=too-many-locals,too-many-nested-blocks  # noqa: C901
+    layout: dict[str, dict[str, Any]],
+    filter_scopes: dict[str, dict[str, Any]],
+    default_filters: dict[str, dict[str, list[Any]]],
     slice_id: int,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     extra_filters = []
 
     # do not apply filters if chart is not in filter's scope or chart is immune to the
@@ -410,7 +376,7 @@ def build_extra_filters(  # pylint: disable=too-many-locals,too-many-nested-bloc
     for filter_id, columns in default_filters.items():
         filter_slice = db.session.query(Slice).filter_by(id=filter_id).one_or_none()
 
-        filter_configs: List[Dict[str, Any]] = []
+        filter_configs: list[dict[str, Any]] = []
         if filter_slice:
             filter_configs = (
                 json.loads(filter_slice.params or "{}").get("filter_configs") or []
@@ -453,7 +419,7 @@ def build_extra_filters(  # pylint: disable=too-many-locals,too-many-nested-bloc
 
 
 def is_slice_in_container(
-    layout: Dict[str, Dict[str, Any]], container_id: str, slice_id: int
+    layout: dict[str, dict[str, Any]], container_id: str, slice_id: int
 ) -> bool:
     if container_id == "ROOT_ID":
         return True
@@ -472,12 +438,9 @@ def is_slice_in_container(
     return False
 
 
-def is_owner(obj: Union[Dashboard, Slice], user: User) -> bool:
-    """Check if user is owner of the slice"""
-    return obj and user in obj.owners
-
-
-def check_resource_permissions(check_perms: Callable[..., Any],) -> Callable[..., Any]:
+def check_resource_permissions(
+    check_perms: Callable[..., Any],
+) -> Callable[..., Any]:
     """
     A decorator for checking permissions on a request using the passed-in function.
     """
@@ -513,7 +476,7 @@ def check_datasource_perms(
     _self: Any,
     datasource_type: Optional[str] = None,
     datasource_id: Optional[int] = None,
-    **kwargs: Any
+    **kwargs: Any,
 ) -> None:
     """
     Check if user can access a cached response from explore_json.
@@ -521,7 +484,7 @@ def check_datasource_perms(
     This function takes `self` since it must have the same signature as the
     the decorated method.
 
-    :param datasource_type: The datasource type, i.e., 'druid' or 'table'
+    :param datasource_type: The datasource type
     :param datasource_id: The datasource ID
     :raises SupersetSecurityException: If the user cannot access the resource
     """
@@ -569,42 +532,9 @@ def check_datasource_perms(
     viz_obj.raise_for_access()
 
 
-def check_slice_perms(_self: Any, slice_id: int) -> None:
-    """
-    Check if user can access a cached response from slice_json.
-
-    This function takes `self` since it must have the same signature as the
-    the decorated method.
-
-    :param slice_id: The slice ID
-    :raises SupersetSecurityException: If the user cannot access the resource
-    """
-
-    form_data, slc = get_form_data(slice_id, use_slice_data=True)
-
-    if slc and slc.datasource:
-        try:
-            viz_obj = get_viz(
-                datasource_type=slc.datasource.type,
-                datasource_id=slc.datasource.id,
-                form_data=form_data,
-                force=False,
-            )
-        except NoResultFound as ex:
-            raise SupersetSecurityException(
-                SupersetError(
-                    error_type=SupersetErrorType.UNKNOWN_DATASOURCE_TYPE_ERROR,
-                    level=ErrorLevel.ERROR,
-                    message="Could not find viz object",
-                )
-            ) from ex
-
-        viz_obj.raise_for_access()
-
-
 def _deserialize_results_payload(
     payload: Union[bytes, str], query: Query, use_msgpack: Optional[bool] = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     logger.debug("Deserializing from msgpack: %r", use_msgpack)
     if use_msgpack:
         with stats_timing(
@@ -614,12 +544,17 @@ def _deserialize_results_payload(
 
         with stats_timing("sqllab.query.results_backend_pa_deserialize", stats_logger):
             try:
-                pa_table = pa.deserialize(ds_payload["data"])
+                reader = pa.BufferReader(ds_payload["data"])
+                pa_table = pa.ipc.open_stream(reader).read_all()
             except pa.ArrowSerializationError as ex:
                 raise SerializationError("Unable to deserialize table") from ex
 
         df = result_set.SupersetResultSet.convert_table_to_df(pa_table)
         ds_payload["data"] = dataframe.df_to_records(df) or []
+
+        for column in ds_payload["selected_columns"]:
+            if "name" in column:
+                column["column_name"] = column.get("name")
 
         db_engine_spec = query.database.db_engine_spec
         all_columns, data, expanded_columns = db_engine_spec.expand_data(
@@ -644,3 +579,8 @@ def get_cta_schema_name(
     if not func:
         return None
     return func(database, user, schema, sql)
+
+
+def redirect_with_flash(url: str, message: str, category: str) -> Response:
+    flash(message=message, category=category)
+    return redirect(url)

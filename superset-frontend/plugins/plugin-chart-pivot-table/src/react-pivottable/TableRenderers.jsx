@@ -17,44 +17,116 @@
  * under the License.
  */
 
-import React from 'react';
+import { Component } from 'react';
+import { getNumberFormatter, t, safeHtmlSpan } from '@superset-ui/core';
 import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
 
 const parseLabel = value => {
-  if (typeof value === 'number' || typeof value === 'string') {
+  if (typeof value === 'string') {
+    if (value === 'metric') return t('metric');
+    return value;
+  }
+  if (typeof value === 'number') {
     return value;
   }
   return String(value);
 };
 
-function displayHeaderCell(
+function SortIcon({ toggleTo, icon, handleSort, sm }) {
+  return (
+    <div
+      role="button"
+      tabIndex="0"
+      className={`sort-icon ${sm ? 'sm' : ''}`}
+      onClick={e => {
+        e.stopPropagation();
+        handleSort(toggleTo);
+      }}
+    >
+      {icon}
+    </div>
+  );
+}
+
+function displayCell(value, allowRenderHtml) {
+  if (allowRenderHtml && typeof value === 'string') {
+    return safeHtmlSpan(value);
+  }
+  return parseLabel(value);
+}
+function displayHeaderCell({
   needToggle,
   ArrowIcon,
   onArrowClick,
   value,
   namesMapping,
-) {
+  allowRenderHtml,
+  sortedOrder,
+  handleSort,
+}) {
   const name = namesMapping[value] || value;
-  return needToggle ? (
-    <span className="toggle-wrapper">
-      <span
-        role="button"
-        tabIndex="0"
-        className="toggle"
-        onClick={onArrowClick}
-      >
-        {ArrowIcon}
+  const parsedLabel = parseLabel(name);
+  const labelContent =
+    allowRenderHtml && typeof parsedLabel === 'string'
+      ? safeHtmlSpan(parsedLabel)
+      : parsedLabel;
+
+  if (needToggle) {
+    return (
+      <span className="toggle-wrapper">
+        <span
+          role="button"
+          tabIndex="0"
+          className="toggle"
+          onClick={onArrowClick}
+        >
+          {ArrowIcon}
+        </span>
+        <span className="toggle-val">{labelContent}</span>
       </span>
-      <span className="toggle-val">{parseLabel(name)}</span>
-    </span>
-  ) : (
-    parseLabel(name)
+    );
+  }
+
+  return (
+    <div className="head-wrapper">
+      {labelContent}
+      {handleSort && (
+        <div className="icons-wrapper">
+          {sortedOrder ? (
+            <SortIcon
+              toggleTo={sortedOrder === 'desc' ? 'asc' : null}
+              icon={sortedOrder === 'asc' ? '▲' : '▼'}
+              handleSort={handleSort}
+            />
+          ) : (
+            <>
+              <SortIcon toggleTo="desc" sm icon="▲" handleSort={handleSort} />
+              <SortIcon toggleTo="desc" sm icon="▼" handleSort={handleSort} />
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
-export class TableRenderer extends React.Component {
+function getCellStyles(
+  isSubtotal,
+  conditionalCellFormatter,
+  backgroundColor,
+  cellColorFormattersPresent,
+) {
+  if (isSubtotal) return { fontWeight: 'bold' };
+
+  if (conditionalCellFormatter && cellColorFormattersPresent) {
+    return { color: backgroundColor, fontWeight: '800' };
+  }
+  return { backgroundColor };
+}
+
+export class TableRenderer extends Component {
   constructor(props) {
     super(props);
 
@@ -91,14 +163,14 @@ export class TableRenderer extends React.Component {
 
     const colSubtotalDisplay = {
       displayOnTop: false,
-      enabled: rowTotals,
+      enabled: tableOptions.colSubTotals,
       hideOnExpand: false,
       ...subtotalOptions.colSubtotalDisplay,
     };
 
     const rowSubtotalDisplay = {
       displayOnTop: false,
-      enabled: colTotals,
+      enabled: tableOptions.rowSubTotals,
       hideOnExpand: false,
       ...subtotalOptions.rowSubtotalDisplay,
     };
@@ -111,6 +183,16 @@ export class TableRenderer extends React.Component {
     });
     const rowKeys = pivotData.getRowKeys();
     const colKeys = pivotData.getColKeys();
+
+    const colKey = this.props.sortedOnCol;
+    const sortedOrder = this.props.sortedColOrder;
+    if (colKey && sortedOrder) {
+      rowKeys.sort((a, b) => {
+        const aVal = pivotData.getAggregator(a, colKey).value();
+        const bVal = pivotData.getAggregator(b, colKey).value();
+        return sortedOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      });
+    }
 
     // Also pre-calculate all the callbacks for cells, etc... This is nice to have to
     // avoid re-calculations of the call-backs on cell expansions, etc...
@@ -174,6 +256,7 @@ export class TableRenderer extends React.Component {
       colTotalCallbacks,
       grandTotalCallback,
       namesMapping,
+      allowRenderHtml: props.allowRenderHtml,
     };
   }
 
@@ -346,6 +429,7 @@ export class TableRenderer extends React.Component {
       maxColVisible,
       pivotData,
       namesMapping,
+      allowRenderHtml,
     } = pivotSettings;
     const {
       highlightHeaderCellsOnHover,
@@ -377,13 +461,14 @@ export class TableRenderer extends React.Component {
     }
     const attrNameCell = (
       <th key="label" className="pvtAxisLabel">
-        {displayHeaderCell(
+        {displayHeaderCell({
           needToggle,
-          subArrow,
-          arrowClickHandle,
-          attrName,
+          ArrowIcon: subArrow,
+          onArrowClick: arrowClickHandle,
+          value: attrName,
           namesMapping,
-        )}
+          allowRenderHtml,
+        })}
       </th>
     );
 
@@ -392,15 +477,19 @@ export class TableRenderer extends React.Component {
     // Iterate through columns. Jump over duplicate values.
     let i = 0;
     while (i < visibleColKeys.length) {
+      let handleContextMenu;
       const colKey = visibleColKeys[i];
       const colSpan = attrIdx < colKey.length ? colAttrSpans[i][attrIdx] : 1;
       let colLabelClass = 'pvtColLabel';
       if (attrIdx < colKey.length) {
-        if (
-          highlightHeaderCellsOnHover &&
-          !omittedHighlightHeaderGroups.includes(colAttrs[attrIdx])
-        ) {
-          colLabelClass += ' hoverable';
+        if (!omittedHighlightHeaderGroups.includes(colAttrs[attrIdx])) {
+          if (highlightHeaderCellsOnHover) {
+            colLabelClass += ' hoverable';
+          }
+          handleContextMenu = e =>
+            this.props.onContextMenu(e, colKey, undefined, {
+              [attrName]: colKey[attrIdx],
+            });
         }
         if (
           highlightedHeaderCells &&
@@ -426,6 +515,7 @@ export class TableRenderer extends React.Component {
             key={`colKey-${flatColKey}`}
             colSpan={colSpan}
             rowSpan={rowSpan}
+            role="columnheader button"
             onClick={this.clickHeaderHandler(
               pivotData,
               colKey,
@@ -433,16 +523,25 @@ export class TableRenderer extends React.Component {
               attrIdx,
               this.props.tableOptions.clickColumnHeaderCallback,
             )}
+            onContextMenu={handleContextMenu}
           >
-            {displayHeaderCell(
+            {displayHeaderCell({
               needToggle,
-              this.state.collapsedCols[flatColKey]
+              ArrowIcon: this.state.collapsedCols[flatColKey]
                 ? arrowCollapsed
                 : arrowExpanded,
               onArrowClick,
-              headerCellFormattedValue,
+              value: headerCellFormattedValue,
               namesMapping,
-            )}
+              allowRenderHtml,
+              sortedOrder: this.props.sortedColOrder,
+              handleSort: this.props.sortingEnabled
+                ? order => {
+                    this.props.setSortedOnCol(colKey);
+                    this.props.setSortedColOrder(order);
+                  }
+                : null,
+            })}
           </th>,
         );
       } else if (attrIdx === colKey.length) {
@@ -453,6 +552,7 @@ export class TableRenderer extends React.Component {
             key={`colKeyBuffer-${flatKey(colKey)}`}
             colSpan={colSpan}
             rowSpan={rowSpan}
+            role="columnheader button"
             onClick={this.clickHeaderHandler(
               pivotData,
               colKey,
@@ -462,7 +562,7 @@ export class TableRenderer extends React.Component {
               true,
             )}
           >
-            Subtotal
+            {t('Subtotal')}
           </th>,
         );
       }
@@ -476,6 +576,7 @@ export class TableRenderer extends React.Component {
           key="total"
           className="pvtTotalLabel"
           rowSpan={colAttrs.length + Math.min(rowAttrs.length, 1)}
+          role="columnheader button"
           onClick={this.clickHeaderHandler(
             pivotData,
             [],
@@ -486,7 +587,9 @@ export class TableRenderer extends React.Component {
             true,
           )}
         >
-          {`Total (${this.props.aggregatorName})`}
+          {t('Total (%(aggregatorName)s)', {
+            aggregatorName: t(this.props.aggregatorName),
+          })}
         </th>
       ) : null;
 
@@ -508,6 +611,7 @@ export class TableRenderer extends React.Component {
       maxRowVisible,
       pivotData,
       namesMapping,
+      allowRenderHtml,
     } = pivotSettings;
     return (
       <tr key="rowHdr">
@@ -525,19 +629,21 @@ export class TableRenderer extends React.Component {
           }
           return (
             <th className="pvtAxisLabel" key={`rowAttr-${i}`}>
-              {displayHeaderCell(
-                needLabelToggle,
-                subArrow,
-                arrowClickHandle,
-                r,
+              {displayHeaderCell({
+                needToggle: needLabelToggle,
+                ArrowIcon: subArrow,
+                onArrowClick: arrowClickHandle,
+                value: r,
                 namesMapping,
-              )}
+                allowRenderHtml,
+              })}
             </th>
           );
         })}
         <th
           className="pvtTotalLabel"
           key="padding"
+          role="columnheader button"
           onClick={this.clickHeaderHandler(
             pivotData,
             [],
@@ -549,7 +655,9 @@ export class TableRenderer extends React.Component {
           )}
         >
           {colAttrs.length === 0
-            ? `Total (${this.props.aggregatorName})`
+            ? t('Total (%(aggregatorName)s)', {
+                aggregatorName: t(this.props.aggregatorName),
+              })
             : null}
         </th>
       </tr>
@@ -572,6 +680,7 @@ export class TableRenderer extends React.Component {
       cellCallbacks,
       rowTotalCallbacks,
       namesMapping,
+      allowRenderHtml,
     } = pivotSettings;
 
     const {
@@ -580,17 +689,27 @@ export class TableRenderer extends React.Component {
       highlightedHeaderCells,
       cellColorFormatters,
       dateFormatters,
+      prefixFormatting,
+      suffixFormatting,
+      conditionalCellFormatter,
+      colValueFormatting,
+      showRowPercentile,
+      showColPercentile,
     } = this.props.tableOptions;
     const flatRowKey = flatKey(rowKey);
 
     const colIncrSpan = colAttrs.length !== 0 ? 1 : 0;
     const attrValueCells = rowKey.map((r, i) => {
+      let handleContextMenu;
       let valueCellClassName = 'pvtRowLabel';
-      if (
-        highlightHeaderCellsOnHover &&
-        !omittedHighlightHeaderGroups.includes(rowAttrs[i])
-      ) {
-        valueCellClassName += ' hoverable';
+      if (!omittedHighlightHeaderGroups.includes(rowAttrs[i])) {
+        if (highlightHeaderCellsOnHover) {
+          valueCellClassName += ' hoverable';
+        }
+        handleContextMenu = e =>
+          this.props.onContextMenu(e, undefined, rowKey, {
+            [rowAttrs[i]]: r,
+          });
       }
       if (
         highlightedHeaderCells &&
@@ -619,6 +738,7 @@ export class TableRenderer extends React.Component {
             className={valueCellClassName}
             rowSpan={rowSpan}
             colSpan={colSpan}
+            role="columnheader button"
             onClick={this.clickHeaderHandler(
               pivotData,
               rowKey,
@@ -626,16 +746,18 @@ export class TableRenderer extends React.Component {
               i,
               this.props.tableOptions.clickRowHeaderCallback,
             )}
+            onContextMenu={handleContextMenu}
           >
-            {displayHeaderCell(
-              needRowToggle,
-              this.state.collapsedRows[flatRowKey]
+            {displayHeaderCell({
+              needToggle: needRowToggle,
+              ArrowIcon: this.state.collapsedRows[flatRowKey]
                 ? arrowCollapsed
                 : arrowExpanded,
               onArrowClick,
-              headerCellFormattedValue,
+              value: headerCellFormattedValue,
               namesMapping,
-            )}
+              allowRenderHtml,
+            })}
           </th>
         );
       }
@@ -649,6 +771,7 @@ export class TableRenderer extends React.Component {
           key="rowKeyBuffer"
           colSpan={rowAttrs.length - rowKey.length + colIncrSpan}
           rowSpan={1}
+          role="columnheader button"
           onClick={this.clickHeaderHandler(
             pivotData,
             rowKey,
@@ -658,7 +781,7 @@ export class TableRenderer extends React.Component {
             true,
           )}
         >
-          Subtotal
+          {t('Subtotal')}
         </th>
       ) : null;
 
@@ -669,18 +792,23 @@ export class TableRenderer extends React.Component {
       const aggValue = agg.value();
 
       const keys = [...rowKey, ...colKey];
+      let cellColorFormattersPresent = false;
       let backgroundColor;
       if (cellColorFormatters) {
         Object.values(cellColorFormatters).forEach(cellColorFormatter => {
           if (Array.isArray(cellColorFormatter)) {
             keys.forEach(key => {
               if (backgroundColor) {
+                cellColorFormattersPresent = true;
                 return;
               }
               cellColorFormatter
                 .filter(formatter => formatter.column === key)
                 .forEach(formatter => {
-                  const formatterResult = formatter.getColorFromValue(aggValue);
+                  cellColorFormattersPresent = true;
+                  const formatterResult = conditionalCellFormatter
+                    ? formatter.getColorFromValue(aggValue, true)
+                    : formatter.getColorFromValue(aggValue);
                   if (formatterResult) {
                     backgroundColor = formatterResult;
                   }
@@ -690,19 +818,102 @@ export class TableRenderer extends React.Component {
         });
       }
 
-      const style = agg.isSubtotal
-        ? { fontWeight: 'bold' }
-        : { backgroundColor };
+      let prefix;
+      if (prefixFormatting) {
+        prefixFormatting.forEach(prefixFormatter => {
+          keys.forEach(key => {
+            if (prefix) {
+              return;
+            }
+            if (prefixFormatter.column === key) {
+              if (prefixFormatter.addSymbols) {
+                prefix = prefixFormatter.addSymbols;
+              }
+            }
+          });
+        });
+      }
+
+      let suffix;
+      if (suffixFormatting) {
+        suffixFormatting.forEach(suffixFormatter => {
+          keys.forEach(key => {
+            if (suffix) {
+              return;
+            }
+            if (suffixFormatter.column === key) {
+              if (suffixFormatter.addSymbols) {
+                suffix = suffixFormatter.addSymbols;
+              }
+            }
+          });
+        });
+      }
+
+      const style = getCellStyles(
+        agg.isSubtotal,
+        conditionalCellFormatter,
+        backgroundColor,
+        cellColorFormattersPresent,
+      );
+
+      let formatFunc;
+      if (colValueFormatting) {
+        colValueFormatting.forEach(colValueFormatter => {
+          keys.forEach(key => {
+            if (formatFunc) {
+              return;
+            }
+            if (colValueFormatter.column === key) {
+              if (colValueFormatter.d3ValueFormatting) {
+                formatFunc = getNumberFormatter(
+                  colValueFormatter.d3ValueFormatting,
+                );
+              }
+            }
+          });
+        });
+      }
+
+      let finalValue = aggValue;
+
+      if (showRowPercentile) {
+        //* row level percentile...
+        const totalAgg = pivotData.getAggregator(rowKey, []).value();
+        finalValue = parseFloat(aggValue / totalAgg) * 100;
+      }
+
+      if (showColPercentile) {
+        //* column level percentile...
+        const totalAgg = pivotData.getAggregator([], colKey).value();
+        finalValue = parseFloat(aggValue / totalAgg) * 100;
+      }
+
+      if (formatFunc) {
+        finalValue = formatFunc(finalValue);
+      }
+
+      finalValue = agg.format(finalValue);
+
+      if (showRowPercentile || showColPercentile) {
+        finalValue = `${finalValue}%`;
+      }
+
+      if (finalValue && prefix) finalValue = `${prefix}${finalValue}`;
+      if (finalValue && suffix) finalValue = `${finalValue}${suffix}`;
 
       return (
         <td
           role="gridcell"
-          className="pvtVal"
+          className={
+            conditionalCellFormatter ? 'pvtVal formattedCell' : 'pvtVal'
+          }
           key={`pvtVal-${flatColKey}`}
           onClick={rowClickHandlers[flatColKey]}
+          onContextMenu={e => this.props.onContextMenu(e, colKey, rowKey)}
           style={style}
         >
-          {agg.format(aggValue)}
+          {displayCell(finalValue, allowRenderHtml)}
         </td>
       );
     });
@@ -717,8 +928,9 @@ export class TableRenderer extends React.Component {
           key="total"
           className="pvtTotal"
           onClick={rowTotalCallbacks[flatRowKey]}
+          onContextMenu={e => this.props.onContextMenu(e, undefined, rowKey)}
         >
-          {agg.format(aggValue)}
+          {displayCell(agg.format(aggValue), allowRenderHtml)}
         </td>
       );
     }
@@ -751,6 +963,7 @@ export class TableRenderer extends React.Component {
         key="label"
         className="pvtTotalLabel pvtRowTotalLabel"
         colSpan={rowAttrs.length + Math.min(colAttrs.length, 1)}
+        role="columnheader button"
         onClick={this.clickHeaderHandler(
           pivotData,
           [],
@@ -761,7 +974,9 @@ export class TableRenderer extends React.Component {
           true,
         )}
       >
-        {`Total (${this.props.aggregatorName})`}
+        {t('Total (%(aggregatorName)s)', {
+          aggregatorName: t(this.props.aggregatorName),
+        })}
       </th>
     );
 
@@ -776,9 +991,10 @@ export class TableRenderer extends React.Component {
           className="pvtTotal pvtRowTotal"
           key={`total-${flatColKey}`}
           onClick={colTotalCallbacks[flatColKey]}
+          onContextMenu={e => this.props.onContextMenu(e, colKey, undefined)}
           style={{ padding: '5px' }}
         >
-          {agg.format(aggValue)}
+          {displayCell(agg.format(aggValue), this.props.allowRenderHtml)}
         </td>
       );
     });
@@ -793,8 +1009,9 @@ export class TableRenderer extends React.Component {
           key="total"
           className="pvtGrandTotal pvtRowTotal"
           onClick={grandTotalCallback}
+          onContextMenu={e => this.props.onContextMenu(e, undefined, undefined)}
         >
-          {agg.format(aggValue)}
+          {displayCell(agg.format(aggValue), this.props.allowRenderHtml)}
         </td>
       );
     }
@@ -822,6 +1039,10 @@ export class TableRenderer extends React.Component {
     );
   }
 
+  isDashboardEditMode() {
+    return document.contains(document.querySelector('.dashboard--editing'));
+  }
+
   render() {
     if (this.cachedProps !== this.props) {
       this.cachedProps = this.props;
@@ -835,6 +1056,7 @@ export class TableRenderer extends React.Component {
       colTotals,
       rowSubtotalDisplay,
       colSubtotalDisplay,
+      allowRenderHtml,
     } = this.cachedBasePivotSettings;
 
     // Need to account for exclusions to compute the effective row
@@ -859,11 +1081,12 @@ export class TableRenderer extends React.Component {
       maxColVisible: Math.max(...visibleColKeys.map(k => k.length)),
       rowAttrSpans: this.calcAttrSpans(visibleRowKeys, rowAttrs.length),
       colAttrSpans: this.calcAttrSpans(visibleColKeys, colAttrs.length),
+      allowRenderHtml,
       ...this.cachedBasePivotSettings,
     };
 
     return (
-      <Styles>
+      <Styles isDashboardEditMode={this.isDashboardEditMode()}>
         <table className="pvtTable" role="grid">
           <thead>
             {colAttrs.map((c, j) =>
@@ -886,5 +1109,6 @@ export class TableRenderer extends React.Component {
 TableRenderer.propTypes = {
   ...PivotData.propTypes,
   tableOptions: PropTypes.object,
+  onContextMenu: PropTypes.func,
 };
 TableRenderer.defaultProps = { ...PivotData.defaultProps, tableOptions: {} };

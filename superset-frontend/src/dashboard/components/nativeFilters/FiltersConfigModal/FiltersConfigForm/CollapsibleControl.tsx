@@ -16,10 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { styled } from '@superset-ui/core';
-import { Checkbox } from 'src/common/components';
-import { InfoTooltipWithTrigger } from '@superset-ui/chart-controls';
+import { Checkbox, InfoTooltip } from '@superset-ui/core/components';
 
 interface CollapsibleControlProps {
   initialValue?: boolean;
@@ -36,16 +35,14 @@ const StyledContainer = styled.div<{ checked: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-height: ${({ theme }) => theme.gridUnit * 10}px;
-  padding-top: ${({ theme }) => theme.gridUnit * 2 + 2}px;
-
-  .checkbox {
-    margin-bottom: ${({ theme, checked }) => (checked ? theme.gridUnit : 0)}px;
-  }
 
   & > div {
-    margin-bottom: ${({ theme }) => theme.gridUnit * 2}px;
+    margin-bottom: ${({ theme }) => theme.sizeUnit * 2}px;
   }
+`;
+
+const ChildrenContainer = styled.div`
+  margin-left: ${({ theme }) => theme.sizeUnit * 6}px;
 `;
 
 const CollapsibleControl = (props: CollapsibleControlProps) => {
@@ -61,8 +58,6 @@ const CollapsibleControl = (props: CollapsibleControlProps) => {
   const [isChecked, setIsChecked] = useState(initialValue);
 
   useEffect(() => {
-    // if external `checked` changed to `undefined`, it means that we work now in uncontrolled mode with local state
-    // and we need ignore external value
     if (checked !== undefined) {
       setIsChecked(checked);
     }
@@ -71,14 +66,11 @@ const CollapsibleControl = (props: CollapsibleControlProps) => {
   return (
     <StyledContainer checked={isChecked}>
       <Checkbox
-        className="checkbox"
         checked={isChecked}
         disabled={disabled}
         onChange={e => {
           const value = e.target.checked;
-          // external `checked` value has more priority then local state
           if (checked === undefined) {
-            // uncontrolled mode
             setIsChecked(value);
           }
           onChange(value);
@@ -86,12 +78,10 @@ const CollapsibleControl = (props: CollapsibleControlProps) => {
       >
         <>
           {title}&nbsp;
-          {tooltip && (
-            <InfoTooltipWithTrigger placement="top" tooltip={tooltip} />
-          )}
+          {tooltip && <InfoTooltip placement="top" tooltip={tooltip} />}
         </>
       </Checkbox>
-      {isChecked && children}
+      {isChecked && <ChildrenContainer>{children}</ChildrenContainer>}
     </StyledContainer>
   );
 };

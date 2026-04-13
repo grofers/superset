@@ -16,16 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { t, validateNonEmpty } from '@superset-ui/core';
+import { ensureIsInt, t, validateNonEmpty } from '@superset-ui/core';
 import {
   ControlPanelConfig,
   ControlPanelsContainerProps,
+  ControlSubSectionHeader,
   D3_FORMAT_DOCS,
+  D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT,
   D3_FORMAT_OPTIONS,
   D3_TIME_FORMAT_OPTIONS,
-  sections,
-  emitFilterControl,
+  getStandardizedControls,
+  sharedControls,
 } from '@superset-ui/chart-controls';
 import { DEFAULT_FORM_DATA } from './types';
 import { legendSection } from '../controls';
@@ -39,11 +40,11 @@ const {
   outerRadius,
   numberFormat,
   showLabels,
+  roseType,
 } = DEFAULT_FORM_DATA;
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
-    sections.legacyRegularTime,
     {
       label: t('Query'),
       expanded: true,
@@ -51,18 +52,13 @@ const config: ControlPanelConfig = {
         ['groupby'],
         ['metric'],
         ['adhoc_filters'],
-        emitFilterControl,
         ['row_limit'],
         [
           {
             name: 'sort_by_metric',
             config: {
+              ...sharedControls.sort_by_metric,
               default: true,
-              type: 'CheckboxControl',
-              label: t('Sort by metric'),
-              description: t(
-                'Whether to sort results by the selected metric in descending order.',
-              ),
             },
           },
         ],
@@ -88,9 +84,43 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'threshold_for_other',
+            config: {
+              type: 'NumberControl',
+              label: t('Threshold for Other'),
+              min: 0,
+              step: 0.5,
+              max: 100,
+              default: 0,
+              renderTrigger: true,
+              description: t(
+                'Values less than this percentage will be grouped into the Other category.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'roseType',
+            config: {
+              type: 'SelectControl',
+              label: t('Rose Type'),
+              default: roseType,
+              renderTrigger: true,
+              choices: [
+                ['area', t('Area')],
+                ['radius', t('Radius')],
+                [null, t('None')],
+              ],
+              description: t('Whether to show as Nightingale chart.'),
+            },
+          },
+        ],
         ...legendSection,
         // eslint-disable-next-line react/jsx-key
-        [<h1 className="section-header">{t('Labels')}</h1>],
+        [<ControlSubSectionHeader>{t('Labels')}</ControlSubSectionHeader>],
         [
           {
             name: 'label_type',
@@ -100,14 +130,35 @@ const config: ControlPanelConfig = {
               default: labelType,
               renderTrigger: true,
               choices: [
-                ['key', 'Category Name'],
-                ['value', 'Value'],
-                ['percent', 'Percentage'],
-                ['key_value', 'Category and Value'],
-                ['key_percent', 'Category and Percentage'],
-                ['key_value_percent', 'Category, Value and Percentage'],
+                ['key', t('Category Name')],
+                ['value', t('Value')],
+                ['percent', t('Percentage')],
+                ['key_value', t('Category and Value')],
+                ['key_percent', t('Category and Percentage')],
+                ['key_value_percent', t('Category, Value and Percentage')],
+                ['value_percent', t('Value and Percentage')],
+                ['template', t('Template')],
               ],
               description: t('What should be shown on the label?'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'label_template',
+            config: {
+              type: 'TextControl',
+              label: t('Label Template'),
+              renderTrigger: true,
+              description: t(
+                'Format data labels. ' +
+                  'Use variables: {name}, {value}, {percent}. ' +
+                  '\\n represents a new line. ' +
+                  'ECharts compatibility:\n' +
+                  '{a} (series), {b} (name), {c} (value), {d} (percentage)',
+              ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                controls?.label_type?.value === 'template',
             },
           },
         ],
@@ -121,12 +172,12 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: numberFormat,
               choices: D3_FORMAT_OPTIONS,
-              description: `${t(
-                'D3 format syntax: https://github.com/d3/d3-format',
-              )} ${t('Only applies when "Label Type" is set to show values.')}`,
+              description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
+              tokenSeparators: ['\n', '\t', ';'],
             },
           },
         ],
+        ['currency_format'],
         [
           {
             name: 'date_format',
@@ -183,8 +234,20 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'show_total',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show Total'),
+              default: false,
+              renderTrigger: true,
+              description: t('Whether to display the aggregate count'),
+            },
+          },
+        ],
         // eslint-disable-next-line react/jsx-key
-        [<h1 className="section-header">{t('Pie shape')}</h1>],
+        [<ControlSubSectionHeader>{t('Pie shape')}</ControlSubSectionHeader>],
         [
           {
             name: 'outerRadius',
@@ -241,6 +304,13 @@ const config: ControlPanelConfig = {
       default: 100,
     },
   },
+  formDataOverrides: formData => ({
+    ...formData,
+    metric: getStandardizedControls().shiftMetric(),
+    groupby: getStandardizedControls().popAllColumns(),
+    row_limit:
+      ensureIsInt(formData.row_limit, 100) >= 100 ? 100 : formData.row_limit,
+  }),
 };
 
 export default config;

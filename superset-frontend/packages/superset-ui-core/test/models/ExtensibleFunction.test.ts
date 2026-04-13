@@ -17,6 +17,8 @@
  * under the License.
  */
 
+/* eslint-disable @typescript-eslint/no-unsafe-declaration-merging */
+
 import { ExtensibleFunction } from '@superset-ui/core';
 
 describe('ExtensibleFunction', () => {
@@ -55,7 +57,7 @@ describe('ExtensibleFunction', () => {
       // @ts-ignore
       super(function customName() {
         // @ts-ignore
-        return customName.x as unknown;
+        return customName.x;
       }); // named function
       this.x = x;
     }

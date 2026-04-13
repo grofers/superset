@@ -16,23 +16,31 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { FeatureFlag, isFeatureEnabled, t } from '@superset-ui/core';
+import { t } from '@superset-ui/core';
 import {
   ControlPanelConfig,
   ControlPanelsContainerProps,
+  ControlSubSectionHeader,
   D3_TIME_FORMAT_DOCS,
-  emitFilterControl,
+  getStandardizedControls,
   sections,
   sharedControls,
 } from '@superset-ui/chart-controls';
 
-import { DEFAULT_FORM_DATA } from '../../types';
+import {
+  DEFAULT_FORM_DATA,
+  TIME_SERIES_DESCRIPTION_TEXT,
+} from '../../constants';
 import {
   legendSection,
+  minorTicks,
   richTooltipSection,
+  seriesOrderSection,
   showValueSection,
-  xAxisControl,
+  truncateXAxis,
+  xAxisBounds,
+  xAxisLabelRotation,
+  xAxisLabelInterval,
 } from '../../../controls';
 
 const {
@@ -43,39 +51,10 @@ const {
   rowLimit,
   truncateYAxis,
   yAxisBounds,
-  zoomable,
-  xAxisLabelRotation,
 } = DEFAULT_FORM_DATA;
 const config: ControlPanelConfig = {
   controlPanelSections: [
-    sections.legacyTimeseriesTime,
-    {
-      label: t('Query'),
-      expanded: true,
-      controlSetRows: [
-        isFeatureEnabled(FeatureFlag.GENERIC_CHART_AXES) ? [xAxisControl] : [],
-        ['metrics'],
-        ['groupby'],
-        ['adhoc_filters'],
-        emitFilterControl,
-        ['limit'],
-        ['timeseries_limit_metric'],
-        [
-          {
-            name: 'order_desc',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Sort Descending'),
-              default: true,
-              description: t('Whether to sort descending or ascending'),
-              visibility: ({ controls }) =>
-                Boolean(controls?.timeseries_limit_metric.value),
-            },
-          },
-        ],
-        ['row_limit'],
-      ],
-    },
+    sections.echartsTimeSeriesQueryWithXAxisSort,
     sections.advancedAnalyticsControls,
     sections.annotationsAndLayersControls,
     sections.forecastIntervalControls,
@@ -84,7 +63,9 @@ const config: ControlPanelConfig = {
       label: t('Chart Options'),
       expanded: true,
       controlSetRows: [
+        ...seriesOrderSection,
         ['color_scheme'],
+        ['time_shift_color'],
         ...showValueSection,
         [
           {
@@ -118,20 +99,10 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [
-          {
-            name: 'zoomable',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Data Zoom'),
-              default: zoomable,
-              renderTrigger: true,
-              description: t('Enable data zooming controls'),
-            },
-          },
-        ],
+        ['zoomable'],
+        [minorTicks],
         ...legendSection,
-        [<h1 className="section-header">{t('X Axis')}</h1>],
+        [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
 
         [
           {
@@ -139,37 +110,18 @@ const config: ControlPanelConfig = {
             config: {
               ...sharedControls.x_axis_time_format,
               default: 'smart_date',
-              description: `${D3_TIME_FORMAT_DOCS}. ${t(
-                'When using other than adaptive formatting, labels may overlap.',
-              )}`,
+              description: `${D3_TIME_FORMAT_DOCS}. ${TIME_SERIES_DESCRIPTION_TEXT}`,
             },
           },
         ],
-        [
-          {
-            name: 'xAxisLabelRotation',
-            config: {
-              type: 'SelectControl',
-              freeForm: true,
-              clearable: false,
-              label: t('Rotate x axis label'),
-              choices: [
-                [0, '0°'],
-                [45, '45°'],
-              ],
-              default: xAxisLabelRotation,
-              renderTrigger: true,
-              description: t(
-                'Input field supports custom rotation. e.g. 30 for 30°',
-              ),
-            },
-          },
-        ],
+        [xAxisLabelRotation],
+        [xAxisLabelInterval],
         // eslint-disable-next-line react/jsx-key
         ...richTooltipSection,
         // eslint-disable-next-line react/jsx-key
-        [<h1 className="section-header">{t('Y Axis')}</h1>],
+        [<ControlSubSectionHeader>{t('Y Axis')}</ControlSubSectionHeader>],
         ['y_axis_format'],
+        ['currency_format'],
         [
           {
             name: 'logAxis',
@@ -194,6 +146,8 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [truncateXAxis],
+        [xAxisBounds],
         [
           {
             name: 'truncateYAxis',
@@ -235,6 +189,11 @@ const config: ControlPanelConfig = {
       default: rowLimit,
     },
   },
+  formDataOverrides: formData => ({
+    ...formData,
+    metrics: getStandardizedControls().popAllMetrics(),
+    groupby: getStandardizedControls().popAllColumns(),
+  }),
 };
 
 export default config;

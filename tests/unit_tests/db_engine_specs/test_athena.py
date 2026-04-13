@@ -17,46 +17,49 @@
 # pylint: disable=unused-argument, import-outside-toplevel, protected-access
 import re
 from datetime import datetime
+from typing import Optional
 
-from flask.ctx import AppContext
+import pytest
 
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
-from tests.unit_tests.fixtures.common import dttm
+from tests.unit_tests.db_engine_specs.utils import assert_convert_dttm
+from tests.unit_tests.fixtures.common import dttm  # noqa
 
 SYNTAX_ERROR_REGEX = re.compile(
     ": mismatched input '(?P<syntax_error>.*?)'. Expecting: "
 )
 
 
-def test_convert_dttm(app_context: AppContext, dttm: datetime) -> None:
-    """
-    Test that date objects are converted correctly.
-    """
+@pytest.mark.parametrize(
+    "target_type,expected_result",
+    [
+        ("Date", "DATE '2019-01-02'"),
+        ("TimeStamp", "TIMESTAMP '2019-01-02 03:04:05.678'"),
+        ("UnknownType", None),
+    ],
+)
+def test_convert_dttm(
+    target_type: str,
+    expected_result: Optional[str],
+    dttm: datetime,  # noqa: F811
+) -> None:
+    from superset.db_engine_specs.athena import AthenaEngineSpec as spec  # noqa: N813
 
-    from superset.db_engine_specs.athena import AthenaEngineSpec
-
-    assert (
-        AthenaEngineSpec.convert_dttm("DATE", dttm) == "from_iso8601_date('2019-01-02')"
-    )
-
-    assert (
-        AthenaEngineSpec.convert_dttm("TIMESTAMP", dttm)
-        == "from_iso8601_timestamp('2019-01-02T03:04:05.678900')"
-    )
+    assert_convert_dttm(spec, target_type, expected_result, dttm)
 
 
-def test_extract_errors(app_context: AppContext) -> None:
+def test_extract_errors() -> None:
     """
     Test that custom error messages are extracted correctly.
     """
 
     from superset.db_engine_specs.athena import AthenaEngineSpec
 
-    msg = ": mismatched input 'fromm'. Expecting: "
+    msg = ": mismatched input 'from_'. Expecting: "
     result = AthenaEngineSpec.extract_errors(Exception(msg))
     assert result == [
         SupersetError(
-            message='Please check your query for syntax errors at or near "fromm". Then, try running your query again.',
+            message='Please check your query for syntax errors at or near "from_". Then, try running your query again.',  # noqa: E501
             error_type=SupersetErrorType.SYNTAX_ERROR,
             level=ErrorLevel.ERROR,
             extra={
@@ -72,7 +75,7 @@ def test_extract_errors(app_context: AppContext) -> None:
     ]
 
 
-def test_get_text_clause_with_colon(app_context: AppContext) -> None:
+def test_get_text_clause_with_colon() -> None:
     """
     Make sure text clauses don't escape the colon character
     """
@@ -80,8 +83,40 @@ def test_get_text_clause_with_colon(app_context: AppContext) -> None:
     from superset.db_engine_specs.athena import AthenaEngineSpec
 
     query = (
-        "SELECT foo FROM tbl WHERE "
-        "abc >= from_iso8601_timestamp('2021-11-26T00\:00\:00.000000')"
+        "SELECT foo FROM tbl WHERE " r"abc >= TIMESTAMP '2021-11-26T00\:00\:00.000000'"
     )
     text_clause = AthenaEngineSpec.get_text_clause(query)
     assert text_clause.text == query
+
+
+def test_handle_boolean_filter() -> None:
+    """
+    Test that Athena uses equality operators for boolean filters instead of IS.
+    """
+    from sqlalchemy import Boolean, Column
+
+    from superset.db_engine_specs.athena import AthenaEngineSpec
+
+    # Create a mock SQLAlchemy column
+    bool_col = Column("test_col", Boolean)
+
+    # Test IS_TRUE filter - use actual FilterOperator values
+    from superset.utils.core import FilterOperator
+
+    result_true = AthenaEngineSpec.handle_boolean_filter(
+        bool_col, FilterOperator.IS_TRUE, True
+    )
+    # The result should be a equality comparison, not an IS comparison
+    assert (
+        str(result_true.compile(compile_kwargs={"literal_binds": True}))
+        == "test_col = true"
+    )
+
+    # Test IS_FALSE filter
+    result_false = AthenaEngineSpec.handle_boolean_filter(
+        bool_col, FilterOperator.IS_FALSE, False
+    )
+    assert (
+        str(result_false.compile(compile_kwargs={"literal_binds": True}))
+        == "test_col = false"
+    )

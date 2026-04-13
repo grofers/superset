@@ -16,42 +16,29 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useCallback, useState } from 'react';
-import PropTypes from 'prop-types';
-import { t, getChartMetadataRegistry, styled } from '@superset-ui/core';
-import { usePluginContext } from 'src/components/DynamicPlugins';
-import Modal from 'src/components/Modal';
-import { Tooltip } from 'src/components/Tooltip';
-import Label, { Type } from 'src/components/Label';
-import ControlHeader from 'src/explore/components/ControlHeader';
+import { useCallback, useState } from 'react';
+import {
+  css,
+  t,
+  getChartMetadataRegistry,
+  styled,
+  SupersetTheme,
+} from '@superset-ui/core';
+import { usePluginContext } from 'src/components';
+import { Icons, Modal } from '@superset-ui/core/components';
+import { noOp } from 'src/utils/common';
+import getBootstrapData from 'src/utils/getBootstrapData';
+import { FilterPlugins } from 'src/constants';
 import VizTypeGallery, {
   MAX_ADVISABLE_VIZ_GALLERY_WIDTH,
 } from './VizTypeGallery';
+import { FastVizSwitcher } from './FastVizSwitcher';
+import { VizTypeControlProps } from './types';
 
-const propTypes = {
-  description: PropTypes.string,
-  label: PropTypes.string,
-  name: PropTypes.string.isRequired,
-  onChange: PropTypes.func,
-  value: PropTypes.string.isRequired,
-  labelType: PropTypes.string,
-};
-
-interface VizTypeControlProps {
-  description?: string;
-  label?: string;
-  name: string;
-  onChange: (vizType: string | null) => void;
-  value: string | null;
-  labelType?: Type;
-  isModalOpenInit?: boolean;
-}
-
-const defaultProps = {
-  onChange: () => {},
-  labelType: 'default',
-};
-
+const bootstrapData = getBootstrapData();
+const denyList: string[] = (
+  bootstrapData.common.conf.VIZ_TYPE_DENYLIST || []
+).concat(Object.values(FilterPlugins));
 const metadataRegistry = getChartMetadataRegistry();
 
 export const VIZ_TYPE_CONTROL_TEST_ID = 'viz-type-control';
@@ -62,8 +49,13 @@ function VizSupportValidation({ vizType }: { vizType: string }) {
     return null;
   }
   return (
-    <div className="text-danger">
-      <i className="fa fa-exclamation-circle text-danger" />{' '}
+    <div
+      className="text-danger"
+      css={(theme: SupersetTheme) => css`
+        margin-top: ${theme.sizeUnit}px;
+      `}
+    >
+      <Icons.ExclamationCircleOutlined className="text-danger" />{' '}
       <small>{t('This visualization type is not supported.')}</small>
     </div>
   );
@@ -76,9 +68,11 @@ const UnpaddedModal = styled(Modal)`
 `;
 
 /** Manages the viz type and the viz picker modal */
-const VizTypeControl = (props: VizTypeControlProps) => {
-  const { value: initialValue, onChange, isModalOpenInit, labelType } = props;
-  const { mountedPluginMetadata } = usePluginContext();
+const VizTypeControl = ({
+  value: initialValue,
+  onChange = noOp,
+  isModalOpenInit,
+}: VizTypeControlProps) => {
   const [showModal, setShowModal] = useState(!!isModalOpenInit);
   // a trick to force re-initialization of the gallery each time the modal opens,
   // ensuring that the modal always opens to the correct category.
@@ -101,30 +95,32 @@ const VizTypeControl = (props: VizTypeControlProps) => {
     setSelectedViz(initialValue);
   }, [initialValue]);
 
-  const labelContent = initialValue
-    ? mountedPluginMetadata[initialValue]?.name || `${initialValue}`
-    : t('Select Viz Type');
-
   return (
-    <div>
-      <ControlHeader {...props} />
-      <Tooltip
-        id="error-tooltip"
-        placement="right"
-        title={t('Click to change visualization type')}
+    <>
+      <div
+        css={(theme: SupersetTheme) => css`
+          min-width: ${theme.sizeUnit * 72}px;
+          max-width: fit-content;
+        `}
       >
-        <>
-          <Label
-            onClick={openModal}
-            type={labelType}
-            data-test="visualization-type"
-          >
-            {labelContent}
-          </Label>
-          {initialValue && <VizSupportValidation vizType={initialValue} />}
-        </>
-      </Tooltip>
-
+        <FastVizSwitcher onChange={onChange} currentSelection={initialValue} />
+        {initialValue && <VizSupportValidation vizType={initialValue} />}
+      </div>
+      <div
+        css={(theme: SupersetTheme) => css`
+          display: flex;
+          justify-content: flex-end;
+          margin-top: ${theme.sizeUnit * 2}px;
+          color: ${theme.colorTextSecondary};
+          text-decoration: underline;
+          font-size: ${theme.fontSizeSM}px;
+          color: ${theme.colorTextTertiary};
+        `}
+      >
+        <span role="button" tabIndex={0} onClick={openModal}>
+          {t('View all charts')}
+        </span>
+      </div>
       <UnpaddedModal
         show={showModal}
         onHide={onCancel}
@@ -140,13 +136,12 @@ const VizTypeControl = (props: VizTypeControlProps) => {
           key={modalKey}
           selectedViz={selectedViz}
           onChange={setSelectedViz}
+          onDoubleClick={onSubmit}
+          denyList={denyList}
         />
       </UnpaddedModal>
-    </div>
+    </>
   );
 };
-
-VizTypeControl.propTypes = propTypes;
-VizTypeControl.defaultProps = defaultProps;
 
 export default VizTypeControl;

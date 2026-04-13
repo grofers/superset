@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { Suspense, useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { hot } from 'react-hot-loader/root';
 import {
   BrowserRouter as Router,
@@ -24,29 +24,42 @@ import {
   Route,
   useLocation,
 } from 'react-router-dom';
-import { initFeatureFlags } from 'src/featureFlags';
-import ErrorBoundary from 'src/components/ErrorBoundary';
-import Loading from 'src/components/Loading';
-import Menu from 'src/views/components/Menu';
-import { bootstrapData } from 'src/preamble';
+import { bindActionCreators } from 'redux';
+import { css } from '@superset-ui/core';
+import { Layout, Loading } from '@superset-ui/core/components';
+import { setupAGGridModules } from '@superset-ui/core/components/ThemedAgGridReact';
+import { ErrorBoundary } from 'src/components';
+import Menu from 'src/features/home/Menu';
+import getBootstrapData, { applicationRoot } from 'src/utils/getBootstrapData';
 import ToastContainer from 'src/components/MessageToasts/ToastContainer';
 import setupApp from 'src/setup/setupApp';
+import setupPlugins from 'src/setup/setupPlugins';
 import { routes, isFrontendRoute } from 'src/views/routes';
-import { Logger } from 'src/logger/LogUtils';
+import { Logger, LOG_ACTIONS_SPA_NAVIGATION } from 'src/logger/LogUtils';
+import setupExtensions from 'src/setup/setupExtensions';
+import { logEvent } from 'src/logger/actions';
+import { store } from 'src/views/store';
 import { RootContextProviders } from './RootContextProviders';
+import { ScrollToTop } from './ScrollToTop';
 
 setupApp();
+setupPlugins();
+setupExtensions();
+setupAGGridModules();
 
-const user = { ...bootstrapData.user };
-const menu = {
-  ...bootstrapData.common.menu_data,
-};
+const bootstrapData = getBootstrapData();
+
 let lastLocationPathname: string;
-initFeatureFlags(bootstrapData.common.feature_flags);
+
+const boundActions = bindActionCreators({ logEvent }, store.dispatch);
 
 const LocationPathnameLogger = () => {
   const location = useLocation();
   useEffect(() => {
+    // This will log client side route changes for single page app user navigation
+    boundActions.logEvent(LOG_ACTIONS_SPA_NAVIGATION, {
+      path: location.pathname,
+    });
     // reset performance logger timer start point to avoid soft navigation
     // cause dashboard perf measurement problem
     if (lastLocationPathname && lastLocationPathname !== location.pathname) {
@@ -58,17 +71,34 @@ const LocationPathnameLogger = () => {
 };
 
 const App = () => (
-  <Router>
+  <Router basename={applicationRoot()}>
+    <ScrollToTop />
     <LocationPathnameLogger />
     <RootContextProviders>
-      <Menu data={menu} isFrontendRoute={isFrontendRoute} />
+      <Menu
+        data={bootstrapData.common.menu_data}
+        isFrontendRoute={isFrontendRoute}
+      />
       <Switch>
         {routes.map(({ path, Component, props = {}, Fallback = Loading }) => (
           <Route path={path} key={path}>
             <Suspense fallback={<Fallback />}>
-              <ErrorBoundary>
-                <Component user={user} {...props} />
-              </ErrorBoundary>
+              <Layout>
+                <Layout.Content
+                  css={css`
+                    display: flex;
+                    flex-direction: column;
+                  `}
+                >
+                  <ErrorBoundary
+                    css={css`
+                      margin: 16px;
+                    `}
+                  >
+                    <Component user={bootstrapData.user} {...props} />
+                  </ErrorBoundary>
+                </Layout.Content>
+              </Layout>
             </Suspense>
           </Route>
         ))}

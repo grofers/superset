@@ -16,18 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
 import PropTypes from 'prop-types';
-import { styled, reactify } from '@superset-ui/core';
+import { styled, reactify, useTheme } from '@superset-ui/core';
 import WorldMap from './WorldMap';
 
 const ReactWorldMap = reactify(WorldMap);
 
-const WorldMapComponent = ({ className, ...otherProps }) => (
-  <div className={className}>
-    <ReactWorldMap {...otherProps} />
-  </div>
-);
+const WorldMapComponent = ({ className, ...otherProps }) => {
+  const theme = useTheme();
+  return (
+    <div className={className}>
+      <ReactWorldMap {...otherProps} theme={theme} />
+    </div>
+  );
+};
 
 WorldMapComponent.propTypes = {
   className: PropTypes.string.isRequired,
@@ -37,7 +39,11 @@ export default styled(WorldMapComponent)`
   .superset-legacy-chart-world-map {
     position: relative;
     svg {
-      background-color: #feffff;
+      background-color: ${({ theme }) => theme.colorBgLayout};
     }
+  }
+  .hoverinfo {
+    background-color: ${({ theme }) => theme.colorBgElevated};
+    color: ${({ theme }) => theme.colorTextSecondary};
   }
 `;

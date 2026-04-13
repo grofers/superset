@@ -35,7 +35,9 @@ class SupersetProfiler:  # pylint: disable=too-few-public-methods
     """
 
     def __init__(
-        self, app: Callable[[Any, Any], Any], interval: float = 0.0001,
+        self,
+        app: Callable[[Any, Any], Any],
+        interval: float = 0.0001,
     ):
         self.app = app
         self.interval = interval
@@ -46,7 +48,9 @@ class SupersetProfiler:  # pylint: disable=too-few-public-methods
             return Response.from_app(self.app, request.environ)
 
         if Profiler is None:
-            raise Exception("The module pyinstrument is not installed.")
+            raise Exception(  # pylint: disable=broad-exception-raised
+                "The module pyinstrument is not installed."
+            )
 
         profiler = Profiler(interval=self.interval)
 

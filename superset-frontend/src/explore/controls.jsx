@@ -56,7 +56,6 @@
  * in tandem with `controlPanels/index.js` that defines how controls are composed into sections for
  * each and every visualization type.
  */
-import React from 'react';
 import {
   t,
   getCategoricalSchemeRegistry,
@@ -64,7 +63,7 @@ import {
   legacyValidateInteger,
   validateNonEmpty,
 } from '@superset-ui/core';
-import { formatSelectOptions } from 'src/modules/utils';
+import { formatSelectOptions } from 'src/explore/exploreUtils';
 import { TIME_FILTER_LABELS } from './constants';
 import { StyledColumnOption } from './components/optionRenderers';
 
@@ -75,8 +74,8 @@ export const PRIMARY_COLOR = { r: 0, g: 122, b: 135, a: 1 };
 
 // input choices & options
 export const D3_FORMAT_OPTIONS = [
-  ['SMART_NUMBER', 'Adaptative formating'],
-  ['~g', 'Original value'],
+  ['SMART_NUMBER', t('Adaptive formatting')],
+  ['~g', t('Original value')],
   [',d', ',d (12345.432 => 12,345)'],
   ['.1s', '.1s (12345.432 => 10k)'],
   ['.3s', '.3s (12345.432 => 12.3k)'],
@@ -86,8 +85,8 @@ export const D3_FORMAT_OPTIONS = [
   [',.3f', ',.3f (12345.432 => 12,345.432)'],
   ['+,', '+, (12345.432 => +12,345.432)'],
   ['$,.2f', '$,.2f (12345.432 => $12,345.43)'],
-  ['DURATION', 'Duration in ms (66000 => 1m 6s)'],
-  ['DURATION_SUB', 'Duration in ms (100.40008 => 100ms 400µs 80ns)'],
+  ['DURATION', t('Duration in ms (66000 => 1m 6s)')],
+  ['DURATION_SUB', t('Duration in ms (100.40008 => 100ms 400µs 80ns)')],
 ];
 
 const ROW_LIMIT_OPTIONS = [10, 50, 100, 250, 500, 1000, 5000, 10000, 50000];
@@ -98,7 +97,7 @@ export const D3_FORMAT_DOCS =
   'D3 format syntax: https://github.com/d3/d3-format';
 
 export const D3_TIME_FORMAT_OPTIONS = [
-  ['smart_date', 'Adaptative formating'],
+  ['smart_date', t('Adaptive formatting')],
   ['%d/%m/%Y', '%d/%m/%Y | 14/01/2019'],
   ['%m/%d/%Y', '%m/%d/%Y | 01/14/2019'],
   ['%Y-%m-%d', '%Y-%m-%d | 2019-01-14'],
@@ -120,7 +119,7 @@ const groupByControl = {
   type: 'SelectControl',
   multi: true,
   freeForm: true,
-  label: t('Group by'),
+  label: t('Dimensions'),
   default: [],
   includeTime: false,
   description: t(
@@ -197,7 +196,6 @@ export const controls = {
 
   viz_type: {
     type: 'VizTypeControl',
-    label: t('Visualization type'),
     default: 'table',
     description: t('The type of visualization to display'),
   },
@@ -246,47 +244,32 @@ export const controls = {
     description: t('One or many controls to pivot as columns'),
   },
 
-  druid_time_origin: {
-    type: 'SelectControl',
-    freeForm: true,
-    label: TIME_FILTER_LABELS.druid_time_origin,
-    choices: [
-      ['', 'default'],
-      ['now', 'now'],
-    ],
-    default: null,
-    description: t(
-      'Defines the origin where time buckets start, ' +
-        'accepts natural dates as in `now`, `sunday` or `1970-01-01`',
-    ),
-  },
-
   granularity: {
     type: 'SelectControl',
     freeForm: true,
     label: TIME_FILTER_LABELS.granularity,
     default: 'P1D',
     choices: [
-      [null, 'all'],
-      ['PT5S', '5 seconds'],
-      ['PT30S', '30 seconds'],
-      ['PT1M', '1 minute'],
-      ['PT5M', '5 minutes'],
-      ['PT30M', '30 minutes'],
-      ['PT1H', '1 hour'],
-      ['PT6H', '6 hour'],
-      ['P1D', '1 day'],
-      ['P7D', '7 days'],
-      ['P1W', 'week'],
-      ['week_starting_sunday', 'week starting Sunday'],
-      ['week_ending_saturday', 'week ending Saturday'],
-      ['P1M', 'month'],
-      ['P3M', 'quarter'],
-      ['P1Y', 'year'],
+      [null, t('all')],
+      ['PT5S', t('5 seconds')],
+      ['PT30S', t('30 seconds')],
+      ['PT1M', t('1 minute')],
+      ['PT5M', t('5 minutes')],
+      ['PT30M', t('30 minutes')],
+      ['PT1H', t('1 hour')],
+      ['PT6H', t('6 hour')],
+      ['P1D', t('1 day')],
+      ['P7D', t('7 days')],
+      ['P1W', t('week')],
+      ['week_starting_sunday', t('week starting Sunday')],
+      ['week_ending_saturday', t('week ending Saturday')],
+      ['P1M', t('month')],
+      ['P3M', t('quarter')],
+      ['P1Y', t('year')],
     ],
     description: t(
       'The time granularity for the visualization. Note that you ' +
-        'can type and use simple natural language as in `10 seconds`, ' +
+        'can type and use simple natural language as in `10 seconds`,' +
         '`1 day` or `56 weeks`',
     ),
   },
@@ -348,10 +331,6 @@ export const controls = {
         "using the engine's local timezone. Note one can explicitly set the timezone " +
         'per the ISO 8601 format if specifying either the start and/or end time.',
     ),
-    mapStateToProps: ({ form_data: formData }) => ({
-      // eslint-disable-next-line camelcase
-      endpoints: formData?.time_range_endpoints,
-    }),
   },
 
   row_limit: {
@@ -397,7 +376,7 @@ export const controls = {
 
   series: {
     ...groupByControl,
-    label: t('Series'),
+    label: t('Dimensions'),
     multi: false,
     default: null,
     description: t(

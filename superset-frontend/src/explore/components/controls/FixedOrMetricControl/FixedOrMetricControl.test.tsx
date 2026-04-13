@@ -16,10 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { render, screen } from 'spec/helpers/testing-library';
-import userEvent from '@testing-library/user-event';
+import { render, screen, userEvent } from 'spec/helpers/testing-library';
 import FixedOrMetricControl from '.';
+
+jest.mock(
+  '@superset-ui/core/components/Icons/AsyncIcon',
+  () =>
+    ({ fileName }: { fileName: string }) => (
+      <span role="img" aria-label={fileName.replace('_', '-')} />
+    ),
+);
 
 const createProps = () => ({
   datasource: {

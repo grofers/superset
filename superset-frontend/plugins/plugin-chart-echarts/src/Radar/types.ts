@@ -16,28 +16,30 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { EChartsCoreOption } from 'echarts';
 import {
-  ChartDataResponseResult,
-  ChartProps,
-  DataRecordValue,
   QueryFormColumn,
   QueryFormData,
   QueryFormMetric,
-  SetDataMaskHook,
 } from '@superset-ui/core';
 import {
-  DEFAULT_LEGEND_FORM_DATA,
-  EchartsLegendFormData,
+  BaseChartProps,
+  BaseTransformedProps,
+  ContextMenuTransformedProps,
+  CrossFilterTransformedProps,
+  LegendFormData,
   LabelPositionEnum,
   LegendOrientation,
   LegendType,
 } from '../types';
+import { DEFAULT_LEGEND_FORM_DATA } from '../constants';
 
-type RadarColumnConfig = Record<string, { radarMetricMaxValue?: number }>;
+type RadarColumnConfig = Record<
+  string,
+  { radarMetricMaxValue?: number | null; radarMetricMinValue?: number }
+>;
 
 export type EchartsRadarFormData = QueryFormData &
-  EchartsLegendFormData & {
+  LegendFormData & {
     colorScheme?: string;
     columnConfig?: RadarColumnConfig;
     currentOwnValue?: string[] | null;
@@ -51,7 +53,7 @@ export type EchartsRadarFormData = QueryFormData &
     isCircle: boolean;
     numberFormat: string;
     dateFormat: string;
-    emitFilter: boolean;
+    isNormalized: boolean;
   };
 
 export enum EchartsRadarLabelType {
@@ -59,9 +61,9 @@ export enum EchartsRadarLabelType {
   KeyValue = 'key_value',
 }
 
-export interface EchartsRadarChartProps extends ChartProps {
+export interface EchartsRadarChartProps
+  extends BaseChartProps<EchartsRadarFormData> {
   formData: EchartsRadarFormData;
-  queriesData: ChartDataResponseResult[];
 }
 
 // @ts-ignore
@@ -74,18 +76,25 @@ export const DEFAULT_FORM_DATA: EchartsRadarFormData = {
   legendType: LegendType.Scroll,
   numberFormat: 'SMART_NUMBER',
   showLabels: true,
-  emitFilter: false,
   dateFormat: 'smart_date',
   isCircle: false,
 };
 
-export interface RadarChartTransformedProps {
-  formData: EchartsRadarFormData;
-  height: number;
-  width: number;
-  echartOptions: EChartsCoreOption;
-  setDataMask: SetDataMaskHook;
-  labelMap: Record<string, DataRecordValue[]>;
-  groupby: QueryFormColumn[];
-  selectedValues: Record<number, string>;
+export type RadarChartTransformedProps =
+  BaseTransformedProps<EchartsRadarFormData> &
+    ContextMenuTransformedProps &
+    CrossFilterTransformedProps;
+
+/**
+ * Represents a mapping from a normalized value (as string) to an original numeric value.
+ */
+interface NormalizedValueMap {
+  [normalized: string]: number;
+}
+
+/**
+ * Represents a collection of series, each containing its own NormalizedValueMap.
+ */
+export interface SeriesNormalizedMap {
+  [seriesName: string]: NormalizedValueMap;
 }

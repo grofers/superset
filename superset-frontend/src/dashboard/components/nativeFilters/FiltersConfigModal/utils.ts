@@ -16,49 +16,44 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { FormInstance } from 'antd/lib/form';
-import shortid from 'shortid';
+import type { FormInstance } from '@superset-ui/core/components';
+import { nanoid } from 'nanoid';
 import { getInitialDataMask } from 'src/dataMask/reducer';
-
 import {
-  Filter,
   FilterConfiguration,
   NativeFilterType,
-  Divider,
-  t,
   NativeFilterTarget,
+  logging,
+  Filter,
+  Divider,
 } from '@superset-ui/core';
 import { DASHBOARD_ROOT_ID } from 'src/dashboard/util/constants';
-import {
-  FilterRemoval,
-  NativeFiltersForm,
-  FilterHierarchy,
-  FilterHierarchyNode,
-} from './types';
+import { FilterChangesType, FilterRemoval, NativeFiltersForm } from './types';
 
 export const REMOVAL_DELAY_SECS = 5;
+
+export const hasCircularDependency = (
+  dependencyMap: Map<string, string[]>,
+  filterId: string,
+  trace: string[] = [],
+): boolean => {
+  if (trace.includes(filterId)) {
+    return true;
+  }
+  const dependencies = dependencyMap.get(filterId);
+  if (dependencies) {
+    return dependencies.some(dependency =>
+      hasCircularDependency(dependencyMap, dependency, [...trace, filterId]),
+    );
+  }
+  return false;
+};
 
 export const validateForm = async (
   form: FormInstance<NativeFiltersForm>,
   currentFilterId: string,
-  filterConfigMap: Record<string, Filter | Divider>,
-  filterIds: string[],
-  removedFilters: Record<string, FilterRemoval>,
   setCurrentFilterId: Function,
 ) => {
-  const addValidationError = (
-    filterId: string,
-    field: string,
-    error: string,
-  ) => {
-    const fieldError = {
-      name: ['filters', filterId, field],
-      errors: [error],
-    };
-    form.setFields([fieldError]);
-    setCurrentFilterId(filterId);
-  };
-
   try {
     let formValues: NativeFiltersForm;
     try {
@@ -71,44 +66,11 @@ export const validateForm = async (
         throw error;
       }
     }
-
-    const validateCycles = (
-      filterId: string,
-      trace: string[] = [],
-    ): boolean => {
-      if (trace.includes(filterId)) {
-        addValidationError(
-          filterId,
-          'parentFilter',
-          t('Cannot create cyclic hierarchy'),
-        );
-        return false;
-      }
-      const formItem = formValues.filters?.[filterId];
-      const configItem = filterConfigMap[filterId];
-      const parentId = formItem
-        ? 'parentFilter' in formItem && formItem.parentFilter?.value
-        : 'cascadeParentIds' in configItem && configItem?.cascadeParentIds?.[0];
-
-      if (parentId) {
-        return validateCycles(parentId, [...trace, filterId]);
-      }
-      return true;
-    };
-
-    const invalid = filterIds
-      .filter(id => !removedFilters[id])
-      .some(filterId => !validateCycles(filterId));
-
-    if (invalid) {
-      return null;
-    }
-
     return formValues;
   } catch (error) {
-    console.warn('Filter configuration failed:', error);
+    logging.warn('Filter configuration failed:', error);
 
-    if (!error.errorFields || !error.errorFields.length) return null; // not a validation error
+    if (!error.errorFields?.length) return null; // not a validation error
 
     // the name is in array format since the fields are nested
     type ErrorFields = { name: ['filters', string, string] }[];
@@ -130,108 +92,71 @@ export const validateForm = async (
 
 export const createHandleSave =
   (
-    filterConfigMap: Record<string, Filter | Divider>,
-    filterIds: string[],
-    removedFilters: Record<string, FilterRemoval>,
     saveForm: Function,
+    filterChanges: FilterChangesType,
     values: NativeFiltersForm,
+    filterConfigMap: Record<string, Filter | Divider>,
   ) =>
   async () => {
-    const newFilterConfig: FilterConfiguration = filterIds
-      .filter(id => !removedFilters[id])
-      .map(id => {
-        // create a filter config object from the form inputs
-        const formInputs = values.filters?.[id];
-        // if user didn't open a filter, return the original config
-        if (!formInputs) return filterConfigMap[id];
-        if (formInputs.type === NativeFilterType.DIVIDER) {
-          return {
-            id,
-            type: NativeFilterType.DIVIDER,
-            scope: {
-              rootPath: [DASHBOARD_ROOT_ID],
-              excluded: [],
-            },
-            title: formInputs.title,
-            description: formInputs.description,
-          };
-        }
-        const target: Partial<NativeFilterTarget> = {};
-        if (formInputs.dataset) {
-          target.datasetId = formInputs.dataset.value;
-        }
-        if (formInputs.dataset && formInputs.column) {
-          target.column = { name: formInputs.column };
-        }
+    const transformFilter = (id: string) => {
+      const formInputs = values.filters?.[id] || filterConfigMap[id];
+      if (!formInputs) {
+        return undefined;
+      }
+      if (formInputs.type === NativeFilterType.Divider) {
         return {
           id,
-          adhoc_filters: formInputs.adhoc_filters,
-          time_range: formInputs.time_range,
-          controlValues: formInputs.controlValues ?? {},
-          granularity_sqla: formInputs.granularity_sqla,
-          requiredFirst: Object.values(formInputs.requiredFirst ?? {}).find(
-            rf => rf,
-          ),
-          name: formInputs.name,
-          filterType: formInputs.filterType,
-          // for now there will only ever be one target
-          targets: [target],
-          defaultDataMask: formInputs.defaultDataMask ?? getInitialDataMask(),
-          cascadeParentIds: formInputs.parentFilter
-            ? [formInputs.parentFilter.value]
-            : [],
-          scope: formInputs.scope,
-          sortMetric: formInputs.sortMetric,
-          type: formInputs.type,
-          description: (formInputs.description || '').trim(),
+          type: NativeFilterType.Divider,
+          scope: {
+            rootPath: [DASHBOARD_ROOT_ID],
+            excluded: [],
+          },
+          title: formInputs.title,
+          description: formInputs.description,
         };
-      });
+      }
 
-    await saveForm(newFilterConfig);
+      const target: Partial<NativeFilterTarget> = {};
+      if (formInputs.dataset) {
+        target.datasetId = formInputs.dataset.value;
+      }
+      if (formInputs.dataset && formInputs.column) {
+        target.column = { name: formInputs.column };
+      }
+
+      return {
+        id,
+        adhoc_filters: formInputs.adhoc_filters,
+        time_range: formInputs.time_range,
+        controlValues: formInputs.controlValues ?? {},
+        granularity_sqla: formInputs.granularity_sqla,
+        requiredFirst: Object.values(formInputs.requiredFirst ?? {}).find(
+          rf => rf,
+        ),
+        name: formInputs.name,
+        filterType: formInputs.filterType,
+        targets: [target],
+        defaultDataMask: formInputs.defaultDataMask ?? getInitialDataMask(),
+        cascadeParentIds: formInputs.dependencies || [],
+        scope: formInputs.scope,
+        sortMetric: formInputs.sortMetric,
+        type: formInputs.type,
+        description: (formInputs.description || '').trim(),
+      };
+      return undefined;
+    };
+
+    const transformedModified = filterChanges.modified
+      .map(transformFilter)
+      .filter(Boolean);
+
+    const newFilterChanges = {
+      ...filterChanges,
+      modified: transformedModified,
+    };
+    await saveForm(newFilterChanges);
   };
-export function buildFilterGroup(nodes: FilterHierarchyNode[]) {
-  const buildGroup = (
-    elementId: string,
-    nodeList: FilterHierarchyNode[],
-    found: string[],
-  ): string[] | null => {
-    const element = nodeList.find(el => el.id === elementId);
-    const didFind = found.includes(elementId);
-    let parent: string[] = [];
-    let children: string[] = [];
 
-    if (!element || didFind) {
-      return null;
-    }
-    found.push(elementId);
-    const { parentId } = element;
-
-    if (parentId) {
-      const parentArray = buildGroup(parentId, nodeList, found);
-      parent = parentArray ? parentArray.flat() : [];
-    }
-    const childrenArray = nodeList
-      .filter(el => el.parentId === elementId)
-      .map(el => buildGroup(el.id, nodeList, found));
-
-    if (childrenArray) {
-      children = childrenArray
-        ? (childrenArray.flat().filter(id => id) as string[])
-        : [];
-    }
-    return [...parent, elementId, ...children];
-  };
-  const rendered: string[] = [];
-  const group: string[][] = [];
-  for (let index = 0; index < nodes.length; index += 1) {
-    const element = nodes[index];
-    const subGroup = buildGroup(element.id, nodes, rendered);
-    if (subGroup) {
-      group.push(subGroup);
-    }
-  }
-  return group;
-}
 export const createHandleRemoveItem =
   (
     setRemovedFilters: (
@@ -241,28 +166,14 @@ export const createHandleRemoveItem =
           ) => Record<string, FilterRemoval>)
         | Record<string, FilterRemoval>,
     ) => void,
-    setSaveAlertVisible: Function,
     setOrderedFilters: (
-      val: string[][] | ((prevState: string[][]) => string[][]),
+      val: string[] | ((prevState: string[]) => string[]),
     ) => void,
-    setFilterHierarchy: (
-      state:
-        | FilterHierarchy
-        | ((prevState: FilterHierarchy) => FilterHierarchy),
-    ) => void,
-    filterHierarchy: FilterHierarchy,
+    setSaveAlertVisible: Function,
+    removeFilter: (filterId: string) => void,
   ) =>
   (filterId: string) => {
     const completeFilterRemoval = (filterId: string) => {
-      const buildNewFilterHierarchy = (hierarchy: FilterHierarchy) =>
-        hierarchy
-          .filter(nativeFilter => nativeFilter.id !== filterId)
-          .map(nativeFilter => {
-            const didRemoveParent = nativeFilter.parentId === filterId;
-            return didRemoveParent
-              ? { ...nativeFilter, parentId: null }
-              : nativeFilter;
-          });
       // the filter state will actually stick around in the form,
       // and the filterConfig/newFilterIds, but we use removedFilters
       // to mark it as removed.
@@ -270,32 +181,9 @@ export const createHandleRemoveItem =
         ...removedFilters,
         [filterId]: { isPending: false },
       }));
-      // Remove the filter from the side tab and de-associate children
-      // in case we removed a parent.
-      setFilterHierarchy(prevFilterHierarchy =>
-        buildNewFilterHierarchy(prevFilterHierarchy),
+      setOrderedFilters((orderedFilters: string[]) =>
+        orderedFilters.filter(filter => filter !== filterId),
       );
-      setOrderedFilters((orderedFilters: string[][]) => {
-        const newOrder = [];
-        for (let index = 0; index < orderedFilters.length; index += 1) {
-          const doesGroupContainDeletedFilter =
-            orderedFilters[index].findIndex(id => id === filterId) >= 0;
-          // Rebuild just the group that contains deleted filter ID.
-          if (doesGroupContainDeletedFilter) {
-            const newGroups = buildFilterGroup(
-              buildNewFilterHierarchy(
-                filterHierarchy.filter(filter =>
-                  orderedFilters[index].includes(filter.id),
-                ),
-              ),
-            );
-            newGroups.forEach(group => newOrder.push(group));
-          } else {
-            newOrder.push(orderedFilters[index]);
-          }
-        }
-        return newOrder;
-      });
     };
 
     // first set up the timer to completely remove it
@@ -307,17 +195,19 @@ export const createHandleRemoveItem =
       ...removedFilters,
       [filterId]: { isPending: true, timerId },
     }));
+    removeFilter(filterId);
+    // eslint-disable-next-line no-param-reassign
     setSaveAlertVisible(false);
   };
 
 export const NATIVE_FILTER_PREFIX = 'NATIVE_FILTER-';
 export const NATIVE_FILTER_DIVIDER_PREFIX = 'NATIVE_FILTER_DIVIDER-';
-export const generateFilterId = (type: NativeFilterType) => {
+export const generateFilterId = (type: NativeFilterType): string => {
   const prefix =
-    type === NativeFilterType.NATIVE_FILTER
+    type === NativeFilterType.NativeFilter
       ? NATIVE_FILTER_PREFIX
       : NATIVE_FILTER_DIVIDER_PREFIX;
-  return `${prefix}${shortid.generate()}`;
+  return `${prefix}${nanoid()}`;
 };
 
 export const getFilterIds = (config: FilterConfiguration) =>

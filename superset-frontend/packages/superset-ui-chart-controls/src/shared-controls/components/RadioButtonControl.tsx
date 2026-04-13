@@ -16,9 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { ReactNode } from 'react';
-import { JsonValue, useTheme } from '@superset-ui/core';
-import ControlHeader from '../../components/ControlHeader';
+import { ReactNode } from 'react';
+import { JsonValue, t } from '@superset-ui/core';
+import { Radio } from '@superset-ui/core/components';
+import { ControlHeader } from '../../components/ControlHeader';
 
 // [value, label]
 export type RadioButtonOption = [
@@ -31,7 +32,7 @@ export interface RadioButtonControlProps {
   description?: string;
   options: RadioButtonOption[];
   hovered?: boolean;
-  value?: string;
+  value?: JsonValue;
   onChange: (opt: RadioButtonOption[0]) => void;
 }
 
@@ -42,44 +43,56 @@ export default function RadioButtonControl({
   ...props
 }: RadioButtonControlProps) {
   const currentValue = initialValue || options[0][0];
-  const theme = useTheme();
   return (
-    <div
-      css={{
-        '.btn svg': {
-          position: 'relative',
-          top: '0.2em',
-        },
-        '.btn:focus': {
-          outline: 'none',
-        },
-        '.control-label + .btn-group': {
-          marginTop: 1,
-        },
-        '.btn-group .btn.active': {
-          background: theme.colors.secondary.light5,
-          fontWeight: theme.typography.weights.bold,
-          boxShadow: 'none',
-        },
-      }}
-    >
-      <ControlHeader {...props} />
-      <div className="btn-group btn-group-sm">
-        {options.map(([val, label]) => (
-          <button
-            key={JSON.stringify(val)}
-            type="button"
-            className={`btn btn-default ${
-              val === currentValue ? 'active' : ''
-            }`}
-            onClick={() => {
-              onChange(val);
-            }}
-          >
-            {label}
-          </button>
-        ))}
+    <div>
+      <div
+        role="tablist"
+        aria-label={typeof props.label === 'string' ? props.label : undefined}
+      >
+        <ControlHeader {...props} />
+        <Radio.Group
+          value={currentValue}
+          onChange={e => onChange(e.target.value)}
+        >
+          {options.map(([val, label]) => (
+            <Radio.Button
+              // role="tab"
+              key={JSON.stringify(val)}
+              value={val}
+              aria-label={typeof label === 'string' ? label : undefined}
+              id={`tab-${val}`}
+              type="button"
+              aria-selected={val === currentValue}
+              className={`btn btn-default ${
+                val === currentValue ? 'active' : ''
+              }`}
+              onClick={e => {
+                e.currentTarget?.focus();
+                onChange(val);
+              }}
+            >
+              {label}
+            </Radio.Button>
+          ))}
+        </Radio.Group>
       </div>
+      {/* accessibility begin */}
+      <div
+        aria-live="polite"
+        style={{
+          position: 'absolute',
+          left: '-9999px',
+          height: '1px',
+          width: '1px',
+          overflow: 'hidden',
+        }}
+      >
+        {t(
+          '%s tab selected',
+          options.find(([val]) => val === currentValue)?.[1],
+        )}
+      </div>
+      {/* accessibility end */}
     </div>
   );
 }

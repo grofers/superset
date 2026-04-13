@@ -21,13 +21,14 @@ import sinon from 'sinon';
 import URI from 'urijs';
 import {
   buildV1ChartDataPayload,
+  exploreChart,
   getExploreUrl,
-  shouldUseLegacyApi,
   getSimpleSQLExpression,
+  getQuerySettings,
 } from 'src/explore/exploreUtils';
 import { DashboardStandaloneMode } from 'src/dashboard/util/constants';
 import * as hostNamesConfig from 'src/utils/hostNamesConfig';
-import { getChartMetadataRegistry } from '@superset-ui/core';
+import { getChartMetadataRegistry, SupersetClient } from '@superset-ui/core';
 
 describe('exploreUtils', () => {
   const { location } = window;
@@ -50,7 +51,7 @@ describe('exploreUtils', () => {
         force: false,
         curUrl: 'http://superset.com',
       });
-      compareURI(URI(url), URI('/superset/explore/'));
+      compareURI(URI(url), URI('/explore/'));
     });
     it('generates proper json url', () => {
       const url = getExploreUrl({
@@ -94,8 +95,8 @@ describe('exploreUtils', () => {
       });
       compareURI(
         URI(url),
-        URI('/superset/explore/').search({
-          standalone: DashboardStandaloneMode.HIDE_NAV,
+        URI('/explore/').search({
+          standalone: DashboardStandaloneMode.HideNav,
         }),
       );
     });
@@ -190,15 +191,15 @@ describe('exploreUtils', () => {
   });
 
   describe('buildV1ChartDataPayload', () => {
-    it('generate valid request payload despite no registered buildQuery', () => {
-      const v1RequestPayload = buildV1ChartDataPayload({
+    it('generate valid request payload despite no registered buildQuery', async () => {
+      const v1RequestPayload = await buildV1ChartDataPayload({
         formData: { ...formData, viz_type: 'my_custom_viz' },
       });
-      expect(v1RequestPayload).hasOwnProperty('queries');
+      expect(v1RequestPayload.hasOwnProperty('queries')).toBeTruthy();
     });
   });
 
-  describe('shouldUseLegacyApi', () => {
+  describe('getQuerySettings', () => {
     beforeAll(() => {
       getChartMetadataRegistry()
         .registerValue('my_legacy_viz', { useLegacyApi: true })
@@ -210,32 +211,36 @@ describe('exploreUtils', () => {
     });
 
     it('returns true for legacy viz', () => {
-      const useLegacyApi = shouldUseLegacyApi({
+      const [useLegacyApi, parseMethod] = getQuerySettings({
         ...formData,
         viz_type: 'my_legacy_viz',
       });
       expect(useLegacyApi).toBe(true);
+      expect(parseMethod).toBe('json-bigint');
     });
 
     it('returns false for v1 viz', () => {
-      const useLegacyApi = shouldUseLegacyApi({
+      const [useLegacyApi, parseMethod] = getQuerySettings({
         ...formData,
         viz_type: 'my_v1_viz',
       });
       expect(useLegacyApi).toBe(false);
+      expect(parseMethod).toBe('json-bigint');
     });
 
     it('returns false for formData with unregistered viz_type', () => {
-      const useLegacyApi = shouldUseLegacyApi({
+      const [useLegacyApi, parseMethod] = getQuerySettings({
         ...formData,
         viz_type: 'undefined_viz',
       });
       expect(useLegacyApi).toBe(false);
+      expect(parseMethod).toBe('json-bigint');
     });
 
     it('returns false for formData without viz_type', () => {
-      const useLegacyApi = shouldUseLegacyApi(formData);
+      const [useLegacyApi, parseMethod] = getQuerySettings(formData);
       expect(useLegacyApi).toBe(false);
+      expect(parseMethod).toBe('json-bigint');
     });
   });
 
@@ -273,6 +278,18 @@ describe('exploreUtils', () => {
       expect(getSimpleSQLExpression('col', 'NOT IN', [0, 1, 2])).toBe(
         'col NOT IN (0, 1, 2)',
       );
+    });
+  });
+
+  describe('.exploreChart()', () => {
+    it('postForm', () => {
+      const postFormSpy = jest.spyOn(SupersetClient, 'postForm');
+      postFormSpy.mockImplementation(jest.fn());
+
+      exploreChart({
+        formData: { ...formData, viz_type: 'my_custom_viz' },
+      });
+      expect(postFormSpy).toHaveBeenCalledTimes(1);
     });
   });
 });

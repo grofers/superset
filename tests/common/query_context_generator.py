@@ -16,20 +16,13 @@
 # under the License.
 import copy
 import dataclasses
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from superset.common.chart_data import ChartDataResultType
-from superset.utils.core import AnnotationType, DTTM_ALIAS, TimeRangeEndpoint
+from superset.utils.core import AnnotationType, DTTM_ALIAS
 
 query_birth_names = {
-    "extras": {
-        "where": "",
-        "time_range_endpoints": (
-            TimeRangeEndpoint.INCLUSIVE,
-            TimeRangeEndpoint.EXCLUSIVE,
-        ),
-        "time_grain_sqla": "P1D",
-    },
+    "extras": {"where": "", "time_grain_sqla": "P1D"},
     "columns": ["name"],
     "metrics": [{"label": "sum__num"}],
     "orderby": [("sum__num", False)],
@@ -45,14 +38,15 @@ query_birth_names = {
         {"col": "name", "op": "NOT IN", "val": ["<NULL>", '"abc"']},
     ],
     "having": "",
-    "having_filters": [],
     "where": "",
 }
 
-QUERY_OBJECTS: Dict[str, Dict[str, object]] = {
+QUERY_OBJECTS: dict[str, dict[str, object]] = {
     "birth_names": query_birth_names,
     # `:suffix` are overrides only
-    "birth_names:include_time": {"groupby": [DTTM_ALIAS, "name"],},
+    "birth_names:include_time": {
+        "groupby": [DTTM_ALIAS, "name"],
+    },
     "birth_names:orderby_dup_alias": {
         "metrics": [
             {
@@ -100,7 +94,9 @@ QUERY_OBJECTS: Dict[str, Dict[str, object]] = {
             ],
         ],
     },
-    "birth_names:only_orderby_has_metric": {"metrics": [],},
+    "birth_names:only_orderby_has_metric": {
+        "metrics": [],
+    },
 }
 
 ANNOTATION_LAYERS = {
@@ -179,25 +175,36 @@ POSTPROCESSING_OPERATIONS = {
         {
             "operation": "aggregate",
             "options": {
-                "groupby": ["gender"],
+                "groupby": ["name"],
                 "aggregates": {
                     "q1": {
                         "operator": "percentile",
                         "column": "sum__num",
-                        "options": {"q": 25},
+                        # todo: rename "interpolation" to "method" when we updated
+                        #  numpy.
+                        #  https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
+                        "options": {"q": 25, "interpolation": "lower"},
                     },
-                    "median": {"operator": "median", "column": "sum__num",},
+                    "median": {
+                        "operator": "median",
+                        "column": "sum__num",
+                    },
                 },
             },
         },
-        {"operation": "sort", "options": {"columns": {"q1": False, "gender": True},},},
+        {
+            "operation": "sort",
+            "options": {"by": ["q1", "name"], "ascending": [False, True]},
+        },
     ]
 }
 
 
 def get_query_object(
-    query_name: str, add_postprocessing_operations: bool, add_time_offsets: bool,
-) -> Dict[str, Any]:
+    query_name: str,
+    add_postprocessing_operations: bool,
+    add_time_offsets: bool,
+) -> dict[str, Any]:
     if query_name not in QUERY_OBJECTS:
         raise Exception(f"QueryObject fixture not defined for datasource: {query_name}")
     obj = QUERY_OBJECTS[query_name]
@@ -219,7 +226,7 @@ def get_query_object(
     return query_object
 
 
-def _get_postprocessing_operation(query_name: str) -> List[Dict[str, Any]]:
+def _get_postprocessing_operation(query_name: str) -> list[dict[str, Any]]:
     if query_name not in QUERY_OBJECTS:
         raise Exception(
             f"Post-processing fixture not defined for datasource: {query_name}"
@@ -242,8 +249,8 @@ class QueryContextGenerator:
         add_time_offsets: bool = False,
         table_id=1,
         table_type="table",
-        form_data: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        form_data: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         form_data = form_data or {}
         table_name = query_name.split(":")[0]
         table = self.get_table(table_name, table_id, table_type)
@@ -251,7 +258,9 @@ class QueryContextGenerator:
             "datasource": {"id": table.id, "type": table.type},
             "queries": [
                 get_query_object(
-                    query_name, add_postprocessing_operations, add_time_offsets,
+                    query_name,
+                    add_postprocessing_operations,
+                    add_time_offsets,
                 )
             ],
             "result_type": ChartDataResultType.FULL,

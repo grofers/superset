@@ -16,42 +16,56 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useMemo } from 'react';
-import Alert from 'src/components/Alert';
-import { t } from '@superset-ui/core';
-import TableView from 'src/components/TableView';
-import Button from 'src/components/Button';
-import Loading from 'src/components/Loading';
-import ModalTrigger from 'src/components/ModalTrigger';
-import { EmptyWrapperType } from 'src/components/TableView/TableView';
+import { useMemo } from 'react';
+import { useSelector } from 'react-redux';
+import { css, styled, t } from '@superset-ui/core';
 
-interface EstimateQueryCostButtonProps {
-  dbId: number;
-  schema: string;
-  sql: string;
+import {
+  Alert,
+  Button,
+  Loading,
+  ModalTrigger,
+  TableView,
+  EmptyWrapperType,
+} from '@superset-ui/core/components';
+import useQueryEditor from 'src/SqlLab/hooks/useQueryEditor';
+import { SqlLabRootState, QueryCostEstimate } from 'src/SqlLab/types';
+
+export interface EstimateQueryCostButtonProps {
   getEstimate: Function;
-  queryCostEstimate: Record<string, any>;
-  selectedText?: string;
+  queryEditorId: string;
   tooltip?: string;
   disabled?: boolean;
 }
 
+const CostEstimateModalStyles = styled.div`
+  ${({ theme }) => css`
+    font-size: ${theme.fontSizeSM};
+  `}
+`;
+
 const EstimateQueryCostButton = ({
-  dbId,
-  schema,
-  sql,
   getEstimate,
-  queryCostEstimate = {},
-  selectedText,
+  queryEditorId,
   tooltip = '',
   disabled = false,
 }: EstimateQueryCostButtonProps) => {
-  const { cost } = queryCostEstimate;
+  const queryCostEstimate = useSelector<
+    SqlLabRootState,
+    QueryCostEstimate | undefined
+  >(state => state.sqlLab.queryCostEstimates?.[queryEditorId]);
+
+  const { selectedText } = useQueryEditor(queryEditorId, ['selectedText']);
+  const { cost } = queryCostEstimate || {};
   const tableData = useMemo(() => (Array.isArray(cost) ? cost : []), [cost]);
   const columns = useMemo(
     () =>
       Array.isArray(cost) && cost.length
-        ? Object.keys(cost[0]).map(key => ({ accessor: key, Header: key }))
+        ? Object.keys(cost[0]).map(key => ({
+            accessor: key,
+            Header: key,
+            id: key,
+          }))
         : [],
     [cost],
   );
@@ -63,24 +77,25 @@ const EstimateQueryCostButton = ({
   };
 
   const renderModalBody = () => {
-    if (queryCostEstimate.error !== null) {
+    if (queryCostEstimate?.error) {
       return (
         <Alert
           key="query-estimate-error"
           type="error"
-          message={queryCostEstimate.error}
+          message={queryCostEstimate?.error}
         />
       );
     }
-    if (queryCostEstimate.completed) {
+    if (queryCostEstimate?.completed) {
       return (
-        <TableView
-          columns={columns}
-          data={tableData}
-          withPagination={false}
-          emptyWrapperType={EmptyWrapperType.Small}
-          className="cost-estimate"
-        />
+        <CostEstimateModalStyles>
+          <TableView
+            columns={columns}
+            data={tableData}
+            withPagination={false}
+            emptyWrapperType={EmptyWrapperType.Small}
+          />
+        </CostEstimateModalStyles>
       );
     }
     return <Loading position="normal" />;

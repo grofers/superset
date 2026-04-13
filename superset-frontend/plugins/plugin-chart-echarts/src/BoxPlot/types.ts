@@ -16,29 +16,29 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { QueryFormData } from '@superset-ui/core';
 import {
-  ChartDataResponseResult,
-  ChartProps,
-  DataRecordValue,
-  QueryFormColumn,
-  QueryFormData,
-  SetDataMaskHook,
-} from '@superset-ui/core';
-import { EChartsCoreOption } from 'echarts';
-import { EchartsTitleFormData, DEFAULT_TITLE_FORM_DATA } from '../types';
+  BaseChartProps,
+  BaseTransformedProps,
+  ContextMenuTransformedProps,
+  CrossFilterTransformedProps,
+  TitleFormData,
+} from '../types';
+import { DEFAULT_TITLE_FORM_DATA } from '../constants';
 
 export type BoxPlotQueryFormData = QueryFormData & {
   numberFormat?: string;
   whiskerOptions?: BoxPlotFormDataWhiskerOptions;
   xTickLayout?: BoxPlotFormXTickLayout;
-  emitFilter: boolean;
-} & EchartsTitleFormData;
+} & TitleFormData;
 
 export type BoxPlotFormDataWhiskerOptions =
   | 'Tukey'
   | 'Min/max (no outliers)'
   | '2/98 percentiles'
-  | '9/91 percentiles';
+  | '5/95 percentiles'
+  | '9/91 percentiles'
+  | '10/90 percentiles';
 
 export type BoxPlotFormXTickLayout =
   | '45°'
@@ -49,23 +49,15 @@ export type BoxPlotFormXTickLayout =
 
 // @ts-ignore
 export const DEFAULT_FORM_DATA: BoxPlotQueryFormData = {
-  emitFilter: false,
   ...DEFAULT_TITLE_FORM_DATA,
 };
 
-export interface EchartsBoxPlotChartProps extends ChartProps {
+export interface EchartsBoxPlotChartProps
+  extends BaseChartProps<BoxPlotQueryFormData> {
   formData: BoxPlotQueryFormData;
-  queriesData: ChartDataResponseResult[];
 }
 
-export interface BoxPlotChartTransformedProps {
-  formData: BoxPlotQueryFormData;
-  height: number;
-  width: number;
-  echartOptions: EChartsCoreOption;
-  emitFilter: boolean;
-  setDataMask: SetDataMaskHook;
-  labelMap: Record<string, DataRecordValue[]>;
-  groupby: QueryFormColumn[];
-  selectedValues: Record<number, string>;
-}
+export type BoxPlotChartTransformedProps =
+  BaseTransformedProps<BoxPlotQueryFormData> &
+    CrossFilterTransformedProps &
+    ContextMenuTransformedProps;

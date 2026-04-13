@@ -56,7 +56,7 @@ export default class Translator {
    */
   addTranslation(key: string, texts: ReadonlyArray<string>) {
     const translations = this.i18n.options.locale_data.superset;
-    if (key in translations) {
+    if (process.env.WEBPACK_MODE !== 'test' && key in translations) {
       logging.warn(`Duplicate translation key "${key}", will override.`);
     }
     translations[key] = texts;
@@ -86,20 +86,33 @@ export default class Translator {
   }
 
   translate(input: string, ...args: unknown[]): string {
-    return this.i18n.translate(input).fetch(...args);
+    try {
+      return this.i18n.translate(input).fetch(...args);
+    } catch (err) {
+      logging.warn(`Translation failed for key "${input}" with args:`, args);
+      return input;
+    }
   }
 
   translateWithNumber(key: string, ...args: unknown[]): string {
-    const [plural, num, ...rest] = args;
-    if (typeof plural === 'number') {
+    try {
+      const [plural, num, ...rest] = args;
+      if (typeof plural === 'number') {
+        return this.i18n
+          .translate(key)
+          .ifPlural(plural, key)
+          .fetch(plural, num, ...rest);
+      }
       return this.i18n
         .translate(key)
-        .ifPlural(plural, key)
-        .fetch(plural, num, ...args);
+        .ifPlural(num as number, plural as string)
+        .fetch(...rest);
+    } catch (err) {
+      logging.warn(
+        `Plural translation failed for key "${key}" with args:`,
+        args,
+      );
     }
-    return this.i18n
-      .translate(key)
-      .ifPlural(num as number, plural as string)
-      .fetch(...rest);
+    return key;
   }
 }

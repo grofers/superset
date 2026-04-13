@@ -16,31 +16,35 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { FeatureFlag, isFeatureEnabled, t } from '@superset-ui/core';
+import { t } from '@superset-ui/core';
 import {
   ControlPanelConfig,
   ControlPanelsContainerProps,
+  ControlSubSectionHeader,
   D3_TIME_FORMAT_DOCS,
-  emitFilterControl,
+  getStandardizedControls,
   sections,
   sharedControls,
 } from '@superset-ui/chart-controls';
 
-import {
-  DEFAULT_FORM_DATA,
-  EchartsTimeseriesContributionType,
-  EchartsTimeseriesSeriesType,
-} from '../types';
+import { EchartsTimeseriesSeriesType } from '../types';
+import { DEFAULT_FORM_DATA, TIME_SERIES_DESCRIPTION_TEXT } from '../constants';
 import {
   legendSection,
+  onlyTotalControl,
+  showValueControl,
   richTooltipSection,
-  showValueSection,
-  xAxisControl,
+  seriesOrderSection,
+  percentageThresholdControl,
+  xAxisLabelRotation,
+  xAxisLabelInterval,
+  truncateXAxis,
+  xAxisBounds,
+  minorTicks,
 } from '../../controls';
+import { AreaChartStackControlOptions } from '../../constants';
 
 const {
-  contributionMode,
   logAxis,
   markerEnabled,
   markerSize,
@@ -50,55 +54,10 @@ const {
   seriesType,
   truncateYAxis,
   yAxisBounds,
-  zoomable,
-  xAxisLabelRotation,
 } = DEFAULT_FORM_DATA;
 const config: ControlPanelConfig = {
   controlPanelSections: [
-    sections.legacyTimeseriesTime,
-    {
-      label: t('Query'),
-      expanded: true,
-      controlSetRows: [
-        isFeatureEnabled(FeatureFlag.GENERIC_CHART_AXES) ? [xAxisControl] : [],
-        ['metrics'],
-        ['groupby'],
-        [
-          {
-            name: 'contributionMode',
-            config: {
-              type: 'SelectControl',
-              label: t('Contribution Mode'),
-              default: contributionMode,
-              choices: [
-                [null, 'None'],
-                [EchartsTimeseriesContributionType.Row, 'Total'],
-                [EchartsTimeseriesContributionType.Column, 'Series'],
-              ],
-              description: t('Calculate contribution per series or total'),
-            },
-          },
-        ],
-        ['adhoc_filters'],
-        emitFilterControl,
-        ['limit'],
-        ['timeseries_limit_metric'],
-        [
-          {
-            name: 'order_desc',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Sort Descending'),
-              default: true,
-              description: t('Whether to sort descending or ascending'),
-              visibility: ({ controls }) =>
-                Boolean(controls?.timeseries_limit_metric.value),
-            },
-          },
-        ],
-        ['row_limit'],
-      ],
-    },
+    sections.echartsTimeSeriesQueryWithXAxisSort,
     sections.advancedAnalyticsControls,
     sections.annotationsAndLayersControls,
     sections.forecastIntervalControls,
@@ -107,7 +66,9 @@ const config: ControlPanelConfig = {
       label: t('Chart Options'),
       expanded: true,
       controlSetRows: [
+        ...seriesOrderSection,
         ['color_scheme'],
+        ['time_shift_color'],
         [
           {
             name: 'seriesType',
@@ -117,11 +78,11 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: seriesType,
               choices: [
-                [EchartsTimeseriesSeriesType.Line, 'Line'],
-                [EchartsTimeseriesSeriesType.Smooth, 'Smooth Line'],
-                [EchartsTimeseriesSeriesType.Start, 'Step - start'],
-                [EchartsTimeseriesSeriesType.Middle, 'Step - middle'],
-                [EchartsTimeseriesSeriesType.End, 'Step - end'],
+                [EchartsTimeseriesSeriesType.Line, t('Line')],
+                [EchartsTimeseriesSeriesType.Smooth, t('Smooth Line')],
+                [EchartsTimeseriesSeriesType.Start, t('Step - start')],
+                [EchartsTimeseriesSeriesType.Middle, t('Step - middle')],
+                [EchartsTimeseriesSeriesType.End, t('Step - end')],
               ],
               description: t('Series chart type (line, bar etc)'),
             },
@@ -144,7 +105,38 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        ...showValueSection,
+        [showValueControl],
+        [
+          {
+            name: 'stack',
+            config: {
+              type: 'SelectControl',
+              label: t('Stacked Style'),
+              renderTrigger: true,
+              choices: AreaChartStackControlOptions,
+              default: null,
+              description: t('Stack series on top of each other'),
+            },
+          },
+        ],
+        [onlyTotalControl],
+        [percentageThresholdControl],
+        [
+          {
+            name: 'show_extra_controls',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Extra Controls'),
+              renderTrigger: true,
+              default: false,
+              description: t(
+                'Whether to show extra controls or not. Extra controls ' +
+                  'include things like making multiBar charts stacked ' +
+                  'or side by side.',
+              ),
+            },
+          },
+        ],
         [
           {
             name: 'markerEnabled',
@@ -177,56 +169,27 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [
-          {
-            name: 'zoomable',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Data Zoom'),
-              default: zoomable,
-              renderTrigger: true,
-              description: t('Enable data zooming controls'),
-            },
-          },
-        ],
+        [minorTicks],
+        ['zoomable'],
         ...legendSection,
-        [<h1 className="section-header">{t('X Axis')}</h1>],
+        [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
         [
           {
             name: 'x_axis_time_format',
             config: {
               ...sharedControls.x_axis_time_format,
               default: 'smart_date',
-              description: `${D3_TIME_FORMAT_DOCS}. ${t(
-                'When using other than adaptive formatting, labels may overlap.',
-              )}`,
+              description: `${D3_TIME_FORMAT_DOCS}. ${TIME_SERIES_DESCRIPTION_TEXT}`,
             },
           },
         ],
-        [
-          {
-            name: 'xAxisLabelRotation',
-            config: {
-              type: 'SelectControl',
-              freeForm: true,
-              clearable: false,
-              label: t('Rotate x axis label'),
-              choices: [
-                [0, '0°'],
-                [45, '45°'],
-              ],
-              default: xAxisLabelRotation,
-              renderTrigger: true,
-              description: t(
-                'Input field supports custom rotation. e.g. 30 for 30°',
-              ),
-            },
-          },
-        ],
+        [xAxisLabelRotation],
+        [xAxisLabelInterval],
         ...richTooltipSection,
         // eslint-disable-next-line react/jsx-key
-        [<h1 className="section-header">{t('Y Axis')}</h1>],
+        [<ControlSubSectionHeader>{t('Y Axis')}</ControlSubSectionHeader>],
         ['y_axis_format'],
+        ['currency_format'],
         [
           {
             name: 'logAxis',
@@ -251,6 +214,8 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [truncateXAxis],
+        [xAxisBounds],
         [
           {
             name: 'truncateYAxis',
@@ -292,6 +257,11 @@ const config: ControlPanelConfig = {
       default: rowLimit,
     },
   },
+  formDataOverrides: formData => ({
+    ...formData,
+    metrics: getStandardizedControls().popAllMetrics(),
+    groupby: getStandardizedControls().popAllColumns(),
+  }),
 };
 
 export default config;

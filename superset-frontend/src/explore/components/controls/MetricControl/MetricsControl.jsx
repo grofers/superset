@@ -16,19 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { ensureIsArray, t, useTheme } from '@superset-ui/core';
+import { ensureIsArray, t, usePrevious } from '@superset-ui/core';
 import { isEqual } from 'lodash';
 import ControlHeader from 'src/explore/components/ControlHeader';
-import Icons from 'src/components/Icons';
+import { Icons } from '@superset-ui/core/components/Icons';
 import {
   AddIconButton,
   AddControlLabel,
   HeaderContainer,
   LabelsContainer,
 } from 'src/explore/components/controls/OptionControls';
-import { usePrevious } from 'src/hooks/usePrevious';
 import columnType from './columnType';
 import MetricDefinitionValue from './MetricDefinitionValue';
 import AdhocMetric from './AdhocMetric';
@@ -125,7 +124,6 @@ const MetricsControl = ({
   ...props
 }) => {
   const [value, setValue] = useState(coerceAdhocMetrics(propsValue));
-  const theme = useTheme();
   const prevColumns = usePrevious(columns);
   const prevSavedMetrics = usePrevious(savedMetrics);
 
@@ -217,10 +215,7 @@ const MetricsControl = ({
     [propsValue, savedMetrics],
   );
 
-  const newAdhocMetric = useMemo(
-    () => new AdhocMetric({ isNew: true }),
-    [value],
-  );
+  const newAdhocMetric = useMemo(() => new AdhocMetric({}), [value]);
   const addNewMetricPopoverTrigger = useCallback(
     trigger => {
       if (isAddNewMetricDisabled()) {
@@ -234,6 +229,7 @@ const MetricsControl = ({
           savedMetricsOptions={savedMetricOptions}
           savedMetric={emptySavedMetric}
           datasource={datasource}
+          isNew
         >
           {trigger}
         </AdhocMetricPopoverTrigger>
@@ -320,10 +316,7 @@ const MetricsControl = ({
             disabled={isAddNewMetricDisabled()}
             data-test="add-metric-button"
           >
-            <Icons.PlusLarge
-              iconSize="s"
-              iconColor={theme.colors.grayscale.light5}
-            />
+            <Icons.PlusOutlined iconSize="m" />
           </AddIconButton>,
         )}
       </HeaderContainer>
@@ -332,7 +325,7 @@ const MetricsControl = ({
           ? value.map((value, index) => valueRenderer(value, index))
           : addNewMetricPopoverTrigger(
               <AddControlLabel>
-                <Icons.PlusSmall iconColor={theme.colors.grayscale.light1} />
+                <Icons.PlusOutlined iconSize="m" />
                 {t('Add metric')}
               </AddControlLabel>,
             )}

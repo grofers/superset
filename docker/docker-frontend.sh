@@ -17,10 +17,30 @@
 #
 set -e
 
-cd /app/superset-frontend
-npm install -g npm@7
-npm install -f --no-optional --global webpack webpack-cli
-npm install -f --no-optional
+# Packages needed for puppeteer:
+if [ "$PUPPETEER_SKIP_CHROMIUM_DOWNLOAD" = "false" ]; then
+    apt update
+    apt install -y chromium
+fi
 
-echo "Running frontend"
-npm run dev
+if [ "$BUILD_SUPERSET_FRONTEND_IN_DOCKER" = "true" ]; then
+    echo "Building Superset frontend in dev mode inside docker container"
+    cd /app/superset-frontend
+
+    if [ "$NPM_RUN_PRUNE" = "true" ]; then
+        echo "Running `npm run prune`"
+        npm run prune
+    fi
+
+    echo "Running `npm install`"
+    npm install
+
+    echo "Start webpack dev server"
+    # start the webpack dev server, serving dynamically at http://localhost:9000
+    # it proxies to the backend served at http://localhost:8088
+    npm run dev-server
+
+else
+    echo "Skipping frontend build steps - YOU NEED TO RUN IT MANUALLY ON THE HOST!"
+    echo "https://superset.apache.org/docs/contributing/development/#webpack-dev-server"
+fi

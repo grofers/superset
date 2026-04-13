@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
 import {
   ChartDataResponseResult,
   GenericDataType,
@@ -26,13 +25,14 @@ import {
 } from '@superset-ui/core';
 import {
   ControlPanelConfig,
+  ControlSubSectionHeader,
   D3_FORMAT_DOCS,
+  D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT,
   D3_FORMAT_OPTIONS,
   D3_TIME_FORMAT_OPTIONS,
-  sections,
   sharedControls,
-  emitFilterControl,
   ControlFormItemSpec,
+  getStandardizedControls,
 } from '@superset-ui/chart-controls';
 import { DEFAULT_FORM_DATA } from './types';
 import { LABEL_POSITION } from '../constants';
@@ -50,7 +50,23 @@ const radarMetricMaxValue: { name: string; config: ControlFormItemSpec } = {
       'The maximum value of metrics. It is an optional configuration',
     ),
     width: 120,
-    placeholder: 'auto',
+    placeholder: t('auto'),
+    debounceDelay: 400,
+    validators: [validateNumber],
+  },
+};
+
+const radarMetricMinValue: { name: string; config: ControlFormItemSpec } = {
+  name: 'radarMetricMinValue',
+  config: {
+    controlType: 'InputNumber',
+    label: t('Min'),
+    description: t(
+      'The minimum value of metrics. It is an optional configuration. If not set, it will be the minimum value of the data',
+    ),
+    defaultValue: '0',
+    width: 120,
+    placeholder: t('auto'),
     debounceDelay: 400,
     validators: [validateNumber],
   },
@@ -58,7 +74,6 @@ const radarMetricMaxValue: { name: string; config: ControlFormItemSpec } = {
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
-    sections.legacyRegularTime,
     {
       label: t('Query'),
       expanded: true,
@@ -67,7 +82,6 @@ const config: ControlPanelConfig = {
         ['metrics'],
         ['timeseries_limit_metric'],
         ['adhoc_filters'],
-        emitFilterControl,
         [
           {
             name: 'row_limit',
@@ -85,7 +99,7 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         ['color_scheme'],
         ...legendSection,
-        [<h1 className="section-header">{t('Labels')}</h1>],
+        [<ControlSubSectionHeader>{t('Labels')}</ControlSubSectionHeader>],
         [
           {
             name: 'show_labels',
@@ -107,8 +121,8 @@ const config: ControlPanelConfig = {
               default: labelType,
               renderTrigger: true,
               choices: [
-                ['value', 'Value'],
-                ['key_value', 'Category and Value'],
+                ['value', t('Value')],
+                ['key_value', t('Category and Value')],
               ],
               description: t('What should be shown on the label?'),
             },
@@ -138,9 +152,7 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: numberFormat,
               choices: D3_FORMAT_OPTIONS,
-              description: `${t(
-                'D3 format syntax: https://github.com/d3/d3-format. ',
-              )} ${t('Only applies when "Label Type" is set to show values.')}`,
+              description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
             },
           },
         ],
@@ -158,7 +170,7 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [<h1 className="section-header">{t('Radar')}</h1>],
+        [<ControlSubSectionHeader>{t('Radar')}</ControlSubSectionHeader>],
         [
           {
             name: 'column_config',
@@ -168,9 +180,14 @@ const config: ControlPanelConfig = {
               description: t('Further customize how to display each metric'),
               renderTrigger: true,
               configFormLayout: {
-                [GenericDataType.NUMERIC]: [[radarMetricMaxValue]],
+                [GenericDataType.Numeric]: [
+                  [radarMetricMinValue, radarMetricMaxValue],
+                ],
               },
-              mapStateToProps(explore, control, chart) {
+              shouldMapStateToProps() {
+                return true;
+              },
+              mapStateToProps(explore, _, chart) {
                 const values =
                   (explore?.controls?.metrics?.value as QueryFormMetric[]) ??
                   [];
@@ -180,11 +197,17 @@ const config: ControlPanelConfig = {
                   }
                   return value.label;
                 });
+                const { colnames: _colnames, coltypes: _coltypes } =
+                  chart?.queriesResponse?.[0] ?? {};
+                const colnames: string[] = _colnames || [];
+                const coltypes: GenericDataType[] = _coltypes || [];
+
                 return {
                   queryResponse: chart?.queriesResponse?.[0] as
                     | ChartDataResponseResult
                     | undefined,
                   appliedColumnNames: metricColumn,
+                  columnsPropsObject: { colnames, coltypes },
                 };
               },
             },
@@ -207,6 +230,11 @@ const config: ControlPanelConfig = {
       ],
     },
   ],
+  formDataOverrides: formData => ({
+    ...formData,
+    metrics: getStandardizedControls().popAllMetrics(),
+    groupby: getStandardizedControls().popAllColumns(),
+  }),
 };
 
 export default config;

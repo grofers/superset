@@ -26,7 +26,6 @@ export default {
     datasource: '93829__table',
     viz_type: 'deck_polygon',
     url_params: {},
-    time_range_endpoints: ['inclusive', 'exclusive'],
     granularity_sqla: null,
     time_range: '100 years ago : ',
     line_column: 'geometry',
@@ -85,7 +84,6 @@ export default {
     js_columns: [],
     where: '',
     having: '',
-    having_filters: [],
     filters: [
       {
         col: 'geometry',

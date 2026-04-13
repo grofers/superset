@@ -17,57 +17,69 @@
  * under the License.
  */
 /* eslint camelcase: 0 */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
-import { styled, t, css, useTheme, logging } from '@superset-ui/core';
-import { debounce } from 'lodash';
+import {
+  styled,
+  t,
+  css,
+  useTheme,
+  logging,
+  useChangeEffect,
+  useComponentDidMount,
+  usePrevious,
+} from '@superset-ui/core';
+import { debounce, isEqual, isObjectLike, omit, pick } from 'lodash';
 import { Resizable } from 're-resizable';
-import { useChangeEffect } from 'src/hooks/useChangeEffect';
-import { usePluginContext } from 'src/components/DynamicPlugins';
+import { Tooltip } from '@superset-ui/core/components';
+import { usePluginContext } from 'src/components';
 import { Global } from '@emotion/react';
-import { Tooltip } from 'src/components/Tooltip';
-import { usePrevious } from 'src/hooks/usePrevious';
-import { useComponentDidMount } from 'src/hooks/useComponentDidMount';
-import Icons from 'src/components/Icons';
+import { Icons } from '@superset-ui/core/components/Icons';
 import {
   getItem,
   setItem,
   LocalStorageKeys,
 } from 'src/utils/localStorageHelpers';
-import { URL_PARAMS } from 'src/constants';
+import { RESERVED_CHART_URL_PARAMS, URL_PARAMS } from 'src/constants';
+import { QUERY_MODE_REQUISITES } from 'src/explore/constants';
+import { areObjectsEqual } from 'src/reduxUtils';
+import * as logActions from 'src/logger/actions';
+import {
+  LOG_ACTIONS_MOUNT_EXPLORER,
+  LOG_ACTIONS_CHANGE_EXPLORE_CONTROLS,
+} from 'src/logger/LogUtils';
+import { ensureAppRoot } from 'src/utils/pathUtils';
 import { getUrlParam } from 'src/utils/urlUtils';
 import cx from 'classnames';
-import * as chartActions from 'src/chart/chartAction';
+import * as chartActions from 'src/components/Chart/chartAction';
 import { fetchDatasourceMetadata } from 'src/dashboard/actions/datasources';
 import { chartPropShape } from 'src/dashboard/util/propShapes';
 import { mergeExtraFormData } from 'src/dashboard/components/nativeFilters/utils';
 import { postFormData, putFormData } from 'src/explore/exploreUtils/formData';
+import { datasourcesActions } from 'src/explore/actions/datasourcesActions';
+import { mountExploreUrl } from 'src/explore/exploreUtils';
+import { getFormDataFromControls } from 'src/explore/controlUtils';
+import * as exploreActions from 'src/explore/actions/exploreActions';
+import * as saveModalActions from 'src/explore/actions/saveModalActions';
 import { useTabId } from 'src/hooks/useTabId';
+import withToasts from 'src/components/MessageToasts/withToasts';
 import ExploreChartPanel from '../ExploreChartPanel';
 import ConnectedControlPanelsContainer from '../ControlPanelsContainer';
 import SaveModal from '../SaveModal';
-import QueryAndSaveBtns from '../QueryAndSaveBtns';
 import DataSourcePanel from '../DatasourcePanel';
-import { mountExploreUrl } from '../../exploreUtils';
-import { areObjectsEqual } from '../../../reduxUtils';
-import { getFormDataFromControls } from '../../controlUtils';
-import * as exploreActions from '../../actions/exploreActions';
-import * as saveModalActions from '../../actions/saveModalActions';
-import * as logActions from '../../../logger/actions';
-import {
-  LOG_ACTIONS_MOUNT_EXPLORER,
-  LOG_ACTIONS_CHANGE_EXPLORE_CONTROLS,
-} from '../../../logger/LogUtils';
+import ConnectedExploreChartHeader from '../ExploreChartHeader';
+import ExploreContainer from '../ExploreContainer';
 
 const propTypes = {
   ...ExploreChartPanel.propTypes,
-  height: PropTypes.string,
-  width: PropTypes.string,
   actions: PropTypes.object.isRequired,
   datasource_type: PropTypes.string.isRequired,
   dashboardId: PropTypes.number,
+  colorScheme: PropTypes.string,
+  ownColorScheme: PropTypes.string,
+  dashboardColorScheme: PropTypes.string,
   isDatasourceMetaLoading: PropTypes.bool.isRequired,
   chart: chartPropShape.isRequired,
   slice: PropTypes.object,
@@ -75,132 +87,164 @@ const propTypes = {
   controls: PropTypes.object.isRequired,
   forcedHeight: PropTypes.string,
   form_data: PropTypes.object.isRequired,
-  standalone: PropTypes.number.isRequired,
+  standalone: PropTypes.bool.isRequired,
   force: PropTypes.bool,
   timeout: PropTypes.number,
   impressionId: PropTypes.string,
   vizType: PropTypes.string,
+  saveAction: PropTypes.string,
+  isSaveModalVisible: PropTypes.bool,
 };
 
-const Styles = styled.div`
-  background: ${({ theme }) => theme.colors.grayscale.light5};
-  text-align: left;
-  position: relative;
-  width: 100%;
-  max-height: 100%;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  flex-basis: 100vh;
-  align-items: stretch;
-  border-top: 1px solid ${({ theme }) => theme.colors.grayscale.light2};
-  .explore-column {
-    display: flex;
-    flex-direction: column;
-    padding: ${({ theme }) => 2 * theme.gridUnit}px 0;
-    max-height: 100%;
-  }
-  .data-source-selection {
-    background-color: ${({ theme }) => theme.colors.grayscale.light4};
-    padding: ${({ theme }) => 2 * theme.gridUnit}px 0;
-    border-right: 1px solid ${({ theme }) => theme.colors.grayscale.light2};
-  }
-  .main-explore-content {
-    flex: 1;
-    min-width: ${({ theme }) => theme.gridUnit * 128}px;
-    border-left: 1px solid ${({ theme }) => theme.colors.grayscale.light2};
-    .panel {
-      margin-bottom: 0;
-    }
-  }
-  .controls-column {
-    align-self: flex-start;
-    padding: 0;
-  }
-  .title-container {
+const ExplorePanelContainer = styled.div`
+  ${({ theme }) => css`
+    text-align: left;
     position: relative;
+    width: 100%;
+    max-height: 100%;
+    background-color: ${theme.colorBgContainer};
+    min-height: 0;
     display: flex;
-    flex-direction: row;
-    padding: 0 ${({ theme }) => 2 * theme.gridUnit}px;
-    justify-content: space-between;
-    .horizontal-text {
-      text-transform: uppercase;
-      color: ${({ theme }) => theme.colors.grayscale.light1};
-      font-size: ${({ theme }) => 4 * theme.typography.sizes.s};
+    flex: 1;
+    flex-wrap: nowrap;
+    border-top: 1px solid ${theme.colorSplit};
+    .explore-column {
+      display: flex;
+      flex-direction: column;
+      padding: ${theme.sizeUnit * 2}px 0;
+      max-height: 100%;
     }
-  }
-  .no-show {
-    display: none;
-  }
-  .vertical-text {
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-  }
-  .sidebar {
-    height: 100%;
-    background-color: ${({ theme }) => theme.colors.grayscale.light4};
-    padding: ${({ theme }) => 2 * theme.gridUnit}px;
-    width: ${({ theme }) => 8 * theme.gridUnit}px;
-  }
-  .callpase-icon > svg {
-    color: ${({ theme }) => theme.colors.primary.base};
-  }
+    .data-source-selection {
+      padding: ${theme.sizeUnit * 2}px 0;
+      border-right: 1px solid ${theme.colorSplit};
+    }
+    .main-explore-content {
+      flex: 1;
+      min-width: ${theme.sizeUnit * 128}px;
+      border-left: 1px solid ${theme.colorSplit};
+      padding: 0 ${theme.sizeUnit * 4}px;
+      .panel {
+        margin-bottom: 0;
+      }
+    }
+    .controls-column {
+      align-self: flex-start;
+      padding: 0;
+    }
+    .title-container {
+      position: relative;
+      display: flex;
+      flex-direction: row;
+      padding: 0 ${theme.sizeUnit * 2}px 0 ${theme.sizeUnit * 4}px;
+      justify-content: space-between;
+      .horizontal-text {
+        font-size: ${theme.fontSize}px;
+      }
+    }
+    .no-show {
+      display: none;
+    }
+    .vertical-text {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+    }
+    .sidebar {
+      height: 100%;
+      padding: ${theme.sizeUnit * 2}px;
+      width: ${theme.sizeUnit * 8}px;
+    }
+    .collapse-icon > svg {
+      color: ${theme.colorPrimary};
+    }
+  `};
 `;
 
-const getWindowSize = () => ({
-  height: window.innerHeight,
-  width: window.innerWidth,
-});
-
-function useWindowSize({ delayMs = 250 } = {}) {
-  const [size, setSize] = useState(getWindowSize());
-
-  useEffect(() => {
-    const onWindowResize = debounce(() => setSize(getWindowSize()), delayMs);
-    window.addEventListener('resize', onWindowResize);
-    return () => window.removeEventListener('resize', onWindowResize);
-  }, []);
-
-  return size;
-}
-
 const updateHistory = debounce(
-  async (formData, datasetId, isReplace, standalone, force, title, tabId) => {
+  async (
+    formData,
+    datasourceId,
+    datasourceType,
+    isReplace,
+    standalone,
+    force,
+    title,
+    tabId,
+  ) => {
     const payload = { ...formData };
     const chartId = formData.slice_id;
-    const additionalParam = {};
+    const params = new URLSearchParams(window.location.search);
+    const additionalParam = Object.fromEntries(params);
+
     if (chartId) {
       additionalParam[URL_PARAMS.sliceId.name] = chartId;
     } else {
-      additionalParam[URL_PARAMS.datasetId.name] = datasetId;
+      additionalParam[URL_PARAMS.datasourceId.name] = datasourceId;
+      additionalParam[URL_PARAMS.datasourceType.name] = datasourceType;
     }
+
+    const urlParams = payload?.url_params || {};
+    Object.entries(urlParams).forEach(([key, value]) => {
+      if (!RESERVED_CHART_URL_PARAMS.includes(key)) {
+        additionalParam[key] = value;
+      }
+    });
 
     try {
       let key;
       let stateModifier;
       if (isReplace) {
-        key = await postFormData(datasetId, formData, chartId, tabId);
+        key = await postFormData(
+          datasourceId,
+          datasourceType,
+          formData,
+          chartId,
+          tabId,
+        );
         stateModifier = 'replaceState';
       } else {
         key = getUrlParam(URL_PARAMS.formDataKey);
-        await putFormData(datasetId, key, formData, chartId, tabId);
+        await putFormData(
+          datasourceId,
+          datasourceType,
+          key,
+          formData,
+          chartId,
+          tabId,
+        );
         stateModifier = 'pushState';
       }
-      const url = mountExploreUrl(
-        standalone ? URL_PARAMS.standalone.name : null,
-        {
-          [URL_PARAMS.formDataKey.name]: key,
-          ...additionalParam,
-        },
-        force,
-      );
-      window.history[stateModifier](payload, title, url);
+      // avoid race condition in case user changes route before explore updates the url
+      if (window.location.pathname.startsWith(ensureAppRoot('/explore'))) {
+        const url = mountExploreUrl(
+          standalone ? URL_PARAMS.standalone.name : null,
+          {
+            [URL_PARAMS.formDataKey.name]: key,
+            ...additionalParam,
+          },
+          force,
+        );
+        window.history[stateModifier](payload, title, url);
+      }
     } catch (e) {
       logging.warn('Failed at altering browser history', e);
     }
   },
   1000,
 );
+
+const defaultSidebarsWidth = {
+  controls_width: 320,
+  datasource_width: 300,
+};
+
+function getSidebarWidths(key) {
+  return getItem(key, defaultSidebarsWidth[key]);
+}
+
+function setSidebarWidths(key, dimension) {
+  const newDimension = Number(getSidebarWidths(key)) + dimension.width;
+  setItem(key, newDimension);
+}
 
 function ExploreViewContainer(props) {
   const dynamicPluginContext = usePluginContext();
@@ -214,24 +258,23 @@ function ExploreViewContainer(props) {
   const [lastQueriedControls, setLastQueriedControls] = useState(
     props.controls,
   );
-  const windowSize = useWindowSize();
 
-  const [showingModal, setShowingModal] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [shouldForceUpdate, setShouldForceUpdate] = useState(-1);
+  const [width, setWidth] = useState(
+    getSidebarWidths(LocalStorageKeys.DatasourceWidth),
+  );
   const tabId = useTabId();
 
   const theme = useTheme();
-  const width = `${windowSize.width}px`;
-  const navHeight = props.standalone ? 0 : 90;
-  const height = props.forcedHeight
-    ? `${props.forcedHeight}px`
-    : `${windowSize.height - navHeight}px`;
 
-  const defaultSidebarsWidth = {
-    controls_width: 320,
-    datasource_width: 300,
-  };
+  useEffect(() => {
+    if (props.sliceName) {
+      document.title = props.sliceName;
+    }
+    return () => {
+      document.title = 'Superset';
+    };
+  }, [props.sliceName]);
 
   const addHistory = useCallback(
     async ({ isReplace = false, title } = {}) => {
@@ -241,11 +284,12 @@ function ExploreViewContainer(props) {
             dashboardId: props.dashboardId,
           }
         : props.form_data;
-      const datasetId = props.datasource.id;
+      const { id: datasourceId, type: datasourceType } = props.datasource;
 
       updateHistory(
         formData,
-        datasetId,
+        datasourceId,
+        datasourceType,
         isReplace,
         props.standalone,
         props.force,
@@ -257,6 +301,7 @@ function ExploreViewContainer(props) {
       props.dashboardId,
       props.form_data,
       props.datasource.id,
+      props.datasource.type,
       props.standalone,
       props.force,
       tabId,
@@ -277,6 +322,7 @@ function ExploreViewContainer(props) {
   }, [props.actions, props.chart.id, props.timeout]);
 
   const onQuery = useCallback(() => {
+    props.actions.setForceQuery(false);
     props.actions.triggerQuery(true, props.chart.id);
     addHistory();
     setLastQueriedControls(props.controls);
@@ -316,16 +362,19 @@ function ExploreViewContainer(props) {
     }
   }
 
-  function toggleModal() {
-    setShowingModal(!showingModal);
-  }
-
   function toggleCollapse() {
     setIsCollapsed(!isCollapsed);
   }
 
   useComponentDidMount(() => {
-    props.actions.logEvent(LOG_ACTIONS_MOUNT_EXPLORER);
+    props.actions.logEvent(
+      LOG_ACTIONS_MOUNT_EXPLORER,
+      props.slice?.slice_id
+        ? {
+            slice_id: props.slice.slice_id,
+          }
+        : undefined,
+    );
   });
 
   useChangeEffect(tabId, (previous, current) => {
@@ -373,18 +422,33 @@ function ExploreViewContainer(props) {
     }
   }, []);
 
-  const reRenderChart = () => {
-    props.actions.updateQueryFormData(
-      getFormDataFromControls(props.controls),
+  const reRenderChart = useCallback(
+    controlsChanged => {
+      const newQueryFormData = controlsChanged
+        ? {
+            ...props.chart.latestQueryFormData,
+            ...getFormDataFromControls(pick(props.controls, controlsChanged)),
+          }
+        : getFormDataFromControls(props.controls);
+      props.actions.updateQueryFormData(newQueryFormData, props.chart.id);
+      props.actions.renderTriggered(new Date().getTime(), props.chart.id);
+      addHistory();
+    },
+    [
+      addHistory,
+      props.actions,
       props.chart.id,
-    );
-    props.actions.renderTriggered(new Date().getTime(), props.chart.id);
-    addHistory();
-  };
+      props.chart.latestQueryFormData,
+      props.controls,
+    ],
+  );
 
   // effect to run when controls change
   useEffect(() => {
-    if (previousControls) {
+    if (
+      previousControls &&
+      props.chart.latestQueryFormData.viz_type === props.controls.viz_type.value
+    ) {
       if (
         props.controls.datasource &&
         (previousControls.datasource == null ||
@@ -404,25 +468,32 @@ function ExploreViewContainer(props) {
       );
 
       // this should also be handled by the actions that are actually changing the controls
-      const hasDisplayControlChanged = changedControlKeys.some(
+      const displayControlsChanged = changedControlKeys.filter(
         key => props.controls[key].renderTrigger,
       );
-      if (hasDisplayControlChanged) {
-        reRenderChart();
+      if (displayControlsChanged.length > 0) {
+        reRenderChart(displayControlsChanged);
       }
     }
   }, [props.controls, props.ownState]);
 
   const chartIsStale = useMemo(() => {
     if (lastQueriedControls) {
-      const changedControlKeys = Object.keys(props.controls).filter(
-        key =>
-          typeof lastQueriedControls[key] !== 'undefined' &&
-          !areObjectsEqual(
-            props.controls[key].value,
-            lastQueriedControls[key].value,
-          ),
-      );
+      const { controls } = props;
+      const changedControlKeys = Object.keys(controls).filter(key => {
+        const lastControl = lastQueriedControls[key];
+        if (typeof lastControl === 'undefined') {
+          return false;
+        }
+        const { value: value1 } = controls[key];
+        const { value: value2 } = lastControl;
+        if (isObjectLike(value1) && isObjectLike(value2)) {
+          return !areObjectsEqual(value1, value2, {
+            ignoreFields: ['datasourceWarning'],
+          });
+        }
+        return !isEqual(value1, value2);
+      });
 
       return changedControlKeys.some(
         key =>
@@ -432,6 +503,14 @@ function ExploreViewContainer(props) {
     }
     return false;
   }, [lastQueriedControls, props.controls]);
+
+  useChangeEffect(props.saveAction, () => {
+    if (['saveas', 'overwrite'].includes(props.saveAction)) {
+      onQuery();
+      addHistory({ isReplace: true });
+      props.actions.setSaveAction(null);
+    }
+  });
 
   useEffect(() => {
     if (props.ownState !== undefined) {
@@ -444,8 +523,7 @@ function ExploreViewContainer(props) {
     props.actions.logEvent(LOG_ACTIONS_CHANGE_EXPLORE_CONTROLS);
   }
 
-  function renderErrorMessage() {
-    // Returns an error message as a node if any errors are in the store
+  const errorMessage = useMemo(() => {
     const controlsWithErrors = Object.values(props.controls).filter(
       control =>
         control.validationErrors && control.validationErrors.length > 0,
@@ -463,7 +541,11 @@ function ExploreViewContainer(props) {
       .map(message => {
         const matchingLabels = controlsWithErrors
           .filter(control => control.validationErrors?.includes(message))
-          .map(control => control.label);
+          .map(control =>
+            typeof control.label === 'function'
+              ? control.label(props.exploreState)
+              : control.label,
+          );
         return [matchingLabels, message];
       })
       .map(([labels, message]) => (
@@ -479,28 +561,17 @@ function ExploreViewContainer(props) {
       errorMessage = <div style={{ textAlign: 'left' }}>{errors}</div>;
     }
     return errorMessage;
-  }
+  }, [props.controls]);
 
   function renderChartContainer() {
     return (
       <ExploreChartPanel
-        width={width}
-        height={height}
         {...props}
-        errorMessage={renderErrorMessage()}
-        refreshOverlayVisible={chartIsStale}
+        errorMessage={errorMessage}
+        chartIsStale={chartIsStale}
         onQuery={onQuery}
       />
     );
-  }
-
-  function getSidebarWidths(key) {
-    return getItem(key, defaultSidebarsWidth[key]);
-  }
-
-  function setSidebarWidths(key, dimension) {
-    const newDimension = Number(getSidebarWidths(key)) + dimension.width;
-    setItem(key, newDimension);
   }
 
   if (props.standalone) {
@@ -508,200 +579,302 @@ function ExploreViewContainer(props) {
   }
 
   return (
-    <Styles id="explore-container" height={height}>
-      <Global
-        styles={css`
-          .navbar {
-            margin-bottom: 0;
-          }
-          body {
-            height: 100vh;
-            max-height: 100vh;
-            overflow: hidden;
-          }
-          #app-menu,
-          #app {
-            flex: 1 1 auto;
-          }
-          #app {
-            flex-basis: 100%;
-            overflow: hidden;
-            height: 100%;
-          }
-          #app-menu {
-            flex-shrink: 0;
-          }
-        `}
+    <ExploreContainer>
+      <ConnectedExploreChartHeader
+        actions={props.actions}
+        canOverwrite={props.can_overwrite}
+        canDownload={props.can_download}
+        dashboardId={props.dashboardId}
+        colorScheme={props.dashboardColorScheme}
+        isStarred={props.isStarred}
+        slice={props.slice}
+        sliceName={props.sliceName}
+        table_name={props.table_name}
+        formData={props.form_data}
+        chart={props.chart}
+        ownState={props.ownState}
+        user={props.user}
+        reports={props.reports}
+        saveDisabled={errorMessage || props.chart.chartStatus === 'loading'}
+        metadata={props.metadata}
+        isSaveModalVisible={props.isSaveModalVisible}
       />
-      {showingModal && (
+      <ExplorePanelContainer id="explore-container">
+        <Global
+          styles={css`
+            .navbar {
+              margin-bottom: 0;
+            }
+            body {
+              height: 100vh;
+              max-height: 100vh;
+              overflow: hidden;
+            }
+            #app-menu,
+            #app {
+              flex: 1 1 auto;
+            }
+            #app {
+              flex-basis: 100%;
+              overflow: hidden;
+              height: 100%;
+            }
+            #app-menu {
+              flex-shrink: 0;
+            }
+          `}
+        />
+        <Resizable
+          onResizeStop={(evt, direction, ref, d) => {
+            setWidth(ref.getBoundingClientRect().width);
+            setSidebarWidths(LocalStorageKeys.DatasourceWidth, d);
+          }}
+          defaultSize={{
+            width: getSidebarWidths(LocalStorageKeys.DatasourceWidth),
+            height: '100%',
+          }}
+          minWidth={defaultSidebarsWidth[LocalStorageKeys.DatasourceWidth]}
+          maxWidth="33%"
+          enable={{ right: true }}
+          className={
+            isCollapsed ? 'no-show' : 'explore-column data-source-selection'
+          }
+        >
+          <div className="title-container">
+            <span className="horizontal-text">{t('Chart Source')}</span>
+            <span
+              role="button"
+              tabIndex={0}
+              className="action-button"
+              onClick={toggleCollapse}
+            >
+              <Icons.VerticalAlignTopOutlined
+                iconSize="xl"
+                css={css`
+                  transform: rotate(-90deg);
+                `}
+                className="collapse-icon"
+                iconColor={theme.colorPrimary}
+              />
+            </span>
+          </div>
+          <DataSourcePanel
+            formData={props.form_data}
+            datasource={props.datasource}
+            controls={props.controls}
+            actions={props.actions}
+            width={width}
+            user={props.user}
+          />
+        </Resizable>
+        {isCollapsed ? (
+          <div
+            className="sidebar"
+            onClick={toggleCollapse}
+            data-test="open-datasource-tab"
+            role="button"
+            tabIndex={0}
+          >
+            <span role="button" tabIndex={0} className="action-button">
+              <Tooltip title={t('Open Datasource tab')}>
+                <Icons.VerticalAlignTopOutlined
+                  iconSize="xl"
+                  css={css`
+                    transform: rotate(90deg);
+                  `}
+                  className="collapse-icon"
+                  iconColor={theme.colorPrimary}
+                />
+              </Tooltip>
+            </span>
+          </div>
+        ) : null}
+        <Resizable
+          onResizeStop={(evt, direction, ref, d) =>
+            setSidebarWidths(LocalStorageKeys.ControlsWidth, d)
+          }
+          defaultSize={{
+            width: getSidebarWidths(LocalStorageKeys.ControlsWidth),
+            height: '100%',
+          }}
+          minWidth={defaultSidebarsWidth[LocalStorageKeys.ControlsWidth]}
+          maxWidth="33%"
+          enable={{ right: true }}
+          className="col-sm-3 explore-column controls-column"
+        >
+          <ConnectedControlPanelsContainer
+            exploreState={props.exploreState}
+            actions={props.actions}
+            form_data={props.form_data}
+            controls={props.controls}
+            chart={props.chart}
+            datasource_type={props.datasource_type}
+            isDatasourceMetaLoading={props.isDatasourceMetaLoading}
+            onQuery={onQuery}
+            onStop={onStop}
+            canStopQuery={props.can_add || props.can_overwrite}
+            errorMessage={errorMessage}
+            chartIsStale={chartIsStale}
+          />
+        </Resizable>
+        <div
+          className={cx(
+            'main-explore-content',
+            isCollapsed ? 'col-sm-9' : 'col-sm-7',
+          )}
+        >
+          {renderChartContainer()}
+        </div>
+      </ExplorePanelContainer>
+      {props.isSaveModalVisible && (
         <SaveModal
-          onHide={toggleModal}
+          addDangerToast={props.addDangerToast}
           actions={props.actions}
           form_data={props.form_data}
           sliceName={props.sliceName}
           dashboardId={props.dashboardId}
         />
       )}
-      <Resizable
-        onResizeStop={(evt, direction, ref, d) => {
-          setShouldForceUpdate(d?.width);
-          setSidebarWidths(LocalStorageKeys.datasource_width, d);
-        }}
-        defaultSize={{
-          width: getSidebarWidths(LocalStorageKeys.datasource_width),
-          height: '100%',
-        }}
-        minWidth={defaultSidebarsWidth[LocalStorageKeys.datasource_width]}
-        maxWidth="33%"
-        enable={{ right: true }}
-        className={
-          isCollapsed ? 'no-show' : 'explore-column data-source-selection'
-        }
-      >
-        <div className="title-container">
-          <span className="horizont al-text">{t('Dataset')}</span>
-          <span
-            role="button"
-            tabIndex={0}
-            className="action-button"
-            onClick={toggleCollapse}
-          >
-            <Icons.Expand
-              className="collapse-icon"
-              iconColor={theme.colors.primary.base}
-              iconSize="l"
-            />
-          </span>
-        </div>
-        <DataSourcePanel
-          datasource={props.datasource}
-          controls={props.controls}
-          actions={props.actions}
-          shouldForceUpdate={shouldForceUpdate}
-        />
-      </Resizable>
-      {isCollapsed ? (
-        <div
-          className="sidebar"
-          onClick={toggleCollapse}
-          data-test="open-datasource-tab"
-          role="button"
-          tabIndex={0}
-        >
-          <span role="button" tabIndex={0} className="action-button">
-            <Tooltip title={t('Open Datasource tab')}>
-              <Icons.Collapse
-                className="collapse-icon"
-                iconColor={theme.colors.primary.base}
-                iconSize="l"
-              />
-            </Tooltip>
-          </span>
-          <Icons.DatasetPhysical
-            css={{ marginTop: theme.gridUnit * 2 }}
-            iconSize="l"
-            iconColor={theme.colors.grayscale.base}
-          />
-        </div>
-      ) : null}
-      <Resizable
-        onResizeStop={(evt, direction, ref, d) =>
-          setSidebarWidths(LocalStorageKeys.controls_width, d)
-        }
-        defaultSize={{
-          width: getSidebarWidths(LocalStorageKeys.controls_width),
-          height: '100%',
-        }}
-        minWidth={defaultSidebarsWidth[LocalStorageKeys.controls_width]}
-        maxWidth="33%"
-        enable={{ right: true }}
-        className="col-sm-3 explore-column controls-column"
-      >
-        <QueryAndSaveBtns
-          canAdd={!!(props.can_add || props.can_overwrite)}
-          onQuery={onQuery}
-          onSave={toggleModal}
-          onStop={onStop}
-          loading={props.chart.chartStatus === 'loading'}
-          chartIsStale={chartIsStale}
-          errorMessage={renderErrorMessage()}
-          datasourceType={props.datasource_type}
-        />
-        <ConnectedControlPanelsContainer
-          exploreState={props.exploreState}
-          actions={props.actions}
-          form_data={props.form_data}
-          controls={props.controls}
-          chart={props.chart}
-          datasource_type={props.datasource_type}
-          isDatasourceMetaLoading={props.isDatasourceMetaLoading}
-        />
-      </Resizable>
-      <div
-        className={cx(
-          'main-explore-content',
-          isCollapsed ? 'col-sm-9' : 'col-sm-7',
-        )}
-      >
-        {renderChartContainer()}
-      </div>
-    </Styles>
+    </ExploreContainer>
   );
 }
 
 ExploreViewContainer.propTypes = propTypes;
 
+const retainQueryModeRequirements = hiddenFormData =>
+  Object.keys(hiddenFormData ?? {}).filter(
+    key => !QUERY_MODE_REQUISITES.has(key),
+  );
+
+function patchBigNumberTotalFormData(form_data, slice) {
+  if (
+    form_data.viz_type === 'big_number_total' &&
+    !form_data.subtitle &&
+    slice?.form_data?.subheader
+  ) {
+    return { ...form_data, subtitle: slice.form_data.subheader };
+  }
+  return form_data;
+}
+
 function mapStateToProps(state) {
-  const { explore, charts, impressionId, dataMask, reports } = state;
-  const form_data = getFormDataFromControls(explore.controls);
+  const {
+    explore,
+    charts,
+    common,
+    impressionId,
+    dataMask,
+    reports,
+    user,
+    saveModal,
+  } = state;
+  const { controls, slice, datasource, metadata, hiddenFormData } = explore;
+  const hasQueryMode = !!controls.query_mode?.value;
+  const fieldsToOmit = hasQueryMode
+    ? retainQueryModeRequirements(hiddenFormData)
+    : Object.keys(hiddenFormData ?? {});
+
+  const controlsBasedFormData = omit(
+    getFormDataFromControls(controls),
+    fieldsToOmit,
+  );
+  const isDeckGLChart = explore.form_data?.viz_type === 'deck_multi';
+
+  const getDeckGLFormData = () => {
+    const formData = { ...controlsBasedFormData };
+
+    if (explore.form_data?.layer_filter_scope) {
+      formData.layer_filter_scope = explore.form_data.layer_filter_scope;
+    }
+
+    if (explore.form_data?.filter_data_mapping) {
+      formData.filter_data_mapping = explore.form_data.filter_data_mapping;
+    }
+
+    return formData;
+  };
+
+  const form_data = isDeckGLChart ? getDeckGLFormData() : controlsBasedFormData;
+
+  const slice_id = form_data.slice_id ?? slice?.slice_id ?? 0; // 0 - unsaved chart
   form_data.extra_form_data = mergeExtraFormData(
     { ...form_data.extra_form_data },
     {
-      ...dataMask[form_data.slice_id ?? 0]?.ownState, // 0 - unsaved chart
+      ...dataMask[slice_id]?.ownState,
     },
   );
-  const chartKey = Object.keys(charts)[0];
-  const chart = charts[chartKey];
+  const chart = charts[slice_id];
+  const colorScheme = explore.form_data?.color_scheme;
+  const ownColorScheme = explore.form_data?.own_color_scheme;
+  const dashboardColorScheme = explore.form_data?.dashboard_color_scheme;
+
+  let dashboardId = Number(explore.form_data?.dashboardId);
+  if (Number.isNaN(dashboardId)) {
+    dashboardId = undefined;
+  }
+
+  if (
+    form_data.viz_type === 'big_number_total' &&
+    slice?.form_data?.subheader &&
+    (!controls.subtitle?.value || controls.subtitle.value === '')
+  ) {
+    controls.subtitle = {
+      ...controls.subtitle,
+      value: slice.form_data.subheader,
+    };
+    if (slice?.form_data?.subheader_font_size) {
+      controls.subtitle_font_size = {
+        ...controls.subtitle_font_size,
+        value: slice.form_data.subheader_font_size,
+      };
+    }
+  }
+
+  const patchedFormData = patchBigNumberTotalFormData(form_data, slice);
 
   return {
     isDatasourceMetaLoading: explore.isDatasourceMetaLoading,
-    datasource: explore.datasource,
-    datasource_type: explore.datasource.type,
-    datasourceId: explore.datasource_id,
-    dashboardId: explore.form_data ? explore.form_data.dashboardId : undefined,
+    datasource,
+    datasource_type: datasource.type,
+    datasourceId: datasource.datasource_id,
+    dashboardId,
+    colorScheme,
+    ownColorScheme,
+    dashboardColorScheme,
     controls: explore.controls,
-    can_overwrite: !!explore.can_overwrite,
     can_add: !!explore.can_add,
     can_download: !!explore.can_download,
-    column_formats: explore.datasource
-      ? explore.datasource.column_formats
-      : null,
-    containerId: explore.slice
-      ? `slice-container-${explore.slice.slice_id}`
+    can_overwrite: !!explore.can_overwrite,
+    column_formats: datasource?.column_formats ?? null,
+    containerId: slice
+      ? `slice-container-${slice.slice_id}`
       : 'slice-container',
     isStarred: explore.isStarred,
-    slice: explore.slice,
-    sliceName: explore.sliceName,
+    slice,
+    sliceName: explore.sliceName ?? slice?.slice_name ?? null,
     triggerRender: explore.triggerRender,
-    form_data,
-    table_name: form_data.datasource_name,
+    form_data: patchedFormData,
+    table_name: datasource.table_name,
     vizType: form_data.viz_type,
-    standalone: explore.standalone,
-    force: explore.force,
-    forcedHeight: explore.forced_height,
+    standalone: !!explore.standalone,
+    force: !!explore.force,
     chart,
-    timeout: explore.common.conf.SUPERSET_WEBSERVER_TIMEOUT,
-    ownState: dataMask[form_data.slice_id ?? 0]?.ownState, // 0 - unsaved chart
+    timeout: common.conf.SUPERSET_WEBSERVER_TIMEOUT,
+    ownState: dataMask[slice_id]?.ownState,
     impressionId,
-    user: explore.user,
+    user,
     exploreState: explore,
     reports,
+    metadata,
+    saveAction: explore.saveAction,
+    isSaveModalVisible: saveModal.isVisible,
   };
 }
 
 function mapDispatchToProps(dispatch) {
   const actions = {
     ...exploreActions,
+    ...datasourcesActions,
     ...saveModalActions,
     ...chartActions,
     ...logActions,
@@ -714,4 +887,4 @@ function mapDispatchToProps(dispatch) {
 export default connect(
   mapStateToProps,
   mapDispatchToProps,
-)(ExploreViewContainer);
+)(withToasts(memo(ExploreViewContainer)));

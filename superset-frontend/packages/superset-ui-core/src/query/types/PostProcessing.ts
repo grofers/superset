@@ -18,7 +18,7 @@
  */
 import { JsonObject } from '../../connection';
 import { TimeGranularity } from '../../time-format';
-import { RollingType, ComparisionType } from './AdvancedAnalytics';
+import { RollingType, ComparisonType } from './AdvancedAnalytics';
 
 export type NumpyFunction =
   | 'average'
@@ -57,41 +57,54 @@ export interface Aggregates {
   [colname: string]: {
     operator: NumpyFunction;
     /**
-     * the name of the column to generate aggrates from.
+     * the name of the column to generate aggregates from.
      */
     column?: string;
     options?: JsonObject;
   };
 }
 
-export interface PostProcessingAggregation {
-  operation: 'aggregation';
+export type DefaultPostProcessing = undefined;
+
+interface _PostProcessingAggregation {
+  operation: 'aggregate';
   options: {
     groupby: string[];
     aggregates: Aggregates;
   };
 }
+export type PostProcessingAggregation =
+  | _PostProcessingAggregation
+  | DefaultPostProcessing;
 
-export interface PostProcessingBoxplot {
+export type BoxPlotQueryObjectWhiskerType = 'tukey' | 'min/max' | 'percentile';
+interface _PostProcessingBoxplot {
   operation: 'boxplot';
   options: {
     groupby: string[];
     metrics: string[];
-    whisker_type: 'tukey' | 'min/max' | 'percentile';
+    whisker_type: BoxPlotQueryObjectWhiskerType;
     percentiles?: [number, number];
   };
 }
+export type PostProcessingBoxplot =
+  | _PostProcessingBoxplot
+  | DefaultPostProcessing;
 
-export interface PostProcessingContribution {
+interface _PostProcessingContribution {
   operation: 'contribution';
   options?: {
     orientation?: 'row' | 'column';
     columns?: string[];
     rename_columns?: string[];
+    contribution_totals?: Record<string, number>;
   };
 }
+export type PostProcessingContribution =
+  | _PostProcessingContribution
+  | DefaultPostProcessing;
 
-export interface PostProcessingPivot {
+interface _PostProcessingPivot {
   operation: 'pivot';
   options: {
     aggregates: Aggregates;
@@ -99,19 +112,18 @@ export interface PostProcessingPivot {
     columns: string[];
     combine_value_with_metric?: boolean;
     drop_missing_columns?: boolean;
-    flatten_columns?: boolean;
     index: string[];
     marginal_distribution_name?: string;
     marginal_distributions?: boolean;
     metric_fill_value?: any;
-    reset_index?: boolean;
   };
 }
+export type PostProcessingPivot = _PostProcessingPivot | DefaultPostProcessing;
 
-export interface PostProcessingProphet {
+interface _PostProcessingProphet {
   operation: 'prophet';
   options: {
-    time_grain: TimeGranularity;
+    time_grain: TimeGranularity | undefined;
     periods: number;
     confidence_interval: number;
     yearly_seasonality?: boolean | number;
@@ -119,8 +131,11 @@ export interface PostProcessingProphet {
     daily_seasonality?: boolean | number;
   };
 }
+export type PostProcessingProphet =
+  | _PostProcessingProphet
+  | DefaultPostProcessing;
 
-export interface PostProcessingDiff {
+interface _PostProcessingDiff {
   operation: 'diff';
   options: {
     columns: string[];
@@ -128,56 +143,110 @@ export interface PostProcessingDiff {
     axis: PandasAxis;
   };
 }
+export type PostProcessingDiff = _PostProcessingDiff | DefaultPostProcessing;
 
-export interface PostProcessingRolling {
+interface _PostProcessingRolling {
   operation: 'rolling';
   options: {
     rolling_type: RollingType;
     window: number;
     min_periods: number;
     columns: string[];
-    is_pivot_df?: boolean;
   };
 }
+export type PostProcessingRolling =
+  | _PostProcessingRolling
+  | DefaultPostProcessing;
 
-export interface PostProcessingCum {
+interface _PostProcessingCum {
   operation: 'cum';
   options: {
     columns: string[];
     operator: NumpyFunction;
-    is_pivot_df?: boolean;
   };
 }
+export type PostProcessingCum = _PostProcessingCum | DefaultPostProcessing;
 
-export interface PostProcessingCompare {
+export interface _PostProcessingCompare {
   operation: 'compare';
   options: {
     source_columns: string[];
     compare_columns: string[];
-    compare_type: Omit<ComparisionType, ComparisionType.Values>;
+    compare_type: Omit<ComparisonType, ComparisonType.Values>;
     drop_original_columns: boolean;
   };
 }
+export type PostProcessingCompare =
+  | _PostProcessingCompare
+  | DefaultPostProcessing;
 
-export interface PostProcessingSort {
+interface _PostProcessingSort {
   operation: 'sort';
   options: {
-    columns: Record<string, boolean>;
+    is_sort_index?: boolean;
+    by?: string[] | string;
+    ascending?: boolean[] | boolean;
   };
 }
+export type PostProcessingSort = _PostProcessingSort | DefaultPostProcessing;
 
-export interface PostProcessingResample {
+interface _PostProcessingResample {
   operation: 'resample';
   options: {
     method: string;
     rule: string;
     fill_value?: number | null;
-    time_column: string;
-    // If AdhocColumn doesn't have a label, it will be undefined.
-    // todo: we have to give an explicit label for AdhocColumn.
-    groupby_columns?: Array<string | undefined>;
   };
 }
+export type PostProcessingResample =
+  | _PostProcessingResample
+  | DefaultPostProcessing;
+
+interface _PostProcessingRename {
+  operation: 'rename';
+  options: {
+    columns: Record<string, string | null>;
+    inplace?: boolean;
+    level?: number | string;
+  };
+}
+export type PostProcessingRename =
+  | _PostProcessingRename
+  | DefaultPostProcessing;
+
+interface _PostProcessingFlatten {
+  operation: 'flatten';
+  options?: {
+    reset_index?: boolean;
+    drop_levels?: number[] | string[];
+  };
+}
+export type PostProcessingFlatten =
+  | _PostProcessingFlatten
+  | DefaultPostProcessing;
+
+interface _PostProcessingRank {
+  operation: 'rank';
+  options?: {
+    metric: string;
+    group_by: string | null;
+  };
+}
+export type PostProcessingRank = _PostProcessingRank | DefaultPostProcessing;
+
+interface _PostProcessingHistogram {
+  operation: 'histogram';
+  options?: {
+    column: string;
+    groupby: string[];
+    bins: number;
+    cumulative?: boolean;
+    normalize?: boolean;
+  };
+}
+export type PostProcessingHistogram =
+  | _PostProcessingHistogram
+  | DefaultPostProcessing;
 
 /**
  * Parameters for chart data postprocessing.
@@ -194,12 +263,16 @@ export type PostProcessingRule =
   | PostProcessingCum
   | PostProcessingCompare
   | PostProcessingSort
-  | PostProcessingResample;
+  | PostProcessingResample
+  | PostProcessingRename
+  | PostProcessingFlatten
+  | PostProcessingHistogram
+  | PostProcessingRank;
 
 export function isPostProcessingAggregation(
   rule?: PostProcessingRule,
 ): rule is PostProcessingAggregation {
-  return rule?.operation === 'aggregation';
+  return rule?.operation === 'aggregate';
 }
 
 export function isPostProcessingBoxplot(
@@ -260,4 +333,28 @@ export function isPostProcessingResample(
   rule?: PostProcessingRule,
 ): rule is PostProcessingResample {
   return rule?.operation === 'resample';
+}
+
+export function isPostProcessingRename(
+  rule?: PostProcessingRule,
+): rule is PostProcessingRename {
+  return rule?.operation === 'rename';
+}
+
+export function isPostProcessingFlatten(
+  rule?: PostProcessingRule,
+): rule is PostProcessingFlatten {
+  return rule?.operation === 'flatten';
+}
+
+export function isPostProcessingRank(
+  rule?: PostProcessingRule,
+): rule is PostProcessingRank {
+  return rule?.operation === 'rank';
+}
+
+export function isPostProcessingHistogram(
+  rule?: PostProcessingRule,
+): rule is PostProcessingHistogram {
+  return rule?.operation === 'histogram';
 }

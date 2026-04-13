@@ -16,17 +16,36 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import Modal from 'src/components/Modal';
-import { Form, Row, Col, Input, TextArea } from 'src/common/components';
-import Button from 'src/components/Button';
-import { Select } from 'src/components';
-import { SelectValue } from 'antd/lib/select';
+import { ChangeEvent, useMemo, useState, useCallback, useEffect } from 'react';
+
+import {
+  Input,
+  Modal,
+  AsyncSelect,
+  Button,
+  Form,
+  Row,
+  Col,
+  FormItem,
+  Typography,
+  type SelectValue,
+} from '@superset-ui/core/components';
 import rison from 'rison';
-import { t, SupersetClient, styled } from '@superset-ui/core';
+import {
+  t,
+  SupersetClient,
+  styled,
+  isFeatureEnabled,
+  FeatureFlag,
+  getClientErrorObject,
+  ensureIsArray,
+} from '@superset-ui/core';
 import Chart, { Slice } from 'src/types/Chart';
-import { getClientErrorObject } from 'src/utils/getClientErrorObject';
 import withToasts from 'src/components/MessageToasts/withToasts';
+import { type TagType } from 'src/components';
+import { TagTypeEnum } from 'src/components/Tag/TagType';
+import { loadTags } from 'src/components/Tag/utils';
+import { ModalTitleWithIcon } from 'src/components/ModalTitleWithIcon';
 
 export type PropertiesModalProps = {
   slice: Slice;
@@ -38,13 +57,7 @@ export type PropertiesModalProps = {
   addSuccessToast: (msg: string) => void;
 };
 
-const FormItem = Form.Item;
-
-const StyledFormItem = styled(Form.Item)`
-  margin-bottom: 0;
-`;
-
-const StyledHelpBlock = styled.span`
+const StyledFormItem = styled(FormItem)`
   margin-bottom: 0;
 `;
 
@@ -63,31 +76,57 @@ function PropertiesModal({
     null,
   );
 
+  const [tags, setTags] = useState<TagType[]>([]);
+
+  const tagsAsSelectValues = useMemo(() => {
+    const selectTags = tags.map((tag: { id: number; name: string }) => ({
+      value: tag.id,
+      label: tag.name,
+    }));
+    return selectTags;
+  }, [tags.length]);
+
   function showError({ error, statusText, message }: any) {
     let errorText = error || statusText || t('An error has occurred');
     if (message === 'Forbidden') {
       errorText = t('You do not have permission to edit this chart');
     }
     Modal.error({
-      title: 'Error',
+      title: t('Error'),
       content: errorText,
       okButtonProps: { danger: true, className: 'btn-danger' },
     });
   }
 
-  const fetchChartOwners = useCallback(
-    async function fetchChartOwners() {
+  const fetchChartProperties = useCallback(
+    async function fetchChartProperties() {
+      const queryParams = rison.encode({
+        select_columns: [
+          'owners.id',
+          'owners.first_name',
+          'owners.last_name',
+          'tags.id',
+          'tags.name',
+          'tags.type',
+        ],
+      });
       try {
         const response = await SupersetClient.get({
-          endpoint: `/api/v1/chart/${slice.slice_id}`,
+          endpoint: `/api/v1/chart/${slice.slice_id}?q=${queryParams}`,
         });
         const chart = response.json.result;
         setSelectedOwners(
-          chart.owners.map((owner: any) => ({
+          chart?.owners?.map((owner: any) => ({
             value: owner.id,
             label: `${owner.first_name} ${owner.last_name}`,
           })),
         );
+        if (isFeatureEnabled(FeatureFlag.TaggingSystem)) {
+          const customTags = chart.tags?.filter(
+            (tag: TagType) => tag.type === TagTypeEnum.Custom,
+          );
+          setTags(customTags);
+        }
       } catch (response) {
         const clientError = await getClientErrorObject(response);
         showError(clientError);
@@ -107,12 +146,12 @@ function PropertiesModal({
         return SupersetClient.get({
           endpoint: `/api/v1/chart/related/owners?q=${query}`,
         }).then(response => ({
-          data: response.json.result.map(
-            (item: { value: number; text: string }) => ({
+          data: response.json.result
+            .filter((item: { extra: { active: boolean } }) => item.extra.active)
+            .map((item: { value: number; text: string }) => ({
               value: item.value,
               label: item.text,
-            }),
-          ),
+            })),
           totalCount: response.json.count,
         }));
       },
@@ -148,19 +187,21 @@ function PropertiesModal({
         }[]
       ).map(o => o.value);
     }
+    if (isFeatureEnabled(FeatureFlag.TaggingSystem)) {
+      payload.tags = tags.map(tag => tag.id);
+    }
+
     try {
-      const res = await SupersetClient.put({
-        endpoint: `/api/v1/chart/${slice.slice_id}`,
+      const chartEndpoint = `/api/v1/chart/${slice.slice_id}`;
+      let res = await SupersetClient.put({
+        endpoint: chartEndpoint,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      // update the redux state
-      const updatedChart = {
-        ...payload,
-        ...res.json.result,
-        id: slice.slice_id,
-      };
-      onSave(updatedChart);
+      res = await SupersetClient.get({
+        endpoint: chartEndpoint,
+      });
+      onSave(res.json.result);
       addSuccessToast(t('Chart properties updated'));
       onHide();
     } catch (res) {
@@ -174,19 +215,38 @@ function PropertiesModal({
 
   // get the owners of this slice
   useEffect(() => {
-    fetchChartOwners();
-  }, [fetchChartOwners]);
+    fetchChartProperties();
+  }, [slice.slice_id]);
 
   // update name after it's changed in another modal
   useEffect(() => {
     setName(slice.slice_name || '');
   }, [slice.slice_name]);
 
+  const handleChangeTags = (tags: { label: string; value: number }[]) => {
+    const parsedTags: TagType[] = ensureIsArray(tags).map(r => ({
+      id: r.value,
+      name: r.label,
+    }));
+    setTags(parsedTags);
+  };
+
+  const handleClearTags = () => {
+    setTags([]);
+  };
+
   return (
     <Modal
       show={show}
       onHide={onHide}
-      title="Edit Chart Properties"
+      name={t('Edit Chart Properties')}
+      title={
+        <ModalTitleWithIcon
+          isEditMode
+          title={t('Edit Chart Properties')}
+          data-test="edit-alt"
+        />
+      }
       footer={
         <>
           <Button
@@ -194,6 +254,7 @@ function PropertiesModal({
             htmlType="button"
             buttonSize="small"
             onClick={onHide}
+            buttonStyle="secondary"
             cta
           >
             {t('Cancel')}
@@ -204,7 +265,14 @@ function PropertiesModal({
             buttonSize="small"
             buttonStyle="primary"
             onClick={form.submit}
-            disabled={submitting || !name}
+            disabled={submitting || !name || slice.is_managed_externally}
+            tooltip={
+              slice.is_managed_externally
+                ? t(
+                    "This chart is managed externally, and can't be edited in Superset",
+                  )
+                : ''
+            }
             cta
           >
             {t('Save')}
@@ -231,7 +299,9 @@ function PropertiesModal({
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
-            <h3>{t('Basic information')}</h3>
+            <Typography.Title level={3}>
+              {t('Basic information')}
+            </Typography.Title>
             <FormItem label={t('Name')} required>
               <Input
                 aria-label={t('Name')}
@@ -239,59 +309,62 @@ function PropertiesModal({
                 data-test="properties-modal-name-input"
                 type="text"
                 value={name}
-                onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                onChange={(event: ChangeEvent<HTMLInputElement>) =>
                   setName(event.target.value ?? '')
                 }
               />
             </FormItem>
-            <FormItem>
+            <FormItem
+              extra={t(
+                'The description can be displayed as widget headers in the dashboard view. Supports markdown.',
+              )}
+            >
               <StyledFormItem label={t('Description')} name="description">
-                <TextArea rows={3} style={{ maxWidth: '100%' }} />
+                <Input.TextArea rows={3} style={{ maxWidth: '100%' }} />
               </StyledFormItem>
-              <StyledHelpBlock className="help-block">
-                {t(
-                  'The description can be displayed as widget headers in the dashboard view. Supports markdown.',
-                )}
-              </StyledHelpBlock>
             </FormItem>
-            <h3>{t('Certification')}</h3>
-            <FormItem>
+            <Typography.Title level={3}>{t('Certification')}</Typography.Title>
+            <FormItem
+              extra={t('Person or group that has certified this chart.')}
+            >
               <StyledFormItem label={t('Certified by')} name="certified_by">
                 <Input aria-label={t('Certified by')} />
               </StyledFormItem>
-              <StyledHelpBlock className="help-block">
-                {t('Person or group that has certified this chart.')}
-              </StyledHelpBlock>
             </FormItem>
-            <FormItem>
+            <FormItem
+              extra={t(
+                'Any additional detail to show in the certification tooltip.',
+              )}
+            >
               <StyledFormItem
                 label={t('Certification details')}
                 name="certification_details"
               >
                 <Input aria-label={t('Certification details')} />
               </StyledFormItem>
-              <StyledHelpBlock className="help-block">
-                {t(
-                  'Any additional detail to show in the certification tooltip.',
-                )}
-              </StyledHelpBlock>
             </FormItem>
           </Col>
           <Col xs={24} md={12}>
-            <h3>{t('Configuration')}</h3>
-            <FormItem>
+            <Typography.Title level={3}>{t('Configuration')}</Typography.Title>
+            <FormItem
+              extra={t(
+                "Duration (in seconds) of the caching timeout for this chart. Set to -1 to bypass the cache. Note this defaults to the dataset's timeout if undefined.",
+              )}
+            >
               <StyledFormItem label={t('Cache timeout')} name="cache_timeout">
                 <Input aria-label="Cache timeout" />
               </StyledFormItem>
-              <StyledHelpBlock className="help-block">
-                {t(
-                  "Duration (in seconds) of the caching timeout for this chart. Note this defaults to the dataset's timeout if undefined.",
-                )}
-              </StyledHelpBlock>
             </FormItem>
-            <h3 style={{ marginTop: '1em' }}>{t('Access')}</h3>
-            <FormItem label={ownersLabel}>
-              <Select
+            <Typography.Title level={3} style={{ marginTop: '1em' }}>
+              {t('Access')}
+            </Typography.Title>
+            <FormItem
+              label={ownersLabel}
+              extra={t(
+                'A list of users who can alter the chart. Searchable by name or username.',
+              )}
+            >
+              <AsyncSelect
                 ariaLabel={ownersLabel}
                 mode="multiple"
                 name="owners"
@@ -301,12 +374,29 @@ function PropertiesModal({
                 disabled={!selectedOwners}
                 allowClear
               />
-              <StyledHelpBlock className="help-block">
-                {t(
-                  'A list of users who can alter the chart. Searchable by name or username.',
-                )}
-              </StyledHelpBlock>
             </FormItem>
+            {isFeatureEnabled(FeatureFlag.TaggingSystem) && (
+              <Typography.Title level={3} css={{ marginTop: '1em' }}>
+                {t('Tags')}
+              </Typography.Title>
+            )}
+            {isFeatureEnabled(FeatureFlag.TaggingSystem) && (
+              <FormItem
+                extra={t(
+                  'A list of tags that have been applied to this chart.',
+                )}
+              >
+                <AsyncSelect
+                  ariaLabel="Tags"
+                  mode="multiple"
+                  value={tagsAsSelectValues}
+                  options={loadTags}
+                  onChange={handleChangeTags}
+                  onClear={handleClearTags}
+                  allowClear
+                />
+              </FormItem>
+            )}
           </Col>
         </Row>
       </Form>

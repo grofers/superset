@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
-import { usePrevious } from 'src/hooks/usePrevious';
-import { NativeFilterType } from '@superset-ui/core';
+import { NativeFilterType, usePrevious } from '@superset-ui/core';
 import { FilterRemoval } from './types';
 
 /**
@@ -25,7 +24,7 @@ import { FilterRemoval } from './types';
 export const useRemoveCurrentFilter = (
   removedFilters: Record<string, FilterRemoval>,
   currentFilterId: string,
-  orderedFilters: string[][],
+  orderedFilters: string[],
   setCurrentFilterId: Function,
 ) => {
   useEffect(() => {
@@ -53,7 +52,7 @@ export const useOpenModal = (
   // add a filter on modal open
   useEffect(() => {
     if (createNewOnOpen && isOpen && !wasOpen) {
-      addFilter(NativeFilterType.NATIVE_FILTER);
+      addFilter(NativeFilterType.NativeFilter);
     }
   }, [createNewOnOpen, isOpen, wasOpen, addFilter]);
 };

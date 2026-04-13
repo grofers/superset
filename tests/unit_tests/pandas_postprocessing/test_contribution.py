@@ -18,52 +18,109 @@
 from datetime import datetime
 
 import pytest
+from numpy import nan
+from numpy.testing import assert_array_equal
 from pandas import DataFrame
 
-from superset.exceptions import QueryObjectValidationError
+from superset.exceptions import InvalidPostProcessingError
 from superset.utils.core import DTTM_ALIAS, PostProcessingContributionOrientation
 from superset.utils.pandas_postprocessing import contribution
 
+df_template = DataFrame(
+    {
+        DTTM_ALIAS: [
+            datetime(2020, 7, 16, 14, 49),
+            datetime(2020, 7, 16, 14, 50),
+            datetime(2020, 7, 16, 14, 51),
+        ],
+        "a": [1, 3, nan],
+        "b": [1, 9, nan],
+        "c": [nan, nan, nan],
+    }
+)
 
-def test_contribution():
-    df = DataFrame(
-        {
-            DTTM_ALIAS: [datetime(2020, 7, 16, 14, 49), datetime(2020, 7, 16, 14, 50),],
-            "a": [1, 3],
-            "b": [1, 9],
-        }
-    )
-    with pytest.raises(QueryObjectValidationError, match="not numeric"):
-        contribution(df, columns=[DTTM_ALIAS])
 
-    with pytest.raises(QueryObjectValidationError, match="same length"):
-        contribution(df, columns=["a"], rename_columns=["aa", "bb"])
+def test_non_numeric_columns():
+    with pytest.raises(InvalidPostProcessingError, match="not numeric"):
+        contribution(df_template.copy(), columns=[DTTM_ALIAS])
 
-    # cell contribution across row
+
+def test_rename_should_have_same_length():
+    with pytest.raises(InvalidPostProcessingError, match="same length"):
+        contribution(df_template.copy(), columns=["a"], rename_columns=["aa", "bb"])
+
+
+def test_cell_contribution_across_row():
     processed_df = contribution(
-        df, orientation=PostProcessingContributionOrientation.ROW,
+        df_template.copy(),
+        orientation=PostProcessingContributionOrientation.ROW,
     )
-    assert processed_df.columns.tolist() == [DTTM_ALIAS, "a", "b"]
-    assert processed_df["a"].tolist() == [0.5, 0.25]
-    assert processed_df["b"].tolist() == [0.5, 0.75]
+    assert processed_df.columns.tolist() == [DTTM_ALIAS, "a", "b", "c"]
+    assert_array_equal(processed_df["a"].tolist(), [0.5, 0.25, nan])
+    assert_array_equal(processed_df["b"].tolist(), [0.5, 0.75, nan])
+    assert_array_equal(processed_df["c"].tolist(), [nan, nan, nan])
 
-    # cell contribution across column without temporal column
+
+def test_cell_contribution_across_column_without_temporal_column():
+    df = df_template.copy()
     df.pop(DTTM_ALIAS)
     processed_df = contribution(
         df, orientation=PostProcessingContributionOrientation.COLUMN
     )
-    assert processed_df.columns.tolist() == ["a", "b"]
-    assert processed_df["a"].tolist() == [0.25, 0.75]
-    assert processed_df["b"].tolist() == [0.1, 0.9]
+    assert processed_df.columns.tolist() == ["a", "b", "c"]
+    assert_array_equal(processed_df["a"].tolist(), [0.25, 0.75, 0])
+    assert_array_equal(processed_df["b"].tolist(), [0.1, 0.9, 0])
+    assert_array_equal(processed_df["c"].tolist(), [nan, nan, nan])
 
-    # contribution only on selected columns
+
+def test_contribution_on_selected_columns():
+    df = df_template.copy()
+    df.pop(DTTM_ALIAS)
     processed_df = contribution(
         df,
         orientation=PostProcessingContributionOrientation.COLUMN,
         columns=["a"],
         rename_columns=["pct_a"],
     )
-    assert processed_df.columns.tolist() == ["a", "b", "pct_a"]
-    assert processed_df["a"].tolist() == [1, 3]
-    assert processed_df["b"].tolist() == [1, 9]
-    assert processed_df["pct_a"].tolist() == [0.25, 0.75]
+    assert processed_df.columns.tolist() == ["a", "b", "c", "pct_a"]
+    assert_array_equal(processed_df["a"].tolist(), [1, 3, nan])
+    assert_array_equal(processed_df["b"].tolist(), [1, 9, nan])
+    assert_array_equal(processed_df["c"].tolist(), [nan, nan, nan])
+    assert processed_df["pct_a"].tolist() == [0.25, 0.75, 0]
+
+
+def test_contribution_with_time_shift_columns():
+    df = DataFrame(
+        {
+            DTTM_ALIAS: [
+                datetime(2020, 7, 16, 14, 49),
+                datetime(2020, 7, 16, 14, 50),
+            ],
+            "a": [3, 6],
+            "b": [3, 3],
+            "c": [6, 3],
+            "a__1 week ago": [2, 2],
+            "b__1 week ago": [1, 1],
+            "c__1 week ago": [1, 1],
+        }
+    )
+    processed_df = contribution(
+        df,
+        orientation=PostProcessingContributionOrientation.ROW,
+        time_shifts=["1 week ago"],
+    )
+    assert processed_df.columns.tolist() == [
+        DTTM_ALIAS,
+        "a",
+        "b",
+        "c",
+        "a__1 week ago",
+        "b__1 week ago",
+        "c__1 week ago",
+    ]
+    assert_array_equal(processed_df["a"].tolist(), [0.25, 0.5])
+    assert_array_equal(processed_df["b"].tolist(), [0.25, 0.25])
+    assert_array_equal(processed_df["c"].tolist(), [0.50, 0.25])
+    assert_array_equal(processed_df["a__1 week ago"].tolist(), [0.5, 0.5])
+    assert_array_equal(processed_df["b__1 week ago"].tolist(), [0.25, 0.25])
+    assert_array_equal(processed_df["c__1 week ago"].tolist(), [0.25, 0.25])

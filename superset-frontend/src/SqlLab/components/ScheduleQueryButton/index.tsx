@@ -16,20 +16,28 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { FunctionComponent, useState } from 'react';
-import SchemaForm, { FormProps, FormValidation } from 'react-jsonschema-form';
-import { Row, Col, Input, TextArea } from 'src/common/components';
-import { t, styled } from '@superset-ui/core';
-import * as chrono from 'chrono-node';
-import ModalTrigger from 'src/components/ModalTrigger';
-import { Form, FormItem } from 'src/components/Form';
-import './ScheduleQueryButton.less';
-import Button from 'src/components/Button';
+import { FunctionComponent, useState, useRef, ChangeEvent } from 'react';
 
-const appContainer = document.getElementById('app');
-const bootstrapData = JSON.parse(
-  appContainer?.getAttribute('data-bootstrap') || '{}',
-);
+import SchemaForm, { FormProps } from '@rjsf/core';
+import { FormValidation } from '@rjsf/utils';
+import validator from '@rjsf/validator-ajv8';
+import { t, styled } from '@superset-ui/core';
+import { parseDate } from 'chrono-node';
+import {
+  ModalTrigger,
+  ModalTriggerRef,
+} from '@superset-ui/core/components/ModalTrigger';
+import {
+  Input,
+  Button,
+  Form,
+  FormItem,
+  Row,
+  Col,
+} from '@superset-ui/core/components';
+import getBootstrapData from 'src/utils/getBootstrapData';
+
+const bootstrapData = getBootstrapData();
 const scheduledQueriesConf = bootstrapData?.common?.conf?.SCHEDULED_QUERIES;
 
 const validators = {
@@ -46,9 +54,10 @@ const getJSONSchema = () => {
     Object.entries(jsonSchema.properties).forEach(
       ([key, value]: [string, any]) => {
         if (value.default && value.format === 'date-time') {
+          const parsedDate = parseDate(value.default);
           jsonSchema.properties[key] = {
             ...value,
-            default: chrono.parseDate(value.default).toISOString(),
+            default: parsedDate ? parsedDate.toISOString() : null,
           };
         }
       },
@@ -66,11 +75,11 @@ const getValidator = () => {
   const rules: any = getValidationRules();
   return (formData: Record<string, any>, errors: FormValidation) => {
     rules.forEach((rule: any) => {
-      const test = validators[rule.name];
+      const test = validators[rule.name as keyof typeof validators];
       const args = rule.arguments.map((name: string) => formData[name]);
       const container = rule.container || rule.arguments.slice(-1)[0];
-      if (!test(...args)) {
-        errors[container].addError(rule.message);
+      if (!test(args[0], args[1])) {
+        errors[container]?.addError(rule.message);
       }
     });
     return errors;
@@ -81,7 +90,7 @@ interface ScheduleQueryButtonProps {
   defaultLabel?: string;
   sql: string;
   schema?: string;
-  dbId: number;
+  dbId?: number;
   animation?: boolean;
   onSchedule?: Function;
   scheduleQueryWarning: string | null;
@@ -90,23 +99,42 @@ interface ScheduleQueryButtonProps {
 }
 
 const StyledRow = styled(Row)`
-  padding-bottom: ${({ theme }) => theme.gridUnit * 2}px;
+  padding-bottom: ${({ theme }) => theme.sizeUnit * 2}px;
 `;
 
 export const StyledButtonComponent = styled(Button)`
-  background: none;
-  text-transform: none;
-  padding: 0px;
-  color: rgba(0, 0, 0, 0.85);
-  font-size: 14px;
-  font-weight: ${({ theme }) => theme.typography.weights.normal};
-  &:disabled {
+  ${({ theme }) => `
     background: none;
-    color: rgba(0, 0, 0, 0.85);
-    &:hover {
+    text-transform: none;
+    padding: 0px;
+    font-size: 14px;
+    font-weight: ${theme.fontWeightNormal};
+    margin-left: 0;
+    &:disabled {
+      margin-left: 0;
       background: none;
-      color: rgba(0, 0, 0, 0.85);
+      &:hover {
+        background: none;
+      }
     }
+  `}
+`;
+
+const StyledJsonSchema = styled.div`
+  i.glyphicon {
+    display: none;
+  }
+  .btn-add::after {
+    content: '+';
+  }
+  .array-item-move-up::after {
+    content: '↑';
+  }
+  .array-item-move-down::after {
+    content: '↓';
+  }
+  .array-item-remove::after {
+    content: '-';
   }
 `;
 
@@ -123,12 +151,12 @@ const ScheduleQueryButton: FunctionComponent<ScheduleQueryButtonProps> = ({
   const [description, setDescription] = useState('');
   const [label, setLabel] = useState(defaultLabel);
   const [showSchedule, setShowSchedule] = useState(false);
-  let saveModal: ModalTrigger | null;
+  const saveModal: ModalTriggerRef | null = useRef() as ModalTriggerRef;
 
   const onScheduleSubmit = ({
     formData,
   }: {
-    formData: Omit<FormProps<Record<string, any>>, 'schema'>;
+    formData?: Omit<FormProps<Record<string, any>>, 'schema'>;
   }) => {
     const query = {
       label,
@@ -139,7 +167,7 @@ const ScheduleQueryButton: FunctionComponent<ScheduleQueryButtonProps> = ({
       extra_json: JSON.stringify({ schedule_info: formData }),
     };
     onSchedule(query);
-    saveModal?.close();
+    saveModal?.current?.close();
   };
 
   const renderModalBody = () => (
@@ -151,7 +179,7 @@ const ScheduleQueryButton: FunctionComponent<ScheduleQueryButtonProps> = ({
               type="text"
               placeholder={t('Label for your query')}
               value={label}
-              onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 setLabel(event.target.value)
               }
             />
@@ -161,11 +189,11 @@ const ScheduleQueryButton: FunctionComponent<ScheduleQueryButtonProps> = ({
       <StyledRow>
         <Col xs={24}>
           <FormItem label={t('Description')}>
-            <TextArea
+            <Input.TextArea
               rows={4}
               placeholder={t('Write a description for your query')}
               value={description}
-              onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) =>
+              onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
                 setDescription(event.target.value)
               }
             />
@@ -174,22 +202,23 @@ const ScheduleQueryButton: FunctionComponent<ScheduleQueryButtonProps> = ({
       </StyledRow>
       <Row>
         <Col xs={24}>
-          <div className="json-schema">
+          <StyledJsonSchema>
             <SchemaForm
               schema={getJSONSchema()}
-              uiSchema={getUISchema}
+              uiSchema={getUISchema()}
               onSubmit={onScheduleSubmit}
-              validate={getValidator()}
+              customValidate={getValidator()}
+              validator={validator}
             >
               <Button
                 buttonStyle="primary"
                 htmlType="submit"
                 css={{ float: 'right' }}
               >
-                Submit
+                {t('Submit')}
               </Button>
             </SchemaForm>
-          </div>
+          </StyledJsonSchema>
         </Col>
       </Row>
       {scheduleQueryWarning && (
@@ -205,9 +234,7 @@ const ScheduleQueryButton: FunctionComponent<ScheduleQueryButtonProps> = ({
   return (
     <span className="ScheduleQueryButton">
       <ModalTrigger
-        ref={ref => {
-          saveModal = ref;
-        }}
+        ref={saveModal}
         modalTitle={t('Schedule query')}
         modalBody={renderModalBody()}
         triggerNode={

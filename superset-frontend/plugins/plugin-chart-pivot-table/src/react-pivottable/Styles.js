@@ -17,123 +17,158 @@
  * under the License.
  */
 
-import { styled } from '@superset-ui/core';
+import { css, styled } from '@superset-ui/core';
 
 export const Styles = styled.div`
-  table.pvtTable {
-    position: relative;
-    font-size: 12px;
-    text-align: left;
-    margin-top: 3px;
-    margin-left: 3px;
-    border-collapse: separate;
-    font-family: 'Inter', Helvetica, Arial, sans-serif;
-    line-height: 1.4;
-  }
+  ${({ theme, isDashboardEditMode }) => css`
+    table.pvtTable {
+      position: ${isDashboardEditMode ? 'inherit' : 'relative'};
+      width: calc(100% - ${theme.sizeUnit}px);
+      font-size: ${theme.fontSizeSM}px;
+      text-align: left;
+      margin: ${theme.sizeUnit}px;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-family: ${theme.fontFamily};
+      line-height: 1.4;
+    }
 
-  table thead {
-    position: sticky;
-    top: 0;
-  }
+    table thead {
+      background-color: ${theme.colorBgBase};
+      position: ${isDashboardEditMode ? 'inherit' : 'sticky'};
+      top: 0;
+    }
 
-  table.pvtTable thead tr th,
-  table.pvtTable tbody tr th {
-    background-color: #fff;
-    border-top: 1px solid #e0e0e0;
-    border-left: 1px solid #e0e0e0;
-    font-size: 12px;
-    padding: 5px;
-    font-weight: normal;
-  }
+    table tbody tr {
+      font-feature-settings: 'tnum' 1;
+    }
 
-  table.pvtTable tbody tr.pvtRowTotals {
-    position: sticky;
-    bottom: 0;
-  }
+    table.pvtTable thead tr th,
+    table.pvtTable tbody tr th {
+      border-top: 1px solid ${theme.colorSplit};
+      border-left: 1px solid ${theme.colorSplit};
+      font-size: ${theme.fontSizeSM}px;
+      padding: ${theme.sizeUnit}px;
+      font-weight: ${theme.fontWeightNormal};
+    }
 
-  table.pvtTable thead tr:last-of-type th,
-  table.pvtTable thead tr:first-of-type th.pvtTotalLabel,
-  table.pvtTable thead tr:nth-last-of-type(2) th.pvtColLabel,
-  table.pvtTable thead th.pvtSubtotalLabel,
-  table.pvtTable tbody tr:last-of-type th,
-  table.pvtTable tbody tr:last-of-type td {
-    border-bottom: 1px solid #e0e0e0;
-  }
+    table.pvtTable tbody tr.pvtRowTotals {
+      position: ${isDashboardEditMode ? 'inherit' : 'sticky'};
+      bottom: 0;
+      background-color: ${theme.colorBgBase};
+    }
 
-  table.pvtTable
-    thead
-    tr:last-of-type:not(:only-child)
-    th.pvtAxisLabel
-    ~ th.pvtColLabel,
-  table.pvtTable tbody tr:first-of-type th,
-  table.pvtTable tbody tr:first-of-type td {
-    border-top: none;
-  }
+    table.pvtTable tbody tr.pvtRowTotals th,
+    table.pvtTable tbody tr.pvtRowTotals td {
+      background-color: ${theme.colorBgBase};
+    }
 
-  table.pvtTable tbody tr td:last-of-type,
-  table.pvtTable thead tr th:last-of-type:not(.pvtSubtotalLabel) {
-    border-right: 1px solid #e0e0e0;
-  }
+    table.pvtTable thead tr:last-of-type th,
+    table.pvtTable thead tr:first-of-type th.pvtTotalLabel,
+    table.pvtTable thead tr:nth-last-of-type(2) th.pvtColLabel,
+    table.pvtTable thead th.pvtSubtotalLabel,
+    table.pvtTable tbody tr:last-of-type th,
+    table.pvtTable tbody tr:last-of-type td {
+      border-bottom: 1px solid ${theme.colorSplit};
+    }
 
-  table.pvtTable
-    thead
-    tr:last-of-type:not(:only-child)
-    th.pvtAxisLabel
-    + .pvtTotalLabel {
-    border-right: none;
-  }
+    table.pvtTable
+      thead
+      tr:last-of-type:not(:only-child)
+      th.pvtAxisLabel
+      ~ th.pvtColLabel,
+    table.pvtTable tbody tr:first-of-type th,
+    table.pvtTable tbody tr:first-of-type td {
+      border-top: none;
+    }
 
-  table.pvtTable tr th.active {
-    background-color: #d9dbe4;
-  }
+    table.pvtTable tbody tr td:last-of-type,
+    table.pvtTable thead tr th:last-of-type:not(.pvtSubtotalLabel) {
+      border-right: 1px solid ${theme.colorSplit};
+    }
 
-  table.pvtTable .pvtTotalLabel {
-    text-align: right;
-    font-weight: bold;
-  }
+    table.pvtTable
+      thead
+      tr:last-of-type:not(:only-child)
+      th.pvtAxisLabel
+      + .pvtTotalLabel {
+      border-right: none;
+    }
 
-  table.pvtTable .pvtSubtotalLabel {
-    font-weight: bold;
-  }
+    table.pvtTable tr th.active {
+      background-color: ${theme.colorPrimaryBg};
+    }
 
-  table.pvtTable tbody tr td {
-    color: #2a3f5f;
-    padding: 5px;
-    background-color: #fff;
-    border-top: 1px solid #e0e0e0;
-    border-left: 1px solid #e0e0e0;
-    vertical-align: top;
-    text-align: right;
-  }
+    table.pvtTable .pvtTotalLabel {
+      text-align: right;
+      font-weight: ${theme.fontWeightStrong};
+    }
 
-  table.pvtTable tbody tr th.pvtRowLabel {
-    vertical-align: baseline;
-  }
+    table.pvtTable .pvtSubtotalLabel {
+      font-weight: ${theme.fontWeightStrong};
+    }
 
-  .pvtTotal,
-  .pvtGrandTotal {
-    font-weight: bold;
-  }
+    table.pvtTable tbody tr td {
+      color: ${theme.colorPrimaryText};
+      padding: ${theme.sizeUnit}px;
+      background-color: ${theme.colorBgBase};
+      border-top: 1px solid ${theme.colorSplit};
+      border-left: 1px solid ${theme.colorSplit};
+      vertical-align: top;
+      text-align: right;
+    }
 
-  table.pvtTable tbody tr td.pvtRowTotal {
-    vertical-align: middle;
-  }
+    table.pvtTable tbody tr th.pvtRowLabel {
+      vertical-align: baseline;
+    }
 
-  .toggle-wrapper {
-    white-space: nowrap;
-  }
+    .pvtTotal,
+    .pvtGrandTotal {
+      font-weight: ${theme.fontWeightStrong};
+    }
 
-  .toggle-wrapper > .toggle-val {
-    white-space: normal;
-  }
+    table.pvtTable tbody tr td.pvtRowTotal {
+      vertical-align: middle;
+    }
 
-  .toggle {
-    padding-right: 4px;
-    cursor: pointer;
-  }
+    .toggle-wrapper {
+      white-space: nowrap;
+    }
 
-  .hoverable:hover {
-    background-color: #eceef2;
-    cursor: pointer;
-  }
+    .toggle-wrapper > .toggle-val {
+      white-space: normal;
+    }
+
+    .head-wrapper {
+      display: flex;
+      gap: ${theme.sizeUnit}px;
+      align-items: center;
+    }
+
+    .icons-wrapper {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .sort-icon {
+      font-size: 10px;
+      color: ${theme.colorTextDescription};
+    }
+
+    .sort-icon.sm {
+      font-size: 8px;
+    }
+
+    .toggle {
+      padding-right: ${theme.sizeUnit}px;
+      cursor: pointer;
+    }
+
+    .hoverable:hover {
+      background-color: ${theme.colorPrimaryBgHover};
+      cursor: pointer;
+    }
+  `}
 `;

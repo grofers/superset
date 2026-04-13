@@ -16,44 +16,48 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { t, styled, supersetTheme } from '@superset-ui/core';
+import { useMemo, FC, ReactElement } from 'react';
 
-import { Menu } from 'src/common/components';
-import Button, { ButtonProps } from 'src/components/Button';
-import Icons from 'src/components/Icons';
+import { t, styled, useTheme, SupersetTheme } from '@superset-ui/core';
+
+import { Button, DropdownButton } from '@superset-ui/core/components';
+import { IconType, Icons } from '@superset-ui/core/components/Icons';
+import { detectOS } from 'src/utils/common';
+import { QueryButtonProps } from 'src/SqlLab/types';
+import useQueryEditor from 'src/SqlLab/hooks/useQueryEditor';
 import {
-  DropdownButton,
-  DropdownButtonProps,
-} from 'src/components/DropdownButton';
+  LOG_ACTIONS_SQLLAB_RUN_QUERY,
+  LOG_ACTIONS_SQLLAB_STOP_QUERY,
+} from 'src/logger/LogUtils';
+import useLogAction from 'src/logger/useLogAction';
 
-interface Props {
+export interface RunQueryActionButtonProps {
+  queryEditorId: string;
   allowAsync: boolean;
   queryState?: string;
   runQuery: (c?: boolean) => void;
-  selectedText?: string;
   stopQuery: () => void;
-  sql: string;
-  overlayCreateAsMenu: typeof Menu | null;
+  overlayCreateAsMenu: ReactElement | null;
 }
 
-type QueryButtonProps = DropdownButtonProps | ButtonProps;
-
-const buildText = (
+const buildTextAndIcon = (
   shouldShowStopButton: boolean,
   selectedText: string | undefined,
-): string | JSX.Element => {
-  if (shouldShowStopButton) {
-    return (
-      <>
-        <i className="fa fa-stop" /> {t('Stop')}
-      </>
-    );
-  }
+  theme: SupersetTheme,
+): { text: string; icon?: IconType } => {
+  let text = t('Run');
+  let icon: IconType | undefined;
   if (selectedText) {
-    return t('Run selection');
+    text = t('Run selection');
   }
-  return t('Run');
+  if (shouldShowStopButton) {
+    text = t('Stop');
+    icon = <Icons.Square iconSize="xs" iconColor={theme.colorIcon} />;
+  }
+  return {
+    text,
+    icon,
+  };
 };
 
 const onClick = (
@@ -61,7 +65,13 @@ const onClick = (
   allowAsync: boolean,
   runQuery: (c?: boolean) => void = () => undefined,
   stopQuery = () => {},
+  logAction: (name: string, payload: Record<string, any>) => void,
 ): void => {
+  const eventName = shouldShowStopButton
+    ? LOG_ACTIONS_SQLLAB_STOP_QUERY
+    : LOG_ACTIONS_SQLLAB_RUN_QUERY;
+
+  logAction(eventName, { shortcut: false });
   if (shouldShowStopButton) return stopQuery();
   if (allowAsync) {
     return runQuery(true);
@@ -75,44 +85,69 @@ const StyledButton = styled.span`
     // this is to over ride a previous transition built into the component
     transition: background-color 0ms;
     &:last-of-type {
-      margin-right: ${({ theme }) => theme.gridUnit * 2}px;
+      margin-right: ${({ theme }) => theme.sizeUnit * 2}px;
     }
     span[name='caret-down'] {
       display: flex;
-      margin-right: ${({ theme }) => theme.gridUnit * -2}px;
+      margin-left: ${({ theme }) => theme.sizeUnit * 1}px;
     }
   }
 `;
 
 const RunQueryActionButton = ({
   allowAsync = false,
+  queryEditorId,
   queryState,
-  selectedText,
-  sql = '',
   overlayCreateAsMenu,
   runQuery,
   stopQuery,
-}: Props) => {
+}: RunQueryActionButtonProps) => {
+  const theme = useTheme();
+  const logAction = useLogAction({ queryEditorId });
+  const userOS = detectOS();
+
+  const { selectedText, sql } = useQueryEditor(queryEditorId, [
+    'selectedText',
+    'sql',
+  ]);
+
   const shouldShowStopBtn =
     !!queryState && ['running', 'pending'].indexOf(queryState) > -1;
 
-  const ButtonComponent: React.FC<QueryButtonProps> = overlayCreateAsMenu
-    ? (DropdownButton as React.FC)
+  const ButtonComponent: FC<QueryButtonProps> = overlayCreateAsMenu
+    ? (DropdownButton as FC)
     : Button;
 
-  const isDisabled = !sql.trim();
+  const sqlContent = selectedText || sql || '';
+  const isDisabled = !sqlContent
+    ?.replace(/(\/\*[^*]*\*\/)|(\/\/[^*]*)|(--[^.].*)/gm, '')
+    .trim();
+
+  const stopButtonTooltipText = useMemo(
+    () =>
+      userOS === 'MacOS'
+        ? t('Stop running (Ctrl + x)')
+        : t('Stop running (Ctrl + e)'),
+    [userOS],
+  );
+
+  const { text, icon } = useMemo(
+    () => buildTextAndIcon(shouldShowStopBtn, selectedText, theme),
+    [shouldShowStopBtn, selectedText, theme],
+  );
 
   return (
     <StyledButton>
       <ButtonComponent
+        data-test="run-query-action"
         onClick={() =>
-          onClick(shouldShowStopBtn, allowAsync, runQuery, stopQuery)
+          onClick(shouldShowStopBtn, allowAsync, runQuery, stopQuery, logAction)
         }
         disabled={isDisabled}
         tooltip={
           (!isDisabled &&
             (shouldShowStopBtn
-              ? t('Stop running (Ctrl + x)')
+              ? stopButtonTooltipText
               : t('Run query (Ctrl + Return)'))) as string
         }
         cta
@@ -120,20 +155,20 @@ const RunQueryActionButton = ({
           ? {
               overlay: overlayCreateAsMenu,
               icon: (
-                <Icons.CaretDown
+                <Icons.DownOutlined
                   iconColor={
-                    isDisabled
-                      ? supersetTheme.colors.grayscale.base
-                      : supersetTheme.colors.grayscale.light5
+                    isDisabled ? theme.colorTextDisabled : theme.colorIcon
                   }
-                  name="caret-down"
                 />
               ),
               trigger: 'click',
             }
-          : { buttonStyle: 'primary' })}
+          : {
+              buttonStyle: shouldShowStopBtn ? 'danger' : 'primary',
+              icon,
+            })}
       >
-        {buildText(shouldShowStopBtn, selectedText)}
+        {text}
       </ButtonComponent>
     </StyledButton>
   );

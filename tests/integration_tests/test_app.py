@@ -14,11 +14,32 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from os import environ
+from typing import TYPE_CHECKING
 
-"""
-Here is where we create the app which ends up being shared across all tests.integration_tests. A future
-optimization will be to create a separate app instance for each test class.
-"""
 from superset.app import create_app
 
-app = create_app()
+if TYPE_CHECKING:
+    from typing import Any
+
+    from flask.testing import FlaskClient
+
+
+# DEPRECATED: Creating global app instance - use app fixture from conftest.py instead
+superset_config_module = environ.get(
+    "SUPERSET_CONFIG", "tests.integration_tests.superset_test_config"
+)
+app = create_app(superset_config_module=superset_config_module)
+
+
+def login(
+    client: "FlaskClient[Any]",
+    username: str = "admin",
+    password: str = "general",  # noqa: S107
+):
+    resp = client.post(
+        "/login/",
+        data=dict(username=username, password=password),  # noqa: C408
+    ).get_data(as_text=True)
+    assert "User confirmation needed" not in resp
+    return resp

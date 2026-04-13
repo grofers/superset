@@ -16,17 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AdhocColumn, t } from '@superset-ui/core';
-import {
-  ColumnMeta,
-  isAdhocColumn,
-  isColumnMeta,
-} from '@superset-ui/chart-controls';
-import Popover from 'src/components/Popover';
+import { useCallback, useEffect, useMemo, useState, ReactNode } from 'react';
+
+import { useSelector } from 'react-redux';
+import { AdhocColumn, t, isAdhocColumn } from '@superset-ui/core';
+import { ColumnMeta, isColumnMeta } from '@superset-ui/chart-controls';
 import { ExplorePopoverContent } from 'src/explore/components/ExploreContentPopover';
+import { SaveDatasetModal } from 'src/SqlLab/components/SaveDatasetModal';
 import ColumnSelectPopover from './ColumnSelectPopover';
 import { DndColumnSelectPopoverTitle } from './DndColumnSelectPopoverTitle';
+import ControlPopover from '../ControlPopover/ControlPopover';
 
 interface ColumnSelectPopoverTriggerProps {
   columns: ColumnMeta[];
@@ -36,8 +35,9 @@ interface ColumnSelectPopoverTriggerProps {
   visible?: boolean;
   togglePopover?: (visible: boolean) => void;
   closePopover?: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
   isTemporal?: boolean;
+  disabledTabs?: Set<string>;
 }
 
 const defaultPopoverLabel = t('My column');
@@ -50,12 +50,16 @@ const ColumnSelectPopoverTrigger = ({
   isControlledComponent,
   children,
   isTemporal,
+  disabledTabs,
   ...props
 }: ColumnSelectPopoverTriggerProps) => {
+  // @ts-ignore
+  const datasource = useSelector(state => state.explore.datasource);
   const [popoverLabel, setPopoverLabel] = useState(defaultPopoverLabel);
   const [popoverVisible, setPopoverVisible] = useState(false);
   const [isTitleEditDisabled, setIsTitleEditDisabled] = useState(true);
   const [hasCustomLabel, setHasCustomLabel] = useState(false);
+  const [showDatasetModal, setDatasetModal] = useState(false);
 
   let initialPopoverLabel = defaultPopoverLabel;
   if (editedColumn && isColumnMeta(editedColumn)) {
@@ -63,10 +67,6 @@ const ColumnSelectPopoverTrigger = ({
   } else if (editedColumn && isAdhocColumn(editedColumn)) {
     initialPopoverLabel = editedColumn.label || defaultPopoverLabel;
   }
-
-  useEffect(() => {
-    setPopoverLabel(initialPopoverLabel);
-  }, [initialPopoverLabel, popoverVisible]);
 
   const togglePopover = useCallback((visible: boolean) => {
     setPopoverVisible(visible);
@@ -93,18 +93,28 @@ const ColumnSelectPopoverTrigger = ({
     setIsTitleEditDisabled(tab !== editableTitleTab);
   }, []);
 
+  useEffect(() => {
+    setPopoverLabel(initialPopoverLabel);
+    if (!visible) {
+      setHasCustomLabel(false);
+    }
+  }, [initialPopoverLabel, visible]);
+
   const overlayContent = useMemo(
     () => (
       <ExplorePopoverContent>
         <ColumnSelectPopover
           editedColumn={editedColumn}
           columns={columns}
+          setDatasetModal={setDatasetModal}
           onClose={handleClosePopover}
           onChange={onColumnEdit}
+          hasCustomLabel={hasCustomLabel}
           label={popoverLabel}
           setLabel={setPopoverLabel}
           getCurrentTab={getCurrentTab}
           isTemporal={isTemporal}
+          disabledTabs={disabledTabs}
         />
       </ExplorePopoverContent>
     ),
@@ -112,17 +122,22 @@ const ColumnSelectPopoverTrigger = ({
       columns,
       editedColumn,
       getCurrentTab,
+      hasCustomLabel,
       handleClosePopover,
       isTemporal,
       onColumnEdit,
       popoverLabel,
+      disabledTabs,
     ],
   );
 
-  const onLabelChange = useCallback((e: any) => {
-    setPopoverLabel(e.target.value);
-    setHasCustomLabel(true);
-  }, []);
+  const onLabelChange = useCallback(
+    (e: any) => {
+      setPopoverLabel(e.target.value);
+      setHasCustomLabel(true);
+    },
+    [setPopoverLabel, setHasCustomLabel],
+  );
 
   const popoverTitle = useMemo(
     () => (
@@ -137,18 +152,31 @@ const ColumnSelectPopoverTrigger = ({
   );
 
   return (
-    <Popover
-      placement="right"
-      trigger="click"
-      content={overlayContent}
-      defaultVisible={visible}
-      visible={visible}
-      onVisibleChange={handleTogglePopover}
-      title={popoverTitle}
-      destroyTooltipOnHide
-    >
-      {children}
-    </Popover>
+    <>
+      {showDatasetModal && (
+        <SaveDatasetModal
+          visible={showDatasetModal}
+          onHide={() => setDatasetModal(false)}
+          buttonTextOnSave={t('Save')}
+          buttonTextOnOverwrite={t('Overwrite')}
+          modalDescription={t(
+            'Save this query as a virtual dataset to continue exploring',
+          )}
+          datasource={datasource}
+        />
+      )}
+      <ControlPopover
+        trigger="click"
+        content={overlayContent}
+        defaultOpen={visible}
+        open={visible}
+        onOpenChange={handleTogglePopover}
+        title={popoverTitle}
+        destroyTooltipOnHide
+      >
+        {children}
+      </ControlPopover>
+    </>
   );
 };
 

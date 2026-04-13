@@ -18,107 +18,141 @@
  */
 import {
   DataMaskStateWithId,
-  Filters,
+  DataMaskWithId,
   JsonObject,
-  NativeFilterScope,
+  PartialFilters,
 } from '@superset-ui/core';
-import { CHART_TYPE } from './componentTypes';
-import { ActiveFilters, Layout, LayoutItem } from '../types';
-import { ChartConfiguration } from '../reducers/types';
-import { DASHBOARD_ROOT_ID } from './constants';
-
-// Looking for affected chart scopes and values
-export const findAffectedCharts = ({
-  child,
-  layout,
-  scope,
-  activeFilters,
-  filterId,
-  extraFormData,
-}: {
-  child: string;
-  layout: { [key: string]: LayoutItem };
-  scope: NativeFilterScope;
-  activeFilters: ActiveFilters;
-  filterId: string;
-  extraFormData: any;
-}) => {
-  const chartId = layout[child]?.meta?.chartId;
-  if (layout[child].type === CHART_TYPE) {
-    // Ignore excluded charts
-    if (scope.excluded.includes(chartId)) {
-      return;
-    }
-    if (!activeFilters[filterId]) {
-      // Small mutation but simplify logic
-      // eslint-disable-next-line no-param-reassign
-      activeFilters[filterId] = {
-        scope: [],
-        values: extraFormData,
-      };
-    }
-    // Add not excluded chart scopes(to know what charts refresh) and values(refresh only if its value changed)
-    activeFilters[filterId].scope.push(chartId);
-    return;
-  }
-  // If child is not chart, recursive iterate over its children
-  layout[child].children.forEach((child: string) =>
-    findAffectedCharts({
-      child,
-      layout,
-      scope,
-      activeFilters,
-      filterId,
-      extraFormData,
-    }),
-  );
-};
+import { ActiveFilters, ChartConfiguration } from '../types';
 
 export const getRelevantDataMask = (
   dataMask: DataMaskStateWithId,
-  prop: string,
-): JsonObject | DataMaskStateWithId =>
-  Object.values(dataMask)
-    .filter(item => item[prop])
-    .reduce(
-      (prev, next) => ({ ...prev, [next.id]: prop ? next[prop] : next }),
-      {},
-    );
+  prop: keyof DataMaskWithId,
+): JsonObject =>
+  Object.fromEntries(
+    Object.values(dataMask)
+      .filter(item => item[prop])
+      .map(item => [item.id, item[prop]]),
+  );
+
+interface LayerInfo {
+  layerMap: { [chartId: number]: number[] };
+  chartIds: Set<number>;
+}
+
+const extractLayerIndicesFromKeys = (selectedLayers: string[]): LayerInfo => {
+  const layerMap: { [chartId: number]: number[] } = {};
+  const chartIds = new Set<number>();
+  selectedLayers.forEach(layerKey => {
+    const match = layerKey.match(/^chart-(\d+)-layer-(\d+)$/);
+    if (match) {
+      const chartId = parseInt(match[1], 10);
+      const layerIndex = parseInt(match[2], 10);
+      if (!Number.isNaN(chartId)) {
+        if (!layerMap[chartId]) {
+          layerMap[chartId] = [];
+        }
+        layerMap[chartId].push(layerIndex);
+        chartIds.add(chartId);
+      }
+    }
+  });
+  return { layerMap, chartIds };
+};
 
 export const getAllActiveFilters = ({
   chartConfiguration,
   nativeFilters,
   dataMask,
-  layout,
+  allSliceIds,
 }: {
   chartConfiguration: ChartConfiguration;
   dataMask: DataMaskStateWithId;
-  nativeFilters: Filters;
-  layout: Layout;
+  nativeFilters: PartialFilters;
+  allSliceIds: number[];
 }): ActiveFilters => {
-  const activeFilters = {};
+  const activeFilters: ActiveFilters = {};
 
-  // Combine native filters with cross filters, because they have similar logic
-  Object.values(dataMask).forEach(({ id: filterId, extraFormData }) => {
-    const scope = nativeFilters?.[filterId]?.scope ??
-      chartConfiguration?.[filterId]?.crossFilters?.scope ?? {
-        rootPath: [DASHBOARD_ROOT_ID],
-        excluded: [filterId],
-      };
-    // Iterate over all roots to find all affected charts
-    scope.rootPath.forEach((layoutItemId: string | number) => {
-      layout[layoutItemId]?.children?.forEach((child: string) => {
-        // Need exclude from affected charts, charts that located in scope `excluded`
-        findAffectedCharts({
-          child,
-          layout,
-          scope,
-          activeFilters,
-          filterId,
-          extraFormData,
-        });
-      });
+  const hasLayerSelectionsInAnyFilter = Object.values(dataMask).some(
+    ({ id: filterId }) => {
+      const selectedLayers = (nativeFilters?.[filterId]?.scope as any)
+        ?.selectedLayers;
+      return selectedLayers && selectedLayers.length > 0;
+    },
+  );
+
+  let masterSelectedLayers: string[] = [];
+  let masterExcluded: number[] = [];
+  if (hasLayerSelectionsInAnyFilter) {
+    Object.values(dataMask).forEach(({ id: filterId }) => {
+      const selectedLayers = (nativeFilters?.[filterId]?.scope as any)
+        ?.selectedLayers;
+      const excluded =
+        (nativeFilters?.[filterId]?.scope as any)?.excluded || [];
+      if (selectedLayers && selectedLayers.length > 0) {
+        masterSelectedLayers = selectedLayers;
+        masterExcluded = excluded;
+      }
     });
+  }
+
+  Object.values(dataMask).forEach(({ id: filterId, extraFormData = {} }) => {
+    let scope =
+      nativeFilters?.[filterId]?.chartsInScope ??
+      chartConfiguration?.[parseInt(filterId, 10)]?.crossFilters
+        ?.chartsInScope ??
+      allSliceIds ??
+      [];
+    const filterType = nativeFilters?.[filterId]?.filterType;
+    const targets = nativeFilters?.[filterId]?.targets;
+
+    let selectedLayers = (nativeFilters?.[filterId]?.scope as any)
+      ?.selectedLayers;
+    let excludedCharts =
+      (nativeFilters?.[filterId]?.scope as any)?.excluded || [];
+
+    if (
+      hasLayerSelectionsInAnyFilter &&
+      (!selectedLayers || selectedLayers.length === 0)
+    ) {
+      selectedLayers = masterSelectedLayers;
+      excludedCharts = masterExcluded;
+    }
+
+    let layerScope;
+    if (selectedLayers && selectedLayers.length > 0) {
+      const layerInfo = extractLayerIndicesFromKeys(selectedLayers);
+      layerScope = layerInfo.layerMap;
+
+      const explicitlyTargetedCharts = new Set<number>(layerInfo.chartIds);
+
+      const originalScope = scope;
+      originalScope.forEach((chartId: number) => {
+        if (!excludedCharts.includes(chartId)) {
+          const hasLayerSelections = selectedLayers.some((key: string) =>
+            key.startsWith(`chart-${chartId}-layer-`),
+          );
+
+          if (!hasLayerSelections) {
+            explicitlyTargetedCharts.add(chartId);
+          }
+        }
+      });
+
+      scope = Array.from(explicitlyTargetedCharts);
+    } else {
+      scope = scope.filter(
+        (chartId: number) => !excludedCharts.includes(chartId),
+      );
+    }
+
+    activeFilters[filterId] = {
+      scope,
+      targets: targets || [],
+      values: extraFormData,
+      filterType,
+      ...(layerScope && { layerScope }),
+    };
   });
+
   return activeFilters;
 };

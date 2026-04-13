@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
+import { Component } from 'react';
 import PropTypes from 'prop-types';
 import {
   t,
@@ -37,19 +37,20 @@ import {
 import FilterDefinitionOption from 'src/explore/components/controls/MetricControl/FilterDefinitionOption';
 import {
   AddControlLabel,
-  AddIconButton,
   HeaderContainer,
   LabelsContainer,
 } from 'src/explore/components/controls/OptionControls';
-import Icons from 'src/components/Icons';
+import { Icons } from '@superset-ui/core/components/Icons';
+import { Modal } from '@superset-ui/core/components';
 import AdhocFilterPopoverTrigger from 'src/explore/components/controls/FilterControl/AdhocFilterPopoverTrigger';
 import AdhocFilterOption from 'src/explore/components/controls/FilterControl/AdhocFilterOption';
-import AdhocFilter, {
-  CLAUSES,
-  EXPRESSION_TYPES,
-} from 'src/explore/components/controls/FilterControl/AdhocFilter';
+import AdhocFilter from 'src/explore/components/controls/FilterControl/AdhocFilter';
 import adhocFilterType from 'src/explore/components/controls/FilterControl/adhocFilterType';
 import columnType from 'src/explore/components/controls/FilterControl/columnType';
+import { toQueryString } from 'src/utils/urlUtils';
+import { Clauses, ExpressionTypes } from '../types';
+
+const { warning } = Modal;
 
 const selectedMetricType = PropTypes.oneOfType([
   PropTypes.string,
@@ -71,6 +72,7 @@ const propTypes = {
     PropTypes.arrayOf(selectedMetricType),
   ]),
   isLoading: PropTypes.bool,
+  canDelete: PropTypes.func,
 };
 
 const defaultProps = {
@@ -85,7 +87,7 @@ function isDictionaryForAdhocFilter(value) {
   return value && !(value instanceof AdhocFilter) && value.expressionType;
 }
 
-class AdhocFilterControl extends React.Component {
+class AdhocFilterControl extends Component {
   constructor(props) {
     super(props);
     this.optionsForSelect = this.optionsForSelect.bind(this);
@@ -96,6 +98,7 @@ class AdhocFilterControl extends React.Component {
     this.onChange = this.onChange.bind(this);
     this.mapOption = this.mapOption.bind(this);
     this.getMetricExpression = this.getMetricExpression.bind(this);
+    this.removeFilter = this.removeFilter.bind(this);
 
     const filters = (this.props.value || []).map(filter =>
       isDictionaryForAdhocFilter(filter) ? new AdhocFilter(filter) : filter,
@@ -112,7 +115,10 @@ class AdhocFilterControl extends React.Component {
         sections={this.props.sections}
         operators={this.props.operators}
         datasource={this.props.datasource}
-        onRemoveFilter={() => this.onRemoveFilter(index)}
+        onRemoveFilter={e => {
+          e.stopPropagation();
+          this.onRemoveFilter(index);
+        }}
         onMoveLabel={this.moveLabel}
         onDropLabel={() => this.props.onChange(this.state.values)}
         partitionColumn={this.state.partitionColumn}
@@ -131,13 +137,20 @@ class AdhocFilterControl extends React.Component {
       const dbId = datasource.database?.id;
       const {
         datasource_name: name,
+        catalog,
         schema,
         is_sqllab_view: isSqllabView,
       } = datasource;
 
       if (!isSqllabView && dbId && name && schema) {
         SupersetClient.get({
-          endpoint: `/superset/extra_table_metadata/${dbId}/${name}/${schema}/`,
+          endpoint: `/api/v1/database/${dbId}/table_metadata/extra/${toQueryString(
+            {
+              name,
+              catalog,
+              schema,
+            },
+          )}`,
         })
           .then(({ json }) => {
             if (json && json.partitions) {
@@ -173,7 +186,7 @@ class AdhocFilterControl extends React.Component {
     }
   }
 
-  onRemoveFilter(index) {
+  removeFilter(index) {
     const valuesCopy = [...this.state.values];
     valuesCopy.splice(index, 1);
     this.setState(prevState => ({
@@ -181,6 +194,17 @@ class AdhocFilterControl extends React.Component {
       values: valuesCopy,
     }));
     this.props.onChange(valuesCopy);
+  }
+
+  onRemoveFilter(index) {
+    const { canDelete } = this.props;
+    const { values } = this.state;
+    const result = canDelete?.(values[index], values);
+    if (typeof result === 'string') {
+      warning({ title: t('Warning'), content: result });
+      return;
+    }
+    this.removeFilter(index);
   }
 
   onNewFilter(newFilter) {
@@ -241,45 +265,33 @@ class AdhocFilterControl extends React.Component {
     // via datasource saved metric
     if (option.saved_metric_name) {
       return new AdhocFilter({
-        expressionType:
-          this.props.datasource.type === 'druid'
-            ? EXPRESSION_TYPES.SIMPLE
-            : EXPRESSION_TYPES.SQL,
-        subject:
-          this.props.datasource.type === 'druid'
-            ? option.saved_metric_name
-            : this.getMetricExpression(option.saved_metric_name),
+        expressionType: ExpressionTypes.Sql,
+        subject: this.getMetricExpression(option.saved_metric_name),
         operator:
-          OPERATOR_ENUM_TO_OPERATOR_TYPE[Operators.GREATER_THAN].operation,
+          OPERATOR_ENUM_TO_OPERATOR_TYPE[Operators.GreaterThan].operation,
         comparator: 0,
-        clause: CLAUSES.HAVING,
+        clause: Clauses.Having,
       });
     }
     // has a custom label, meaning it's custom column
     if (option.label) {
       return new AdhocFilter({
-        expressionType:
-          this.props.datasource.type === 'druid'
-            ? EXPRESSION_TYPES.SIMPLE
-            : EXPRESSION_TYPES.SQL,
-        subject:
-          this.props.datasource.type === 'druid'
-            ? option.label
-            : new AdhocMetric(option).translateToSql(),
+        expressionType: ExpressionTypes.Sql,
+        subject: new AdhocMetric(option).translateToSql(),
         operator:
-          OPERATOR_ENUM_TO_OPERATOR_TYPE[Operators.GREATER_THAN].operation,
+          OPERATOR_ENUM_TO_OPERATOR_TYPE[Operators.GreaterThan].operation,
         comparator: 0,
-        clause: CLAUSES.HAVING,
+        clause: Clauses.Having,
       });
     }
     // add a new filter item
     if (option.column_name) {
       return new AdhocFilter({
-        expressionType: EXPRESSION_TYPES.SIMPLE,
+        expressionType: ExpressionTypes.Simple,
         subject: option.column_name,
-        operator: OPERATOR_ENUM_TO_OPERATOR_TYPE[Operators.EQUALS].operation,
+        operator: OPERATOR_ENUM_TO_OPERATOR_TYPE[Operators.Equals].operation,
         comparator: '',
-        clause: CLAUSES.WHERE,
+        clause: Clauses.Where,
         isNew: true,
       });
     }
@@ -342,31 +354,25 @@ class AdhocFilterControl extends React.Component {
   }
 
   render() {
-    const { theme } = this.props;
     return (
       <div className="metrics-select" data-test="adhoc-filter-control">
         <HeaderContainer>
           <ControlHeader {...this.props} />
-          {this.addNewFilterPopoverTrigger(
-            <AddIconButton data-test="add-filter-button">
-              <Icons.PlusLarge
-                iconSize="s"
-                iconColor={theme.colors.grayscale.light5}
-              />
-            </AddIconButton>,
-          )}
         </HeaderContainer>
         <LabelsContainer>
-          {this.state.values.length > 0
-            ? this.state.values.map((value, index) =>
-                this.valueRenderer(value, index),
-              )
-            : this.addNewFilterPopoverTrigger(
-                <AddControlLabel>
-                  <Icons.PlusSmall iconColor={theme.colors.grayscale.light1} />
-                  {t('Add filter')}
-                </AddControlLabel>,
-              )}
+          {[
+            ...(this.state.values.length > 0
+              ? this.state.values.map((value, index) =>
+                  this.valueRenderer(value, index),
+                )
+              : []),
+            this.addNewFilterPopoverTrigger(
+              <AddControlLabel role="button" data-test="add-filter-button">
+                <Icons.PlusOutlined iconSize="m" />
+                {t('Add filter')}
+              </AddControlLabel>,
+            ),
+          ]}
         </LabelsContainer>
       </div>
     );

@@ -31,7 +31,13 @@ import {
   RequestConfig,
   ParseMethod,
 } from './types';
-import { DEFAULT_FETCH_RETRY_OPTIONS, DEFAULT_BASE_URL } from './constants';
+import { DEFAULT_FETCH_RETRY_OPTIONS, DEFAULT_APP_ROOT } from './constants';
+
+const defaultUnauthorizedHandlerForPrefix = (appRoot: string) => () => {
+  if (!window.location.pathname.startsWith(`${appRoot}/login`)) {
+    window.location.href = `${appRoot}/login?next=${window.location.href}`;
+  }
+};
 
 export default class SupersetClientClass {
   credentials: Credentials;
@@ -46,7 +52,7 @@ export default class SupersetClientClass {
 
   fetchRetryOptions?: FetchRetryOptions;
 
-  baseUrl: string;
+  appRoot?: string;
 
   protocol: Protocol;
 
@@ -58,10 +64,12 @@ export default class SupersetClientClass {
 
   timeout: ClientTimeout;
 
+  handleUnauthorized: () => void;
+
   constructor({
-    baseUrl = DEFAULT_BASE_URL,
     host,
     protocol,
+    appRoot = DEFAULT_APP_ROOT,
     headers = {},
     fetchRetryOptions = {},
     mode = 'same-origin',
@@ -70,16 +78,10 @@ export default class SupersetClientClass {
     csrfToken = undefined,
     guestToken = undefined,
     guestTokenHeaderName = 'X-GuestToken',
+    unauthorizedHandler = undefined,
   }: ClientConfig = {}) {
-    const url = new URL(
-      host || protocol
-        ? `${protocol || 'https:'}//${host || 'localhost'}`
-        : baseUrl,
-      // baseUrl for API could also be relative, so we provide current location.href
-      // as the base of baseUrl
-      window.location.href,
-    );
-    this.baseUrl = url.href.replace(/\/+$/, ''); // always strip trailing slash
+    const url = new URL(`${protocol || 'https:'}//${host || 'localhost'}`);
+    this.appRoot = appRoot;
     this.host = url.host;
     this.protocol = url.protocol as Protocol;
     this.headers = { Accept: 'application/json', ...headers }; // defaulting accept to json
@@ -100,6 +102,10 @@ export default class SupersetClientClass {
     if (guestToken) {
       this.headers[guestTokenHeaderName] = guestToken;
     }
+    this.handleUnauthorized =
+      unauthorizedHandler !== undefined
+        ? unauthorizedHandler
+        : defaultUnauthorizedHandlerForPrefix(this.appRoot);
   }
 
   async init(force = false): CsrfPromise {
@@ -109,6 +115,40 @@ export default class SupersetClientClass {
     return this.getCSRFToken();
   }
 
+  async postForm(
+    endpoint: string,
+    payload: Record<string, any>,
+    target = '_blank',
+  ) {
+    if (endpoint) {
+      await this.ensureAuth();
+      const hiddenForm = document.createElement('form');
+      hiddenForm.action = this.getUrl({ endpoint });
+      hiddenForm.method = 'POST';
+      hiddenForm.target = target;
+      const payloadWithToken: Record<string, any> = {
+        ...payload,
+        csrf_token: this.csrfToken!,
+      };
+
+      if (this.guestToken) {
+        payloadWithToken.guest_token = this.guestToken;
+      }
+
+      Object.entries(payloadWithToken).forEach(([key, value]) => {
+        const data = document.createElement('input');
+        data.type = 'hidden';
+        data.name = key;
+        data.value = value;
+        hiddenForm.appendChild(data);
+      });
+
+      document.body.appendChild(hiddenForm);
+      hiddenForm.submit();
+      document.body.removeChild(hiddenForm);
+    }
+  }
+
   async reAuthenticate() {
     return this.init(true);
   }
@@ -116,6 +156,10 @@ export default class SupersetClientClass {
   isAuthenticated(): boolean {
     // if CSRF protection is disabled in the Superset app, the token may be an empty string
     return this.csrfToken !== null && this.csrfToken !== undefined;
+  }
+
+  getGuestToken() {
+    return this.guestToken;
   }
 
   async get<T extends ParseMethod = 'json'>(
@@ -151,6 +195,7 @@ export default class SupersetClientClass {
     headers,
     timeout,
     fetchRetryOptions,
+    ignoreUnauthorized = false,
     ...rest
   }: RequestConfig & { parseMethod?: T }) {
     await this.ensureAuth();
@@ -163,8 +208,8 @@ export default class SupersetClientClass {
       timeout: timeout ?? this.timeout,
       fetchRetryOptions: fetchRetryOptions ?? this.fetchRetryOptions,
     }).catch(res => {
-      if (res?.status === 401) {
-        this.redirectUnauthorized();
+      if (res?.status === 401 && !ignoreUnauthorized) {
+        this.handleUnauthorized();
       }
       return Promise.reject(res);
     });
@@ -194,7 +239,7 @@ export default class SupersetClientClass {
       method: 'GET',
       mode: this.mode,
       timeout: this.timeout,
-      url: this.getUrl({ endpoint: 'api/v1/security/csrf_token/' }),
+      url: this.getUrl({ endpoint: '/api/v1/security/csrf_token/' }),
       parseMethod: 'json',
     }).then(({ json }) => {
       if (typeof json === 'object') {
@@ -226,14 +271,8 @@ export default class SupersetClientClass {
     const host = inputHost ?? this.host;
     const cleanHost = host.slice(-1) === '/' ? host.slice(0, -1) : host; // no backslash
 
-    return `${this.protocol}//${cleanHost}/${
+    return `${this.protocol}//${cleanHost}${this.appRoot}/${
       endpoint[0] === '/' ? endpoint.slice(1) : endpoint
-    }`;
-  }
-
-  redirectUnauthorized() {
-    window.location.href = `/login?next=${
-      window.location.pathname + window.location.search
     }`;
   }
 }

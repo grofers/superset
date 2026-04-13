@@ -16,13 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import Popover from 'src/components/Popover';
+import { PureComponent } from 'react';
 import { OptionSortType } from 'src/explore/types';
 import AdhocFilterEditPopover from 'src/explore/components/controls/FilterControl/AdhocFilterEditPopover';
 import AdhocFilter from 'src/explore/components/controls/FilterControl/AdhocFilter';
 import { ExplorePopoverContent } from 'src/explore/components/ExploreContentPopover';
 import { Operators } from 'src/explore/constants';
+import ControlPopover from '../../ControlPopover/ControlPopover';
 
 interface AdhocFilterPopoverTriggerProps {
   sections?: string[];
@@ -36,13 +36,14 @@ interface AdhocFilterPopoverTriggerProps {
   visible?: boolean;
   togglePopover?: (visible: boolean) => void;
   closePopover?: () => void;
+  requireSave?: boolean;
 }
 
 interface AdhocFilterPopoverTriggerState {
   popoverVisible: boolean;
 }
 
-class AdhocFilterPopoverTrigger extends React.PureComponent<
+class AdhocFilterPopoverTrigger extends PureComponent<
   AdhocFilterPopoverTriggerProps,
   AdhocFilterPopoverTriggerState
 > {
@@ -96,22 +97,22 @@ class AdhocFilterPopoverTrigger extends React.PureComponent<
           sections={this.props.sections}
           operators={this.props.operators}
           onChange={this.props.onFilterEdit}
+          requireSave={this.props.requireSave}
         />
       </ExplorePopoverContent>
     );
 
     return (
-      <Popover
-        placement="right"
+      <ControlPopover
         trigger="click"
         content={overlayContent}
-        defaultVisible={visible}
-        visible={visible}
-        onVisibleChange={togglePopover}
+        defaultOpen={visible}
+        open={visible}
+        onOpenChange={togglePopover}
         destroyTooltipOnHide
       >
         {this.props.children}
-      </Popover>
+      </ControlPopover>
     );
   }
 }

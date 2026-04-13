@@ -14,16 +14,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from collections.abc import Sequence
 from functools import partial
-from typing import Any, Callable, Dict, Tuple, Union
+from typing import Any, Callable
 
 import numpy as np
+import pandas as pd
 from flask_babel import gettext as _
-from pandas import DataFrame, NamedAgg, Timestamp
+from pandas import DataFrame, NamedAgg
 
-from superset.exceptions import QueryObjectValidationError
+from superset.constants import TimeGrain
+from superset.exceptions import InvalidPostProcessingError
 
-NUMPY_FUNCTIONS = {
+NUMPY_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "average": np.average,
     "argmin": np.argmin,
     "argmax": np.argmax,
@@ -72,62 +75,55 @@ ALLOWLIST_CUMULATIVE_FUNCTIONS = (
     "cumsum",
 )
 
-PROPHET_TIME_GRAIN_MAP = {
-    "PT1S": "S",
-    "PT1M": "min",
-    "PT5M": "5min",
-    "PT10M": "10min",
-    "PT15M": "15min",
-    "PT30M": "30min",
-    "PT1H": "H",
-    "P1D": "D",
-    "P1W": "W",
-    "P1M": "M",
-    "P3M": "Q",
-    "P1Y": "A",
-    "1969-12-28T00:00:00Z/P1W": "W",
-    "1969-12-29T00:00:00Z/P1W": "W",
-    "P1W/1970-01-03T00:00:00Z": "W",
-    "P1W/1970-01-04T00:00:00Z": "W",
+PROPHET_TIME_GRAIN_MAP: dict[str, str] = {
+    TimeGrain.SECOND: "S",
+    TimeGrain.MINUTE: "min",
+    TimeGrain.FIVE_MINUTES: "5min",
+    TimeGrain.TEN_MINUTES: "10min",
+    TimeGrain.FIFTEEN_MINUTES: "15min",
+    TimeGrain.THIRTY_MINUTES: "30min",
+    TimeGrain.HOUR: "H",
+    TimeGrain.DAY: "D",
+    TimeGrain.WEEK: "W",
+    TimeGrain.MONTH: "M",
+    TimeGrain.QUARTER: "Q",
+    TimeGrain.YEAR: "A",
+    TimeGrain.WEEK_STARTING_SUNDAY: "W-SUN",
+    TimeGrain.WEEK_STARTING_MONDAY: "W-MON",
+    TimeGrain.WEEK_ENDING_SATURDAY: "W-SAT",
+    TimeGrain.WEEK_ENDING_SUNDAY: "W-SUN",
 }
 
+RESAMPLE_METHOD = ("asfreq", "bfill", "ffill", "linear", "median", "mean", "sum")
 
-def _flatten_column_after_pivot(
-    column: Union[float, Timestamp, str, Tuple[str, ...]],
-    aggregates: Dict[str, Dict[str, Any]],
-) -> str:
-    """
-    Function for flattening column names into a single string. This step is necessary
-    to be able to properly serialize a DataFrame. If the column is a string, return
-    element unchanged. For multi-element columns, join column elements with a comma,
-    with the exception of pivots made with a single aggregate, in which case the
-    aggregate column name is omitted.
+FLAT_COLUMN_SEPARATOR = ", "
 
-    :param column: single element from `DataFrame.columns`
-    :param aggregates: aggregates
-    :return:
-    """
-    if not isinstance(column, tuple):
-        column = (column,)
-    if len(aggregates) == 1 and len(column) > 1:
-        # drop aggregate for single aggregate pivots with multiple groupings
-        # from column name (aggregates always come first in column name)
-        column = column[1:]
-    return ", ".join([str(col) for col in column])
+
+def _is_multi_index_on_columns(df: DataFrame) -> bool:
+    return isinstance(df.columns, pd.MultiIndex)
+
+
+def scalar_to_sequence(val: Any) -> Sequence[str]:
+    if val is None:
+        return []
+    if isinstance(val, str):
+        return [val]
+    return val
 
 
 def validate_column_args(*argnames: str) -> Callable[..., Any]:
     def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
         def wrapped(df: DataFrame, **options: Any) -> Any:
-            if options.get("is_pivot_df"):
-                # skip validation when pivot Dataframe
-                return func(df, **options)
-            columns = df.columns.tolist()
+            if _is_multi_index_on_columns(df):
+                # MultiIndex column validate first level
+                columns = df.columns.get_level_values(0)
+            else:
+                columns = df.columns.tolist()
             for name in argnames:
                 if name in options and not all(
-                    elem in columns for elem in options.get(name) or []
+                    elem in columns for elem in scalar_to_sequence(options.get(name))
                 ):
-                    raise QueryObjectValidationError(
+                    raise InvalidPostProcessingError(
                         _("Referenced columns not available in DataFrame.")
                     )
             return func(df, **options)
@@ -138,8 +134,9 @@ def validate_column_args(*argnames: str) -> Callable[..., Any]:
 
 
 def _get_aggregate_funcs(
-    df: DataFrame, aggregates: Dict[str, Dict[str, Any]],
-) -> Dict[str, NamedAgg]:
+    df: DataFrame,
+    aggregates: dict[str, dict[str, Any]],
+) -> dict[str, NamedAgg]:
     """
     Converts a set of aggregate config objects into functions that pandas can use as
     aggregators. Currently only numpy aggregators are supported.
@@ -148,19 +145,22 @@ def _get_aggregate_funcs(
     :param aggregates: Mapping from column name to aggregate config.
     :return: Mapping from metric name to function that takes a single input argument.
     """
-    agg_funcs: Dict[str, NamedAgg] = {}
+    agg_funcs: dict[str, NamedAgg] = {}
     for name, agg_obj in aggregates.items():
         column = agg_obj.get("column", name)
         if column not in df:
-            raise QueryObjectValidationError(
+            raise InvalidPostProcessingError(
                 _(
                     "Column referenced by aggregate is undefined: %(column)s",
                     column=column,
                 )
             )
         if "operator" not in agg_obj:
-            raise QueryObjectValidationError(
-                _("Operator undefined for aggregator: %(name)s", name=name,)
+            raise InvalidPostProcessingError(
+                _(
+                    "Operator undefined for aggregator: %(name)s",
+                    name=name,
+                )
             )
         operator = agg_obj["operator"]
         if callable(operator):
@@ -168,8 +168,11 @@ def _get_aggregate_funcs(
         else:
             func = NUMPY_FUNCTIONS.get(operator)
             if not func:
-                raise QueryObjectValidationError(
-                    _("Invalid numpy function: %(operator)s", operator=operator,)
+                raise InvalidPostProcessingError(
+                    _(
+                        "Invalid numpy function: %(operator)s",
+                        operator=operator,
+                    )
                 )
             options = agg_obj.get("options", {})
             aggfunc = partial(func, **options)
@@ -179,12 +182,14 @@ def _get_aggregate_funcs(
 
 
 def _append_columns(
-    base_df: DataFrame, append_df: DataFrame, columns: Dict[str, str]
+    base_df: DataFrame, append_df: DataFrame, columns: dict[str, str]
 ) -> DataFrame:
     """
     Function for adding columns from one DataFrame to another DataFrame. Calls the
     assign method, which overwrites the original column in `base_df` if the column
     already exists, and appends the column if the name is not defined.
+
+    Note that! this is a memory-intensive operation.
 
     :param base_df: DataFrame which to use as the base
     :param append_df: DataFrame from which to select data.
@@ -196,6 +201,20 @@ def _append_columns(
            in `base_df` unchanged.
     :return: new DataFrame with combined data from `base_df` and `append_df`
     """
-    return base_df.assign(
-        **{target: append_df[source] for source, target in columns.items()}
-    )
+    if all(key == value for key, value in columns.items()):
+        # make sure to return a new DataFrame instead of changing the `base_df`.
+        _base_df = base_df.copy()
+        _base_df.loc[:, columns.keys()] = append_df
+        return _base_df
+    append_df = append_df.rename(columns=columns)
+    return pd.concat([base_df, append_df], axis="columns")
+
+
+def escape_separator(plain_str: str, sep: str = FLAT_COLUMN_SEPARATOR) -> str:
+    char = sep.strip()
+    return plain_str.replace(char, "\\" + char)
+
+
+def unescape_separator(escaped_str: str, sep: str = FLAT_COLUMN_SEPARATOR) -> str:
+    char = sep.strip()
+    return escaped_str.replace("\\" + char, char)

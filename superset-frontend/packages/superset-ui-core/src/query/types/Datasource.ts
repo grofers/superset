@@ -16,12 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { nanoid } from 'nanoid';
 import { Column } from './Column';
 import { Metric } from './Metric';
 
 export enum DatasourceType {
   Table = 'table',
-  Druid = 'druid',
+  Query = 'query',
+  Dataset = 'dataset',
+  SlTable = 'sl_table',
+  SavedQuery = 'saved_query',
+}
+
+export interface Currency {
+  symbol: string;
+  symbolPosition: string;
 }
 
 /**
@@ -38,9 +47,20 @@ export interface Datasource {
   columnFormats?: {
     [key: string]: string;
   };
+  currencyFormats?: {
+    [key: string]: Currency;
+  };
   verboseMap?: {
     [key: string]: string;
   };
 }
+
+export const DEFAULT_METRICS: Metric[] = [
+  {
+    metric_name: 'COUNT(*)',
+    expression: 'COUNT(*)',
+    uuid: nanoid(),
+  },
+];
 
 export default {};

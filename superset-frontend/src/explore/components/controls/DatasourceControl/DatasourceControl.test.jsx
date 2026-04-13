@@ -16,18 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import sinon from 'sinon';
 import configureStore from 'redux-mock-store';
-import { shallow } from 'enzyme';
-import { Menu } from 'src/common/components';
+import { DatasourceType } from '@superset-ui/core';
 import {
-  DatasourceModal,
-  ChangeDatasourceModal,
-} from 'src/components/Datasource';
-import DatasourceControl from 'src/explore/components/controls/DatasourceControl';
-import Icons from 'src/components/Icons';
-import { Tooltip } from 'src/components/Tooltip';
+  fireEvent,
+  render,
+  screen,
+  userEvent,
+  waitFor,
+} from 'spec/helpers/testing-library';
+import DatasourceControl, {
+  getDatasourceTitle,
+} from 'src/explore/components/controls/DatasourceControl';
 
 const defaultProps = {
   name: 'datasource',
@@ -40,6 +40,7 @@ const defaultProps = {
     id: 1,
     columns: [],
     metrics: [],
+    owners: [{ username: 'admin', userId: 1 }],
     database: {
       backend: 'mysql',
       name: 'main',
@@ -47,84 +48,122 @@ const defaultProps = {
     health_check_message: 'Warning message!',
   },
   actions: {
-    setDatasource: sinon.spy(),
+    setDatasource: jest.fn(),
   },
-  onChange: sinon.spy(),
+  onChange: jest.fn(),
+  user: {
+    createdOn: '2021-04-27T18:12:38.952304',
+    email: 'admin',
+    firstName: 'admin',
+    isActive: true,
+    lastName: 'admin',
+    permissions: {},
+    roles: { Admin: Array(173) },
+    userId: 1,
+    username: 'admin',
+  },
 };
 
 describe('DatasourceControl', () => {
-  function setup(overrideProps) {
+  const setup = (overrideProps = {}) => {
     const mockStore = configureStore([]);
     const store = mockStore({});
     const props = {
       ...defaultProps,
       ...overrideProps,
     };
-    return shallow(<DatasourceControl {...props} />, {
-      context: { store },
-    });
-  }
+    return {
+      rendered: render(<DatasourceControl {...props} />, {
+        useRedux: true,
+        useRouter: true,
+        store,
+      }),
+      store,
+      props,
+    };
+  };
 
   it('should not render Modal', () => {
-    const wrapper = setup();
-    expect(wrapper.find(DatasourceModal)).toHaveLength(0);
+    setup();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('should not render ChangeDatasourceModal', () => {
-    const wrapper = setup();
-    expect(wrapper.find(ChangeDatasourceModal)).toHaveLength(0);
+    setup();
+    expect(screen.queryByTestId('Swap dataset-modal')).not.toBeInTheDocument();
   });
 
-  it('show or hide Edit Datasource option', () => {
-    let wrapper = setup();
-    expect(wrapper.find('[data-test="datasource-menu"]')).toExist();
-    let menuWrapper = shallow(
-      <div>
-        {wrapper.find('[data-test="datasource-menu"]').prop('overlay')}
-      </div>,
-    );
-    expect(menuWrapper.find(Menu.Item)).toHaveLength(3);
-
-    wrapper = setup({
-      isEditable: false,
+  it('show or hide Edit Datasource option', async () => {
+    const {
+      rendered: { container, rerender },
+      store,
+      props,
+    } = setup();
+    expect(
+      container.querySelector('[data-test="datasource-menu-trigger"]'),
+    ).toBeInTheDocument();
+    userEvent.click(screen.getByLabelText('more'));
+    await waitFor(() => {
+      expect(screen.queryAllByRole('menuitem')).toHaveLength(3);
     });
-    expect(wrapper.find('[data-test="datasource-menu"]')).toExist();
-    menuWrapper = shallow(
-      <div>
-        {wrapper.find('[data-test="datasource-menu"]').prop('overlay')}
-      </div>,
-    );
-    expect(menuWrapper.find(Menu.Item)).toHaveLength(2);
 
-    wrapper = setup({
-      datasource: {
-        name: 'birth_names',
-        type: 'druid',
-        uid: '1__druid',
-        id: 1,
-        columns: [],
-        metrics: [],
-        database: {
-          backend: 'druid',
-          name: 'main',
-        },
-      },
+    // Close the menu
+    userEvent.click(document.body);
+    await waitFor(() => {
+      expect(screen.queryAllByRole('menuitem')).toHaveLength(0);
     });
-    expect(wrapper.find('[data-test="datasource-menu"]')).toExist();
-    menuWrapper = shallow(
-      <div>
-        {wrapper.find('[data-test="datasource-menu"]').prop('overlay')}
-      </div>,
-    );
-    expect(menuWrapper.find(Menu.Item)).toHaveLength(2);
+
+    rerender(<DatasourceControl {...{ ...props, isEditable: false }} />, {
+      useRedux: true,
+      useRouter: true,
+      store,
+    });
+    expect(
+      container.querySelector('[data-test="datasource-menu-trigger"]'),
+    ).toBeInTheDocument();
+    userEvent.click(screen.getByLabelText('more'));
+    await waitFor(() => {
+      expect(screen.queryAllByRole('menuitem')).toHaveLength(2);
+    });
   });
 
-  it('should render health check message', () => {
-    const wrapper = setup();
-    expect(wrapper.find(Icons.AlertSolid)).toExist();
-    const tooltip = wrapper.find(Tooltip).at(0);
-    expect(tooltip.prop('title')).toBe(
-      defaultProps.datasource.health_check_message,
-    );
+  it('should render health check message', async () => {
+    setup();
+    const modalTrigger = screen.getByLabelText('warning');
+    expect(modalTrigger).toBeInTheDocument();
+
+    // Hover the modal so healthcheck message can show up
+    fireEvent.mouseOver(modalTrigger);
+    await waitFor(() => {
+      expect(
+        screen.getByText(defaultProps.datasource.health_check_message),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('Gets Datasource Title', () => {
+    const sql = 'This is the sql';
+    const name = 'this is a name';
+    const emptyResult = '';
+    const queryDatasource1 = { type: DatasourceType.Query, sql };
+    let displayText = getDatasourceTitle(queryDatasource1);
+    expect(displayText).toBe(sql);
+    const queryDatasource2 = { type: DatasourceType.Query, sql: null };
+    displayText = getDatasourceTitle(queryDatasource2);
+    expect(displayText).toBe(null);
+    const queryDatasource3 = { type: 'random type', name };
+    displayText = getDatasourceTitle(queryDatasource3);
+    expect(displayText).toBe(name);
+    const queryDatasource4 = { type: 'random type' };
+    displayText = getDatasourceTitle(queryDatasource4);
+    expect(displayText).toBe(emptyResult);
+    displayText = getDatasourceTitle();
+    expect(displayText).toBe(emptyResult);
+    displayText = getDatasourceTitle(null);
+    expect(displayText).toBe(emptyResult);
+    displayText = getDatasourceTitle('I should not be a string');
+    expect(displayText).toBe(emptyResult);
+    displayText = getDatasourceTitle([]);
+    expect(displayText).toBe(emptyResult);
   });
 });

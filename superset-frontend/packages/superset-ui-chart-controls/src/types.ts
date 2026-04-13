@@ -17,20 +17,24 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { ReactNode, ReactText, ReactElement } from 'react';
+import { ReactElement, ReactNode, ReactText, ComponentType } from 'react';
+
 import type {
   AdhocColumn,
   Column,
+  Currency,
   DatasourceType,
+  JsonObject,
   JsonValue,
   Metric,
+  QueryFormColumn,
   QueryFormData,
+  QueryFormMetric,
+  QueryResponse,
 } from '@superset-ui/core';
-import { sharedControls } from './shared-controls';
-import sharedControlComponents from './shared-controls/components';
+import { sharedControls, sharedControlComponents } from './shared-controls';
 
 export type { Metric } from '@superset-ui/core';
-export type { ControlFormItemSpec } from './components/ControlForm';
 export type { ControlComponentProps } from './shared-controls/components/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,34 +51,61 @@ export type SharedControlComponents = typeof sharedControlComponents;
 /** ----------------------------------------------
  * Input data/props while rendering
  * ---------------------------------------------*/
+export interface Owner {
+  first_name: string;
+  id: number;
+  last_name: string;
+  username: string;
+  email?: string;
+}
+
 export type ColumnMeta = Omit<Column, 'id'> & {
   id?: number;
 } & AnyDict;
 
-export interface DatasourceMeta {
+export interface Dataset {
   id: number;
   type: DatasourceType;
   columns: ColumnMeta[];
   metrics: Metric[];
-  column_format: Record<string, string>;
+  column_formats: Record<string, string>;
+  currency_formats?: Record<string, Currency>;
   verbose_map: Record<string, string>;
   main_dttm_col: string;
   // eg. ['["ds", true]', 'ds [asc]']
   order_by_choices?: [string, string][] | null;
-  time_grain_sqla?: string;
+  time_grain_sqla?: [string, string][];
   granularity_sqla?: string;
   datasource_name: string | null;
+  name?: string;
   description: string | null;
+  uid?: string;
+  owners?: Owner[];
+  filter_select?: boolean;
+  filter_select_enabled?: boolean;
+  column_names?: string[];
+  catalog?: string;
+  schema?: string;
+  table_name?: string;
+  database?: Record<string, unknown>;
+  normalize_columns?: boolean;
+  always_filter_main_dttm?: boolean;
+  extra?: object | string;
 }
 
 export interface ControlPanelState {
+  slice: {
+    slice_id: number;
+  };
   form_data: QueryFormData;
-  datasource: DatasourceMeta | null;
+  datasource: Dataset | QueryResponse | null;
   controls: ControlStateMapping;
+  common: JsonObject;
+  metadata?: JsonObject | null;
 }
 
 /**
- * The action dispather will call Redux `dispatch` internally and return what's
+ * The action dispatcher will call Redux `dispatch` internally and return what's
  * returned from `dispatch`, which by default is the original or another action.
  */
 export interface ActionDispatcher<
@@ -88,7 +119,7 @@ export interface ActionDispatcher<
  * Mapping of action dispatchers
  */
 export interface ControlPanelActionDispatchers {
-  setDatasource: ActionDispatcher<[DatasourceMeta]>;
+  setDatasource: ActionDispatcher<[Dataset]>;
 }
 
 /**
@@ -131,6 +162,7 @@ export type InternalControlType =
   | 'DatasourceControl'
   | 'DateFilterControl'
   | 'FixedOrMetricControl'
+  | 'ColorBreakpointsControl'
   | 'HiddenControl'
   | 'SelectAsyncControl'
   | 'SelectControl'
@@ -147,10 +179,16 @@ export type InternalControlType =
   | 'DndColumnSelect'
   | 'DndFilterSelect'
   | 'DndMetricSelect'
+  | 'CurrencyControl'
+  | 'InputNumber'
+  | 'Checkbox'
+  | 'Select'
+  | 'Slider'
+  | 'Input'
   | keyof SharedControlComponents; // expanded in `expandControlConfig`
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ControlType = InternalControlType | React.ComponentType<any>;
+export type ControlType = InternalControlType | ComponentType<any>;
 
 export type TabOverride = 'data' | 'customize' | boolean;
 
@@ -171,6 +209,8 @@ export type TabOverride = 'data' | 'customize' | boolean;
  *    bubbled up to the control header, section header and query panel header.
  * - warning: text shown as a tooltip on a warning icon in the control's header
  * - error: text shown as a tooltip on a error icon in the control's header
+ * - shouldMapStateToProps: a function that receives the previous and current app state
+ *   and determines if the control needs to recalculate it's props based on the new state.
  * - mapStateToProps: a function that receives the App's state and return an object of k/v
  *    to overwrite configuration at runtime. This is useful to alter a component based on
  *    anything external to it, like another control's value. For instance it's possible to
@@ -180,7 +220,7 @@ export type TabOverride = 'data' | 'customize' | boolean;
      tab, or 'customize' if you want it to show up on that tam. Otherwise sections with ALL
      `renderTrigger: true` components will show up on the `Customize` tab.
  * - visibility: a function that uses control panel props to check whether a control should
- *    be visibile.
+ *    be visible.
  */
 export interface BaseControlConfig<
   T extends ControlType = ControlType,
@@ -188,9 +228,24 @@ export interface BaseControlConfig<
   V = JsonValue,
 > extends AnyDict {
   type: T;
-  label?: ReactNode;
-  description?: ReactNode;
+  label?:
+    | ReactNode
+    | ((
+        state: ControlPanelState,
+        controlState: ControlState,
+        // TODO: add strict `chartState` typing (see superset-frontend/src/explore/types)
+        chartState?: AnyDict,
+      ) => ReactNode);
+  description?:
+    | ReactNode
+    | ((
+        state: ControlPanelState,
+        controlState: ControlState,
+        // TODO: add strict `chartState` typing (see superset-frontend/src/explore/types)
+        chartState?: AnyDict,
+      ) => ReactNode);
   default?: V;
+  initialValue?: V;
   renderTrigger?: boolean;
   validators?: ControlValueValidator<T, O, V>[];
   warning?: ReactNode;
@@ -198,13 +253,27 @@ export interface BaseControlConfig<
   /**
    * Add additional props to chart control.
    */
+  shouldMapStateToProps?: (
+    prevState: ControlPanelState,
+    state: ControlPanelState,
+    controlState: ControlState,
+    // TODO: add strict `chartState` typing (see superset-frontend/src/explore/types)
+    chartState?: AnyDict,
+  ) => boolean;
   mapStateToProps?: (
     state: ControlPanelState,
     controlState: ControlState,
     // TODO: add strict `chartState` typing (see superset-frontend/src/explore/types)
     chartState?: AnyDict,
   ) => ExtraControlProps;
-  visibility?: (props: ControlPanelsContainerProps) => boolean;
+  visibility?: (
+    props: ControlPanelsContainerProps,
+    controlData: AnyDict,
+  ) => boolean;
+  disableStash?: boolean;
+  hidden?:
+    | boolean
+    | ((props: ControlPanelsContainerProps, controlData: AnyDict) => boolean);
 }
 
 export interface ControlValueValidator<
@@ -228,14 +297,13 @@ export type SelectControlType =
   | 'AdhocFilterControl'
   | 'FilterBoxItemControl';
 
-// via react-select/src/filters
 export interface FilterOption<T extends SelectOption> {
   label: string;
   value: string;
   data: T;
 }
 
-// Ref: superset-frontend/src/components/Select/SupersetStyledSelect.tsx
+// Ref: superset-frontend/@superset-ui/core/components/Select/SupersetStyledSelect.tsx
 export interface SelectControlConfig<
   O extends SelectOption = SelectOption,
   T extends SelectControlType = SelectControlType,
@@ -263,9 +331,7 @@ export type SharedControlConfig<
 /** --------------------------------------------
  * Custom controls
  * --------------------------------------------- */
-export type CustomControlConfig<P = {}> = BaseControlConfig<
-  React.ComponentType<P>
-> &
+export type CustomControlConfig<P = {}> = BaseControlConfig<ComponentType<P>> &
   // two run-time properties from superset-frontend/src/explore/components/Control.jsx
   Omit<P, 'onChange' | 'hovered'>;
 
@@ -279,8 +345,8 @@ export type ControlConfig<
 > = T extends InternalControlType
   ? SharedControlConfig<T, O>
   : T extends object
-  ? CustomControlConfig<T> // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  : CustomControlConfig<any>;
+    ? CustomControlConfig<T> // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    : CustomControlConfig<any>;
 
 /** ===========================================================
  * Chart plugin control panel config
@@ -289,7 +355,6 @@ export type SharedSectionAlias =
   | 'annotations'
   | 'colorScheme'
   | 'datasourceAndVizType'
-  | 'druidTimeSeries'
   | 'sqlaTimeSeries'
   | 'NVD3TimeSeries';
 
@@ -306,6 +371,13 @@ export type CustomControlItem = {
   config: BaseControlConfig<any, any, any>;
 };
 
+export const isCustomControlItem = (obj: unknown): obj is CustomControlItem =>
+  typeof obj === 'object' &&
+  obj !== null &&
+  typeof ('name' in obj && obj.name) === 'string' &&
+  typeof ('config' in obj && obj.config) === 'object' &&
+  (obj as CustomControlItem).config !== null;
+
 // use ReactElement instead of ReactNode because `string`, `number`, etc. may
 // interfere with other ControlSetItem types
 export type ExpandedControlItem = CustomControlItem | ReactElement | null;
@@ -321,18 +393,47 @@ export type ControlSetRow = ControlSetItem[];
 //  - superset-frontend/src/explore/components/ControlPanelsContainer.jsx
 //  - superset-frontend/src/explore/components/ControlPanelSection.jsx
 export interface ControlPanelSectionConfig {
-  label: ReactNode;
+  label?: ReactNode;
   description?: ReactNode;
   expanded?: boolean;
   tabOverride?: TabOverride;
   controlSetRows: ControlSetRow[];
+  visibility?: (
+    props: ControlPanelsContainerProps,
+    controlData: AnyDict,
+  ) => boolean;
 }
 
+export interface StandardizedControls {
+  metrics: QueryFormMetric[];
+  columns: QueryFormColumn[];
+}
+
+export interface StandardizedFormDataInterface {
+  // Controls not used in the current viz
+  controls: StandardizedControls;
+  // Transformation history
+  memorizedFormData: Map<string, QueryFormData>;
+}
+
+export type QueryStandardizedFormData = QueryFormData & {
+  standardizedFormData: StandardizedFormDataInterface;
+};
+
+export const isStandardizedFormData = (
+  formData: QueryFormData,
+): formData is QueryStandardizedFormData =>
+  formData?.standardizedFormData?.controls &&
+  formData?.standardizedFormData?.memorizedFormData &&
+  Array.isArray(formData.standardizedFormData.controls.metrics) &&
+  Array.isArray(formData.standardizedFormData.controls.columns);
+
 export interface ControlPanelConfig {
-  controlPanelSections: ControlPanelSectionConfig[];
+  controlPanelSections: (ControlPanelSectionConfig | null)[];
   controlOverrides?: ControlOverrides;
   sectionOverrides?: SectionOverrides;
   onInit?: (state: ControlStateMapping) => void;
+  formDataOverrides?: (formData: QueryFormData) => QueryFormData;
 }
 
 export type ControlOverrides = {
@@ -345,29 +446,29 @@ export type SectionOverrides = {
 
 // Ref:
 //  - superset-frontend/src/explore/components/ConditionalFormattingControl.tsx
-export enum COMPARATOR {
-  NONE = 'None',
-  GREATER_THAN = '>',
-  LESS_THAN = '<',
-  GREATER_OR_EQUAL = '≥',
-  LESS_OR_EQUAL = '≤',
-  EQUAL = '=',
-  NOT_EQUAL = '≠',
-  BETWEEN = '< x <',
-  BETWEEN_OR_EQUAL = '≤ x ≤',
-  BETWEEN_OR_LEFT_EQUAL = '≤ x <',
-  BETWEEN_OR_RIGHT_EQUAL = '< x ≤',
+export enum Comparator {
+  None = 'None',
+  GreaterThan = '>',
+  LessThan = '<',
+  GreaterOrEqual = '≥',
+  LessOrEqual = '≤',
+  Equal = '=',
+  NotEqual = '≠',
+  Between = '< x <',
+  BetweenOrEqual = '≤ x ≤',
+  BetweenOrLeftEqual = '≤ x <',
+  BetweenOrRightEqual = '< x ≤',
 }
 
-export const MULTIPLE_VALUE_COMPARATORS = [
-  COMPARATOR.BETWEEN,
-  COMPARATOR.BETWEEN_OR_EQUAL,
-  COMPARATOR.BETWEEN_OR_LEFT_EQUAL,
-  COMPARATOR.BETWEEN_OR_RIGHT_EQUAL,
+export const MultipleValueComparators = [
+  Comparator.Between,
+  Comparator.BetweenOrEqual,
+  Comparator.BetweenOrLeftEqual,
+  Comparator.BetweenOrRightEqual,
 ];
 
 export type ConditionalFormattingConfig = {
-  operator?: COMPARATOR;
+  operator?: Comparator;
   targetValue?: number;
   targetValueLeft?: number;
   targetValueRight?: number;
@@ -382,10 +483,8 @@ export type ColorFormatters = {
 
 export default {};
 
-export function isColumnMeta(
-  column: AdhocColumn | ColumnMeta,
-): column is ColumnMeta {
-  return 'column_name' in column;
+export function isColumnMeta(column: AnyDict): column is ColumnMeta {
+  return !!column && 'column_name' in column;
 }
 
 export function isSavedExpression(
@@ -396,8 +495,100 @@ export function isSavedExpression(
   );
 }
 
-export function isAdhocColumn(
-  column: AdhocColumn | ColumnMeta,
-): column is AdhocColumn {
-  return 'label' in column && 'sqlExpression' in column;
+export function isControlPanelSectionConfig(
+  section: ControlPanelSectionConfig | null,
+): section is ControlPanelSectionConfig {
+  return section !== null;
 }
+
+export function isDataset(
+  datasource: Dataset | QueryResponse | null | undefined,
+): datasource is Dataset {
+  return (
+    !!datasource && 'columns' in datasource && !('sqlEditorId' in datasource)
+  );
+}
+
+export function isQueryResponse(
+  datasource: Dataset | QueryResponse | null | undefined,
+): datasource is QueryResponse {
+  return !!datasource && 'results' in datasource && 'sqlEditorId' in datasource;
+}
+
+export enum SortSeriesType {
+  Name = 'name',
+  Max = 'max',
+  Min = 'min',
+  Sum = 'sum',
+  Avg = 'avg',
+}
+
+export type LegendPaddingType = {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+};
+
+export type SortSeriesData = {
+  sort_series_type: SortSeriesType;
+  sort_series_ascending: boolean;
+};
+
+export type ControlFormValueValidator<V> = (value: V) => string | false;
+
+export type ControlFormItemSpec<T extends ControlType = ControlType> = {
+  controlType: T;
+  label: ReactNode;
+  description: ReactNode;
+  placeholder?: string;
+  validators?: ControlFormValueValidator<any>[];
+  width?: number | string;
+  /**
+   * Time to delay change propagation.
+   */
+  debounceDelay?: number;
+} & (T extends 'Select'
+  ? {
+      allowNewOptions?: boolean;
+      options: any;
+      value?: string;
+      defaultValue?: string;
+      creatable?: boolean;
+      minWidth?: number | string;
+      validators?: ControlFormValueValidator<string>[];
+    }
+  : T extends 'RadioButtonControl'
+    ? {
+        options: [string, ReactNode][];
+        value?: string;
+        defaultValue?: string;
+      }
+    : T extends 'Checkbox'
+      ? {
+          value?: boolean;
+          defaultValue?: boolean;
+        }
+      : T extends 'InputNumber' | 'Slider'
+        ? {
+            min?: number;
+            max?: number;
+            step?: number;
+            value?: number;
+            defaultValue?: number;
+            validators?: ControlFormValueValidator<number>[];
+          }
+        : T extends 'Input'
+          ? {
+              controlType: 'Input';
+              value?: string;
+              defaultValue?: string;
+              validators?: ControlFormValueValidator<string>[];
+            }
+          : T extends 'CurrencyControl'
+            ? {
+                controlType: 'CurrencyControl';
+                value?: Currency;
+                defaultValue?: Currency;
+              }
+            : {});

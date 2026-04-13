@@ -16,22 +16,42 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { lazy, Suspense } from 'react';
+import 'src/public-path';
+
+import { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom';
 import { BrowserRouter as Router, Route } from 'react-router-dom';
-import { Switchboard } from '@superset-ui/switchboard';
-import { bootstrapData } from 'src/preamble';
+import {
+  type SupersetThemeConfig,
+  makeApi,
+  t,
+  logging,
+} from '@superset-ui/core';
+import Switchboard from '@superset-ui/switchboard';
+import getBootstrapData, { applicationRoot } from 'src/utils/getBootstrapData';
 import setupClient from 'src/setup/setupClient';
-import { RootContextProviders } from 'src/views/RootContextProviders';
-import ErrorBoundary from 'src/components/ErrorBoundary';
-import Loading from 'src/components/Loading';
+import setupPlugins from 'src/setup/setupPlugins';
+import { useUiConfig } from 'src/components/UiConfigContext';
+import { store, USER_LOADED } from 'src/views/store';
+import { Loading } from '@superset-ui/core/components';
+import { ErrorBoundary } from 'src/components';
+import { addDangerToast } from 'src/components/MessageToasts/actions';
+import ToastContainer from 'src/components/MessageToasts/ToastContainer';
+import { UserWithPermissionsAndRoles } from 'src/types/bootstrapTypes';
+import {
+  EmbeddedContextProviders,
+  getThemeController,
+} from './EmbeddedContextProviders';
+import { embeddedApi } from './api';
+import { getDataMaskChangeTrigger } from './utils';
+
+setupPlugins();
 
 const debugMode = process.env.WEBPACK_MODE === 'development';
+const bootstrapData = getBootstrapData();
 
 function log(...info: unknown[]) {
-  if (debugMode) {
-    console.debug(`[superset]`, ...info);
-  }
+  if (debugMode) logging.debug(`[superset]`, ...info);
 }
 
 const LazyDashboardPage = lazy(
@@ -41,17 +61,49 @@ const LazyDashboardPage = lazy(
     ),
 );
 
+const EmbededLazyDashboardPage = () => {
+  const uiConfig = useUiConfig();
+
+  // Emit data mask changes to the parent window
+  if (uiConfig?.emitDataMasks) {
+    log('setting up Switchboard event emitter');
+
+    let previousDataMask = store.getState().dataMask;
+
+    store.subscribe(() => {
+      const currentState = store.getState();
+      const currentDataMask = currentState.dataMask;
+
+      // Only emit if the dataMask has changed
+      if (previousDataMask !== currentDataMask) {
+        Switchboard.emit('observeDataMask', {
+          ...currentDataMask,
+          ...getDataMaskChangeTrigger(currentDataMask, previousDataMask),
+        });
+        previousDataMask = currentDataMask;
+      }
+    });
+  }
+
+  return <LazyDashboardPage idOrSlug={bootstrapData.embedded!.dashboard_id} />;
+};
+
+const EmbeddedRoute = () => (
+  <EmbeddedContextProviders>
+    <Suspense fallback={<Loading />}>
+      <ErrorBoundary>
+        <EmbededLazyDashboardPage />
+      </ErrorBoundary>
+      <ToastContainer position="top" />
+    </Suspense>
+  </EmbeddedContextProviders>
+);
+
 const EmbeddedApp = () => (
-  <Router>
-    <Route path="/dashboard/:idOrSlug/embedded">
-      <Suspense fallback={<Loading />}>
-        <RootContextProviders>
-          <ErrorBoundary>
-            <LazyDashboardPage />
-          </ErrorBoundary>
-        </RootContextProviders>
-      </Suspense>
-    </Route>
+  <Router basename={applicationRoot()}>
+    {/* todo (embedded) remove this line after uuids are deployed */}
+    <Route path="/dashboard/:idOrSlug/embedded/" component={EmbeddedRoute} />
+    <Route path="/embedded/:uuid/" component={EmbeddedRoute} />
   </Router>
 );
 
@@ -59,9 +111,16 @@ const appMountPoint = document.getElementById('app')!;
 
 const MESSAGE_TYPE = '__embedded_comms__';
 
-if (!window.parent) {
-  appMountPoint.innerHTML =
-    'This page is intended to be embedded in an iframe, but no window.parent was found.';
+function showFailureMessage(message: string) {
+  appMountPoint.innerHTML = message;
+}
+
+if (!window.parent || window.parent === window) {
+  showFailureMessage(
+    t(
+      'This page is intended to be embedded in an iframe, but it looks like that is not the case.',
+    ),
+  );
 }
 
 // if the page is embedded in an origin that hasn't
@@ -75,25 +134,73 @@ if (!window.parent) {
 //   );
 // }
 
-async function start(guestToken: string) {
-  // the preamble configures a client, but we need to configure a new one
-  // now that we have the guest token
+let displayedUnauthorizedToast = false;
+
+/**
+ * If there is a problem with the guest token, we will start getting
+ * 401 errors from the api and SupersetClient will call this function.
+ */
+function guestUnauthorizedHandler() {
+  if (displayedUnauthorizedToast) return; // no need to display this message every time we get another 401
+  displayedUnauthorizedToast = true;
+  // If a guest user were sent to a login screen on 401, they would have no valid login to use.
+  // For embedded it makes more sense to just display a message
+  // and let them continue accessing the page, to whatever extent they can.
+  store.dispatch(
+    addDangerToast(
+      t(
+        'This session has encountered an interruption, and some controls may not work as intended. If you are the developer of this app, please check that the guest token is being generated correctly.',
+      ),
+      {
+        duration: -1, // stay open until manually closed
+        noDuplicate: true,
+      },
+    ),
+  );
+}
+
+function start() {
+  const getMeWithRole = makeApi<void, { result: UserWithPermissionsAndRoles }>({
+    method: 'GET',
+    endpoint: '/api/v1/me/roles/',
+  });
+  return getMeWithRole().then(
+    ({ result }) => {
+      // fill in some missing bootstrap data
+      // (because at pageload, we don't have any auth yet)
+      // this allows the frontend's permissions checks to work.
+      bootstrapData.user = result;
+      store.dispatch({
+        type: USER_LOADED,
+        user: result,
+      });
+      ReactDOM.render(<EmbeddedApp />, appMountPoint);
+    },
+    err => {
+      // something is most likely wrong with the guest token
+      logging.error(err);
+      showFailureMessage(
+        t(
+          'Something went wrong with embedded authentication. Check the dev console for details.',
+        ),
+      );
+    },
+  );
+}
+
+/**
+ * Configures SupersetClient with the correct settings for the embedded dashboard page.
+ */
+function setupGuestClient(guestToken: string) {
   setupClient({
+    appRoot: applicationRoot(),
     guestToken,
     guestTokenHeaderName: bootstrapData.config?.GUEST_TOKEN_HEADER_NAME,
+    unauthorizedHandler: guestUnauthorizedHandler,
   });
-  ReactDOM.render(<EmbeddedApp />, appMountPoint);
 }
 
 function validateMessageEvent(event: MessageEvent) {
-  if (
-    event.data?.type === 'webpackClose' ||
-    event.data?.source === '@devtools-page'
-  ) {
-    // sometimes devtools use the messaging api and we want to ignore those
-    throw new Error("Sir, this is a Wendy's");
-  }
-
   // if (!ALLOW_ORIGINS.includes(event.origin)) {
   //   throw new Error('Message origin is not in the allowed list');
   // }
@@ -103,11 +210,11 @@ function validateMessageEvent(event: MessageEvent) {
   }
 }
 
-window.addEventListener('message', function (event) {
+window.addEventListener('message', function embeddedPageInitializer(event) {
   try {
     validateMessageEvent(event);
   } catch (err) {
-    log('ignoring message', err, event);
+    log('ignoring message unrelated to embedded comms', err, event);
     return;
   }
 
@@ -115,22 +222,63 @@ window.addEventListener('message', function (event) {
   if (event.data.handshake === 'port transfer' && port) {
     log('message port received', event);
 
-    const switchboard = new Switchboard({
+    Switchboard.init({
       port,
       name: 'superset',
       debug: debugMode,
     });
 
-    switchboard.defineMethod('guestToken', ({ guestToken }) => {
-      start(guestToken);
-    });
+    let started = false;
 
-    switchboard.defineMethod('getScrollSize', () => ({
-      width: document.body.scrollWidth,
-      height: document.body.scrollHeight,
-    }));
+    Switchboard.defineMethod(
+      'guestToken',
+      ({ guestToken }: { guestToken: string }) => {
+        setupGuestClient(guestToken);
+        if (!started) {
+          start();
+          started = true;
+        }
+      },
+    );
 
-    switchboard.start();
+    Switchboard.defineMethod('getScrollSize', embeddedApi.getScrollSize);
+    Switchboard.defineMethod(
+      'getDashboardPermalink',
+      embeddedApi.getDashboardPermalink,
+    );
+    Switchboard.defineMethod('getActiveTabs', embeddedApi.getActiveTabs);
+    Switchboard.defineMethod('getDataMask', embeddedApi.getDataMask);
+    Switchboard.defineMethod(
+      'setThemeConfig',
+      (payload: { themeConfig: SupersetThemeConfig }) => {
+        const { themeConfig } = payload;
+        log('Received setThemeConfig request:', themeConfig);
+
+        try {
+          const themeController = getThemeController();
+          themeController.setThemeConfig(themeConfig);
+          return { success: true, message: 'Theme applied' };
+        } catch (error) {
+          logging.error('Failed to apply theme config:', error);
+          throw new Error(`Failed to apply theme config: ${error.message}`);
+        }
+      },
+    );
+
+    Switchboard.start();
+  }
+});
+
+// Clean up theme controller on page unload
+window.addEventListener('beforeunload', () => {
+  try {
+    const controller = getThemeController();
+    if (controller) {
+      log('Destroying theme controller');
+      controller.destroy();
+    }
+  } catch (error) {
+    logging.warn('Failed to destroy theme controller:', error);
   }
 });
 

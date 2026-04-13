@@ -17,11 +17,17 @@
  * under the License.
  */
 
-import userEvent from '@testing-library/user-event';
-import React from 'react';
-import { render, screen } from 'spec/helpers/testing-library';
-import TimeoutErrorMessage from './TimeoutErrorMessage';
-import { ErrorLevel, ErrorSource, ErrorTypeEnum } from './types';
+import { ErrorSource, ErrorTypeEnum, ErrorLevel } from '@superset-ui/core';
+import { render, screen, userEvent } from 'spec/helpers/testing-library';
+import { TimeoutErrorMessage } from './TimeoutErrorMessage';
+
+jest.mock(
+  '@superset-ui/core/components/Icons/AsyncIcon',
+  () =>
+    ({ fileName }: { fileName: string }) => (
+      <span role="img" aria-label={fileName.replace('_', '-')} />
+    ),
+);
 
 const mockedProps = {
   error: {

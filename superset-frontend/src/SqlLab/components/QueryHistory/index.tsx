@@ -16,43 +16,154 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import Alert from 'src/components/Alert';
-import { t } from '@superset-ui/core';
-import { Query } from 'src/SqlLab/types';
+import { useEffect, useMemo, useState } from 'react';
+import { shallowEqual, useSelector } from 'react-redux';
+import { useInView } from 'react-intersection-observer';
+import { omit } from 'lodash';
+import { EmptyState, Skeleton } from '@superset-ui/core/components';
+import {
+  t,
+  styled,
+  css,
+  FeatureFlag,
+  isFeatureEnabled,
+  useTheme,
+} from '@superset-ui/core';
 import QueryTable from 'src/SqlLab/components/QueryTable';
+import { SqlLabRootState } from 'src/SqlLab/types';
+import { useEditorQueriesQuery } from 'src/hooks/apiResources/queries';
+import useEffectEvent from 'src/hooks/useEffectEvent';
+import useQueryEditor from 'src/SqlLab/hooks/useQueryEditor';
 
 interface QueryHistoryProps {
-  queries: Query[];
-  actions: {
-    queryEditorSetSql: Function;
-    cloneQueryToNewTab: Function;
-    fetchQueryResults: Function;
-    clearQueryResults: Function;
-    removeQuery: Function;
-  };
+  queryEditorId: string | number;
   displayLimit: number;
+  latestQueryId: string | undefined;
 }
 
-const QueryHistory = ({ queries, actions, displayLimit }: QueryHistoryProps) =>
-  queries.length > 0 ? (
-    <QueryTable
-      columns={[
-        'state',
-        'started',
-        'duration',
-        'progress',
-        'rows',
-        'sql',
-        'output',
-        'actions',
-      ]}
-      queries={queries}
-      actions={actions}
-      displayLimit={displayLimit}
-    />
-  ) : (
-    <Alert type="info" message={t('No query history yet...')} />
+const StyledEmptyStateWrapper = styled.div`
+  height: 100%;
+  .ant-empty-image img {
+    margin-right: 28px;
+  }
+
+  p {
+    margin-right: 28px;
+  }
+`;
+
+const getEditorQueries = (
+  queries: SqlLabRootState['sqlLab']['queries'],
+  queryEditorId: string | number,
+) =>
+  Object.values(queries).filter(
+    ({ sqlEditorId }) => String(sqlEditorId) === String(queryEditorId),
   );
+
+const QueryHistory = ({
+  queryEditorId,
+  displayLimit,
+  latestQueryId,
+}: QueryHistoryProps) => {
+  const { id, tabViewId } = useQueryEditor(String(queryEditorId), [
+    'tabViewId',
+  ]);
+  const theme = useTheme();
+  const editorId = tabViewId ?? id;
+  const [ref, hasReachedBottom] = useInView({ threshold: 0 });
+  const [pageIndex, setPageIndex] = useState(0);
+  const queries = useSelector(
+    ({ sqlLab: { queries } }: SqlLabRootState) => queries,
+    shallowEqual,
+  );
+  const {
+    currentData: data,
+    isLoading,
+    isFetching,
+  } = useEditorQueriesQuery(
+    { editorId, pageIndex },
+    {
+      skip: !isFeatureEnabled(FeatureFlag.SqllabBackendPersistence),
+    },
+  );
+  const editorQueries = useMemo(
+    () =>
+      data
+        ? getEditorQueries(
+            omit(
+              queries,
+              data.result.map(({ id }) => id),
+            ),
+            editorId,
+          )
+            .concat(data.result)
+            .sort((a, b) => {
+              const aTime = a.startDttm || 0;
+              const bTime = b.startDttm || 0;
+              return aTime - bTime;
+            })
+        : getEditorQueries(queries, editorId),
+    [queries, data, editorId],
+  );
+
+  const loadNext = useEffectEvent(() => {
+    setPageIndex(pageIndex + 1);
+  });
+
+  const loadedDataCount = data?.result.length || 0;
+  const totalCount = data?.count || 0;
+
+  useEffect(() => {
+    if (hasReachedBottom && loadedDataCount < totalCount) {
+      loadNext();
+    }
+  }, [hasReachedBottom, loadNext, loadedDataCount, totalCount]);
+
+  if (!editorQueries.length && isLoading) {
+    return <Skeleton active />;
+  }
+
+  return editorQueries.length > 0 ? (
+    <div
+      css={css`
+        padding-left: ${theme.sizeUnit * 4}px;
+      `}
+    >
+      <QueryTable
+        columns={[
+          'state',
+          'started',
+          'duration',
+          'progress',
+          'rows',
+          'sql',
+          'results',
+          'actions',
+        ]}
+        queries={editorQueries}
+        displayLimit={displayLimit}
+        latestQueryId={latestQueryId}
+      />
+      {data && loadedDataCount < totalCount && (
+        <div
+          ref={ref}
+          css={css`
+            position: relative;
+            top: -150px;
+          `}
+        />
+      )}
+      {isFetching && <Skeleton active />}
+    </div>
+  ) : (
+    <StyledEmptyStateWrapper>
+      <EmptyState
+        title={t('Run a query to display query history')}
+        size="medium"
+        image="document.svg"
+      />
+    </StyledEmptyStateWrapper>
+  );
+};
 
 export default QueryHistory;

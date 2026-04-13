@@ -16,33 +16,40 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, {
+import {
   FunctionComponent,
   useState,
   ReactNode,
   useMemo,
   useEffect,
 } from 'react';
-import { styled, SupersetClient, t } from '@superset-ui/core';
-import { Select } from 'src/components';
-import { FormLabel } from 'src/components/Form';
-import Icons from 'src/components/Icons';
-import DatabaseSelector, {
-  DatabaseObject,
-} from 'src/components/DatabaseSelector';
-import RefreshLabel from 'src/components/RefreshLabel';
-import CertifiedBadge from 'src/components/CertifiedBadge';
-import WarningIconWithTooltip from 'src/components/WarningIconWithTooltip';
+import type { SelectValue } from '@superset-ui/core/components';
+
+import {
+  styled,
+  t,
+  getClientErrorMessage,
+  getClientErrorObject,
+} from '@superset-ui/core';
+import { CertifiedBadge, Select } from '@superset-ui/core/components';
+import { DatabaseSelector } from 'src/components';
+import { Icons } from '@superset-ui/core/components/Icons';
+import type { DatabaseObject } from 'src/components/DatabaseSelector/types';
+import { StyledFormLabel } from 'src/components/DatabaseSelector/styles';
+import RefreshLabel from '@superset-ui/core/components/RefreshLabel';
+import WarningIconWithTooltip from '@superset-ui/core/components/WarningIconWithTooltip';
 import { useToasts } from 'src/components/MessageToasts/withToasts';
+import { useTables, Table } from 'src/hooks/apiResources';
+
+const REFRESH_WIDTH = 30;
 
 const TableSelectorWrapper = styled.div`
   ${({ theme }) => `
     .refresh {
       display: flex;
       align-items: center;
-      width: 30px;
-      margin-left: ${theme.gridUnit}px;
-      margin-top: ${theme.gridUnit * 5}px;
+      width: ${REFRESH_WIDTH}px;
+      margin-left: ${theme.sizeUnit}px;
     }
 
     .section {
@@ -52,16 +59,17 @@ const TableSelectorWrapper = styled.div`
     }
 
     .divider {
-      border-bottom: 1px solid ${theme.colors.secondary.light5};
+      border-bottom: 1px solid ${theme.colorSplit};
       margin: 15px 0;
     }
 
     .table-length {
-      color: ${theme.colors.grayscale.light1};
+      color: ${theme.colorTextSecondary};
     }
 
     .select {
       flex: 1;
+      max-width: calc(100% - ${theme.sizeUnit + REFRESH_WIDTH}px)
     }
   `}
 `;
@@ -73,55 +81,50 @@ const TableLabel = styled.span`
 
   svg,
   small {
-    margin-right: ${({ theme }) => theme.gridUnit}px;
+    margin-right: ${({ theme }) => theme.sizeUnit}px;
   }
 `;
 
 interface TableSelectorProps {
   clearable?: boolean;
-  database?: DatabaseObject;
+  database?: DatabaseObject | null;
+  emptyState?: ReactNode;
   formMode?: boolean;
-  getDbList?: (arg0: any) => {};
+  getDbList?: (arg0: any) => void;
   handleError: (msg: string) => void;
   isDatabaseSelectEnabled?: boolean;
   onDbChange?: (db: DatabaseObject) => void;
+  onCatalogChange?: (catalog?: string | null) => void;
   onSchemaChange?: (schema?: string) => void;
-  onSchemasLoad?: () => void;
-  onTableChange?: (tableName?: string, schema?: string) => void;
-  onTablesLoad?: (options: Array<any>) => void;
   readOnly?: boolean;
+  catalog?: string | null;
   schema?: string;
+  onEmptyResults?: (searchText?: string) => void;
   sqlLabMode?: boolean;
-  tableName?: string;
+  tableValue?: string | string[];
+  onTableSelectChange?: (
+    value?: string | string[],
+    catalog?: string | null,
+    schema?: string,
+  ) => void;
+  tableSelectMode?: 'single' | 'multiple';
+  customTableOptionLabelRenderer?: (table: Table) => JSX.Element;
 }
 
-interface Table {
-  label: string;
-  value: string;
-  type: string;
-  extra?: {
-    certification?: {
-      certified_by: string;
-      details: string;
-    };
-    warning_markdown?: string;
-  };
-}
-
-interface TableOption {
+export interface TableOption {
   label: JSX.Element;
   text: string;
   value: string;
 }
 
-const TableOption = ({ table }: { table: Table }) => {
-  const { label, type, extra } = table;
+export const TableOption = ({ table }: { table: Table }) => {
+  const { value, type, extra } = table;
   return (
-    <TableLabel title={label}>
+    <TableLabel title={value}>
       {type === 'view' ? (
-        <Icons.Eye iconSize="m" />
+        <Icons.EyeOutlined iconSize="m" />
       ) : (
-        <Icons.Table iconSize="m" />
+        <Icons.InsertRowAboveOutlined iconSize="m" />
       )}
       {extra?.certification && (
         <CertifiedBadge
@@ -134,119 +137,153 @@ const TableOption = ({ table }: { table: Table }) => {
         <WarningIconWithTooltip
           warningMarkdown={extra.warning_markdown}
           size="l"
+          marginRight={4}
         />
       )}
-      {label}
+      {value}
     </TableLabel>
   );
 };
 
+function renderSelectRow(select: ReactNode, refreshBtn: ReactNode) {
+  return (
+    <div className="section">
+      <span className="select">{select}</span>
+      <span className="refresh">{refreshBtn}</span>
+    </div>
+  );
+}
+
 const TableSelector: FunctionComponent<TableSelectorProps> = ({
   database,
+  emptyState,
   formMode = false,
   getDbList,
   handleError,
   isDatabaseSelectEnabled = true,
   onDbChange,
+  onCatalogChange,
   onSchemaChange,
-  onSchemasLoad,
-  onTableChange,
-  onTablesLoad,
   readOnly = false,
+  onEmptyResults,
+  catalog,
   schema,
   sqlLabMode = true,
-  tableName,
+  tableSelectMode = 'single',
+  tableValue = undefined,
+  onTableSelectChange,
+  customTableOptionLabelRenderer,
 }) => {
-  const [currentDatabase, setCurrentDatabase] = useState<
-    DatabaseObject | undefined
-  >(database);
+  const { addSuccessToast } = useToasts();
+  const [currentCatalog, setCurrentCatalog] = useState<
+    string | null | undefined
+  >(catalog);
   const [currentSchema, setCurrentSchema] = useState<string | undefined>(
     schema,
   );
-  const [currentTable, setCurrentTable] = useState<TableOption | undefined>();
-  const [refresh, setRefresh] = useState(0);
-  const [previousRefresh, setPreviousRefresh] = useState(0);
-  const [loadingTables, setLoadingTables] = useState(false);
-  const [tableOptions, setTableOptions] = useState<TableOption[]>([]);
-  const { addSuccessToast } = useToasts();
+  const [tableSelectValue, setTableSelectValue] = useState<
+    SelectValue | undefined
+  >(undefined);
+  const {
+    currentData: data,
+    isFetching: loadingTables,
+    refetch,
+  } = useTables({
+    dbId: database?.id,
+    catalog: currentCatalog,
+    schema: currentSchema,
+    onSuccess: (data, isFetched) => {
+      if (isFetched) {
+        addSuccessToast(t('List updated'));
+      }
+    },
+    onError: err => {
+      getClientErrorObject(err).then(clientError => {
+        handleError(
+          getClientErrorMessage(
+            t('There was an error loading the tables'),
+            clientError,
+          ),
+        );
+      });
+    },
+  });
+
+  const tableOptions = useMemo<TableOption[]>(
+    () =>
+      data
+        ? data.options.map(table => ({
+            value: table.value,
+            label: customTableOptionLabelRenderer ? (
+              customTableOptionLabelRenderer(table)
+            ) : (
+              <TableOption table={table} />
+            ),
+            text: table.value,
+          }))
+        : [],
+    [data, customTableOptionLabelRenderer],
+  );
 
   useEffect(() => {
     // reset selections
     if (database === undefined) {
-      setCurrentDatabase(undefined);
+      setCurrentCatalog(undefined);
       setCurrentSchema(undefined);
-      setCurrentTable(undefined);
+      setTableSelectValue(undefined);
     }
-  }, [database]);
+  }, [database, tableSelectMode]);
 
   useEffect(() => {
-    if (currentDatabase && currentSchema) {
-      setLoadingTables(true);
-      const encodedSchema = encodeURIComponent(currentSchema);
-      const forceRefresh = refresh !== previousRefresh;
-      // TODO: Would be nice to add pagination in a follow-up. Needs endpoint changes.
-      const endpoint = encodeURI(
-        `/superset/tables/${currentDatabase.id}/${encodedSchema}/undefined/${forceRefresh}/`,
+    if (tableSelectMode === 'single') {
+      setTableSelectValue(
+        tableOptions.find(option => option.value === tableValue),
       );
-
-      if (previousRefresh !== refresh) {
-        setPreviousRefresh(refresh);
-      }
-
-      SupersetClient.get({ endpoint })
-        .then(({ json }) => {
-          const options: TableOption[] = [];
-          let currentTable;
-          json.options.forEach((table: Table) => {
-            const option = {
-              value: table.value,
-              label: <TableOption table={table} />,
-              text: table.label,
-            };
-            options.push(option);
-            if (table.label === tableName) {
-              currentTable = option;
-            }
-          });
-          if (onTablesLoad) {
-            onTablesLoad(json.options);
-          }
-          setTableOptions(options);
-          setCurrentTable(currentTable);
-          setLoadingTables(false);
-          if (forceRefresh) addSuccessToast('List updated');
-        })
-        .catch(e => {
-          setLoadingTables(false);
-          handleError(t('There was an error loading the tables'));
-        });
+    } else {
+      setTableSelectValue(
+        tableOptions?.filter(
+          option => option && tableValue?.includes(option.value),
+        ) || [],
+      );
     }
-    // We are using the refresh state to re-trigger the query
-    // previousRefresh should be out of dependencies array
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDatabase, currentSchema, onTablesLoad, refresh]);
+  }, [tableOptions, tableValue, tableSelectMode]);
 
-  function renderSelectRow(select: ReactNode, refreshBtn: ReactNode) {
-    return (
-      <div className="section">
-        <span className="select">{select}</span>
-        <span className="refresh">{refreshBtn}</span>
-      </div>
-    );
-  }
-
-  const internalTableChange = (table?: TableOption) => {
-    setCurrentTable(table);
-    if (onTableChange && currentSchema) {
-      onTableChange(table?.value, currentSchema);
+  const internalTableChange = (
+    selectedOptions: TableOption | TableOption[] | undefined,
+  ) => {
+    if (currentSchema) {
+      onTableSelectChange?.(
+        Array.isArray(selectedOptions)
+          ? selectedOptions.map(option => option?.value)
+          : selectedOptions?.value,
+        currentCatalog,
+        currentSchema,
+      );
+    } else {
+      setTableSelectValue(selectedOptions);
     }
   };
 
   const internalDbChange = (db: DatabaseObject) => {
-    setCurrentDatabase(db);
     if (onDbChange) {
       onDbChange(db);
     }
+
+    setCurrentCatalog(undefined);
+    setCurrentSchema(undefined);
+    const value = tableSelectMode === 'single' ? undefined : [];
+    setTableSelectValue(value);
+  };
+
+  const internalCatalogChange = (catalog?: string | null) => {
+    setCurrentCatalog(catalog);
+    if (onCatalogChange) {
+      onCatalogChange(catalog);
+    }
+
+    setCurrentSchema(undefined);
+    const value = tableSelectMode === 'single' ? undefined : [];
+    setTableSelectValue(value);
   };
 
   const internalSchemaChange = (schema?: string) => {
@@ -254,83 +291,87 @@ const TableSelector: FunctionComponent<TableSelectorProps> = ({
     if (onSchemaChange) {
       onSchemaChange(schema);
     }
-    internalTableChange(undefined);
-  };
 
-  function renderDatabaseSelector() {
-    return (
-      <DatabaseSelector
-        key={currentDatabase?.id}
-        db={currentDatabase}
-        formMode={formMode}
-        getDbList={getDbList}
-        handleError={handleError}
-        onDbChange={readOnly ? undefined : internalDbChange}
-        onSchemaChange={readOnly ? undefined : internalSchemaChange}
-        onSchemasLoad={onSchemasLoad}
-        schema={currentSchema}
-        sqlLabMode={sqlLabMode}
-        isDatabaseSelectEnabled={isDatabaseSelectEnabled && !readOnly}
-        readOnly={readOnly}
-      />
-    );
-  }
+    const value = tableSelectMode === 'single' ? undefined : [];
+    setTableSelectValue(value);
+  };
 
   const handleFilterOption = useMemo(
     () => (search: string, option: TableOption) => {
       const searchValue = search.trim().toLowerCase();
-      const { text } = option;
-      return text.toLowerCase().includes(searchValue);
+      const { value } = option;
+      return value.toLowerCase().includes(searchValue);
     },
     [],
   );
 
   function renderTableSelect() {
-    const disabled =
-      (currentSchema && !formMode && readOnly) ||
-      (!currentSchema && !database?.allow_multi_schema_metadata_fetch);
+    const disabled = (currentSchema && !formMode && readOnly) || !currentSchema;
 
-    const header = sqlLabMode ? (
-      <FormLabel>{t('See table schema')}</FormLabel>
-    ) : (
-      <FormLabel>{t('Table')}</FormLabel>
-    );
+    const label = sqlLabMode ? t('See table schema') : t('Table');
 
     const select = (
       <Select
-        ariaLabel={t('Select table or type table name')}
+        ariaLabel={t('Select table or type to search tables')}
         disabled={disabled}
         filterOption={handleFilterOption}
-        header={header}
         labelInValue
-        lazyLoading={false}
         loading={loadingTables}
         name="select-table"
-        onChange={(table: TableOption) => internalTableChange(table)}
+        onChange={(options: TableOption | TableOption[]) =>
+          internalTableChange(options)
+        }
         options={tableOptions}
-        placeholder={t('Select table or type table name')}
+        placeholder={t('Select table or type to search tables')}
         showSearch
-        value={currentTable}
+        mode={tableSelectMode}
+        value={tableSelectValue}
+        allowClear={tableSelectMode === 'multiple'}
+        allowSelectAll={false}
       />
     );
 
-    const refreshLabel = !formMode && !readOnly && (
+    const refreshLabel = !readOnly && (
       <RefreshLabel
-        onClick={() => setRefresh(refresh + 1)}
+        onClick={() => refetch()}
         tooltipContent={t('Force refresh table list')}
       />
     );
 
-    return renderSelectRow(select, refreshLabel);
+    return (
+      <>
+        <StyledFormLabel>{label}</StyledFormLabel>
+        {renderSelectRow(select, refreshLabel)}
+      </>
+    );
   }
 
   return (
     <TableSelectorWrapper>
-      {renderDatabaseSelector()}
+      <DatabaseSelector
+        db={database}
+        emptyState={emptyState}
+        formMode={formMode}
+        getDbList={getDbList}
+        handleError={handleError}
+        onDbChange={readOnly ? undefined : internalDbChange}
+        onEmptyResults={onEmptyResults}
+        onCatalogChange={readOnly ? undefined : internalCatalogChange}
+        catalog={currentCatalog}
+        onSchemaChange={readOnly ? undefined : internalSchemaChange}
+        schema={currentSchema}
+        sqlLabMode={sqlLabMode}
+        isDatabaseSelectEnabled={isDatabaseSelectEnabled && !readOnly}
+        readOnly={readOnly}
+      />
       {sqlLabMode && !formMode && <div className="divider" />}
       {renderTableSelect()}
     </TableSelectorWrapper>
   );
 };
+
+export const TableSelectorMultiple: FunctionComponent<
+  TableSelectorProps
+> = props => <TableSelector tableSelectMode="multiple" {...props} />;
 
 export default TableSelector;

@@ -17,13 +17,15 @@
  * under the License.
  */
 
-import React, { ReactNode } from 'react';
+import { Component, ReactNode } from 'react';
 import {
   SupersetClient,
   Method,
   makeApi,
   SupersetApiError,
+  t,
 } from '@superset-ui/core';
+import { Button } from '@superset-ui/core/components';
 import ErrorMessage from './ErrorMessage';
 
 export type Props = {
@@ -52,7 +54,7 @@ export const renderError = (error: Error) => (
   </div>
 );
 
-export default class VerifyCORS extends React.Component<Props, State> {
+export default class VerifyCORS extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = { didVerify: false };
@@ -116,13 +118,9 @@ export default class VerifyCORS extends React.Component<Props, State> {
           3) click below to verify authentication. You may debug CORS further
           using the `@superset-ui/connection` story. <br />
           <br />
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={this.handleVerify}
-          >
-            Verify
-          </button>
+          <Button type="primary" size="small" onClick={this.handleVerify}>
+            {t('Verify')}
+          </Button>
           <br />
           <br />
         </div>

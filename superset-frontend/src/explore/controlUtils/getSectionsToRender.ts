@@ -23,7 +23,9 @@ import {
 } from '@superset-ui/core';
 import {
   ControlPanelConfig,
+  ControlPanelSectionConfig,
   expandControlConfig,
+  isControlPanelSectionConfig,
 } from '@superset-ui/chart-controls';
 
 import * as SECTIONS from 'src/explore/controlPanels/sections';
@@ -37,7 +39,12 @@ const getMemoizedSectionsToRender = memoizeOne(
     } = controlPanelConfig;
 
     // default control panel sections
-    const sections = { ...SECTIONS };
+    const sections: Record<
+      string,
+      | ControlPanelSectionConfig
+      | ControlPanelSectionConfig[]
+      | Partial<ControlPanelSectionConfig>
+    > = { ...SECTIONS };
 
     // apply section overrides
     Object.entries(sectionOverrides).forEach(([section, overrides]) => {
@@ -53,15 +60,14 @@ const getMemoizedSectionsToRender = memoizeOne(
 
     const { datasourceAndVizType } = sections;
 
-    // list of datasource-specific controls that should be removed
-    const invalidControls =
-      datasourceType === 'table'
-        ? ['granularity', 'druid_time_origin']
-        : ['granularity_sqla', 'time_grain_sqla'];
+    // list of datasource-specific controls that should be removed if the datasource is a specific type
+    const filterControlsForTypes = [DatasourceType.Query, DatasourceType.Table];
+    const invalidControls = filterControlsForTypes.includes(datasourceType)
+      ? ['granularity']
+      : ['granularity_sqla', 'time_grain_sqla'];
 
-    return [datasourceAndVizType]
-      .concat(controlPanelSections)
-      .filter(section => !!section)
+    return [datasourceAndVizType as ControlPanelSectionConfig]
+      .concat(controlPanelSections.filter(isControlPanelSectionConfig))
       .map(section => {
         const { controlSetRows } = section;
         return {

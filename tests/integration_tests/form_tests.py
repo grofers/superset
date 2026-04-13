@@ -23,14 +23,14 @@ from tests.integration_tests.base_tests import SupersetTestCase
 class TestForm(SupersetTestCase):
     def test_comma_separated_list_field(self):
         field = CommaSeparatedListField().bind(Form(), "foo")
-        field.process_formdata([u""])
-        self.assertEqual(field.data, [u""])
+        field.process_formdata([""])
+        assert field.data == [""]
 
         field.process_formdata(["a,comma,separated,list"])
-        self.assertEqual(field.data, [u"a", u"comma", u"separated", u"list"])
+        assert field.data == ["a", "comma", "separated", "list"]
 
     def test_filter_not_empty_values(self):
-        self.assertEqual(filter_not_empty_values(None), None)
-        self.assertEqual(filter_not_empty_values([]), None)
-        self.assertEqual(filter_not_empty_values([""]), None)
-        self.assertEqual(filter_not_empty_values(["hi"]), ["hi"])
+        assert filter_not_empty_values(None) is None
+        assert filter_not_empty_values([]) is None
+        assert filter_not_empty_values([""]) is None
+        assert filter_not_empty_values(["hi"]) == ["hi"]

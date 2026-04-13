@@ -16,11 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
+import { PureComponent } from 'react';
 import PropTypes from 'prop-types';
 import cx from 'classnames';
-import Button from 'src/components/Button';
-import { t, styled } from '@superset-ui/core';
+import { Button, Input } from '@superset-ui/core/components';
+import { css, t, styled } from '@superset-ui/core';
 
 import buildFilterScopeTreeEntry from 'src/dashboard/util/buildFilterScopeTreeEntry';
 import getFilterScopeNodesTree from 'src/dashboard/util/getFilterScopeNodesTree';
@@ -49,25 +49,282 @@ const propTypes = {
   onCloseModal: PropTypes.func.isRequired,
 };
 
-const ActionsContainer = styled.div`
-  height: ${({ theme }) => theme.gridUnit * 16}px;
+const ScopeContainer = styled.div`
+  ${({ theme }) => css`
+    display: flex;
+    flex-direction: column;
+    height: 80%;
+    margin-right: ${theme.sizeUnit * -6}px;
+    font-size: ${theme.fontSize}px;
 
-  // TODO: replace hardcoded color with theme variable after refactoring filter-scope-selector.less to Emotion
-  border-top: ${({ theme }) => theme.gridUnit / 4}px solid #cfd8dc;
-  padding: ${({ theme }) => theme.gridUnit * 6}px;
-  margin: 0 0 0 ${({ theme }) => -theme.gridUnit * 6}px;
-  text-align: right;
-
-  .btn {
-    margin-right: ${({ theme }) => theme.gridUnit * 4}px;
-
-    &:last-child {
-      margin-right: 0;
+    & .nav.nav-tabs {
+      border: none;
     }
-  }
+
+    & .filter-scope-body {
+      flex: 1;
+      max-height: calc(100% - ${theme.sizeUnit * 32}px);
+
+      .filter-field-pane,
+      .filter-scope-pane {
+        overflow-y: auto;
+      }
+    }
+
+    & .warning-message {
+      padding: ${theme.sizeUnit * 6}px;
+    }
+  `}
 `;
 
-export default class FilterScopeSelector extends React.PureComponent {
+const ScopeBody = styled.div`
+  ${({ theme }) => css`
+    &.filter-scope-body {
+      flex: 1;
+      max-height: calc(100% - ${theme.sizeUnit * 32}px);
+
+      .filter-field-pane,
+      .filter-scope-pane {
+        overflow-y: auto;
+      }
+    }
+  `}
+`;
+
+const ScopeHeader = styled.div`
+  ${({ theme }) => css`
+    height: ${theme.sizeUnit * 16}px;
+    border-bottom: 1px solid ${theme.colorSplit};
+    padding-left: ${theme.sizeUnit * 6}px;
+    margin-left: ${theme.sizeUnit * -6}px;
+
+    h4 {
+      margin-top: 0;
+    }
+
+    .selected-fields {
+      margin: ${theme.sizeUnit * 3}px 0 ${theme.sizeUnit * 4}px;
+      visibility: hidden;
+
+      &.multi-edit-mode {
+        visibility: visible;
+      }
+
+      .selected-scopes {
+        padding-left: ${theme.sizeUnit}px;
+      }
+    }
+  `}
+`;
+
+const ScopeSelector = styled.div`
+  ${({ theme }) => css`
+    &.filters-scope-selector {
+      display: flex;
+      flex-direction: row;
+      position: relative;
+      height: 100%;
+
+      a,
+      a:active,
+      a:hover {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .react-checkbox-tree .rct-icon.rct-icon-expand-all,
+      .react-checkbox-tree .rct-icon.rct-icon-collapse-all {
+        font-family: ${theme.fontFamily};
+        font-size: ${theme.fontSize}px;
+        color: ${theme.colorPrimary};
+
+        &::before {
+          content: '';
+        }
+
+        &:hover {
+          text-decoration: underline;
+        }
+
+        &:focus {
+          outline: none;
+        }
+      }
+
+      .filter-field-pane {
+        position: relative;
+        width: 40%;
+        padding: ${theme.sizeUnit * 4}px;
+        padding-left: 0;
+        border-right: 1px solid ${theme.colorBorder};
+
+        .filter-container label {
+          font-weight: ${theme.fontWeightNormal};
+          margin: 0 0 0 ${theme.sizeUnit * 4}px;
+          word-break: break-all;
+        }
+
+        .filter-field-item {
+          height: ${theme.sizeUnit * 9}px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 ${theme.sizeUnit * 6}px;
+          margin-left: ${theme.sizeUnit * -6}px;
+
+          &.is-selected {
+            border: 1px solid ${theme.colorBorder};
+            border-radius: ${theme.borderRadius}px;
+            background-color: ${theme.colorBgContainer};
+            margin-left: ${theme.sizeUnit * -6}px;
+          }
+        }
+
+        .react-checkbox-tree {
+          .rct-title .root {
+            font-weight: ${theme.fontWeightStrong};
+          }
+
+          .rct-text {
+            height: ${theme.sizeUnit * 10}px;
+          }
+        }
+      }
+
+      .filter-scope-pane {
+        position: relative;
+        flex: 1;
+        padding: ${theme.sizeUnit * 4}px;
+        padding-right: ${theme.sizeUnit * 6}px;
+      }
+
+      .react-checkbox-tree {
+        flex-direction: column;
+        color: ${theme.colorText};
+        font-size: ${theme.fontSize}px;
+
+        .filter-scope-type {
+          padding: ${theme.sizeUnit * 2}px 0;
+          display: flex;
+          align-items: center;
+
+          &.chart {
+            font-weight: ${theme.fontWeightNormal};
+          }
+
+          &.selected-filter {
+            padding-left: ${theme.sizeUnit * 7}px;
+            position: relative;
+            color: ${theme.colorBgContainerTextActive};
+
+            &::before {
+              content: ' ';
+              position: absolute;
+              left: 0;
+              top: 50%;
+              width: ${theme.sizeUnit * 4}px;
+              height: ${theme.sizeUnit * 4}px;
+              border-radius: ${theme.borderRadius}px;
+              margin-top: ${theme.sizeUnit * -2}px;
+              box-shadow: inset 0 0 0 2px ${theme.colorBorder};
+              background: ${theme.colorFill};
+            }
+          }
+
+          &.root {
+            font-weight: ${theme.fontWeightStrong};
+          }
+        }
+
+        .rct-checkbox {
+          svg {
+            position: relative;
+            top: 3px;
+            width: ${theme.sizeUnit * 4.5}px;
+          }
+        }
+
+        .rct-node-leaf {
+          .rct-bare-label {
+            &::before {
+              padding-left: ${theme.sizeUnit}px;
+            }
+          }
+        }
+
+        .rct-options {
+          text-align: left;
+          margin-left: 0;
+          margin-bottom: ${theme.sizeUnit * 2}px;
+        }
+
+        .rct-text {
+          margin: 0;
+          display: flex;
+        }
+
+        .rct-title {
+          display: block;
+        }
+
+        // disable style from react-checkbox-trees.css
+        .rct-node-clickable:hover,
+        .rct-node-clickable:focus,
+        label:hover,
+        label:active {
+          background: none !important;
+        }
+      }
+
+      .multi-edit-mode {
+        .filter-field-item {
+          padding: 0 ${theme.sizeUnit * 4}px 0 ${theme.sizeUnit * 12}px;
+          margin-left: ${theme.sizeUnit * -12}px;
+
+          &.is-selected {
+            margin-left: ${theme.sizeUnit * -13}px;
+          }
+        }
+      }
+
+      .scope-search {
+        position: absolute;
+        right: ${theme.sizeUnit * 4}px;
+        top: ${theme.sizeUnit * 4}px;
+        border-radius: ${theme.borderRadius}px;
+        border: 1px solid ${theme.colorBorder};
+        padding: ${theme.sizeUnit}px ${theme.sizeUnit * 2}px;
+        font-size: ${theme.fontSize}px;
+        outline: none;
+
+        &:focus {
+          border: 1px solid ${theme.colorPrimary};
+        }
+      }
+    }
+  `}
+`;
+
+const ActionsContainer = styled.div`
+  ${({ theme }) => `
+    height: ${theme.sizeUnit * 16}px;
+
+    border-top: ${theme.sizeUnit / 4}px solid ${theme.colorPrimaryBg};
+    padding: ${theme.sizeUnit * 6}px;
+    margin: 0 0 0 ${-theme.sizeUnit * 6}px;
+    text-align: right;
+
+    .btn {
+      margin-right: ${theme.sizeUnit * 4}px;
+
+      &:last-child {
+        margin-right: 0;
+      }
+    }
+  `}
+`;
+
+export default class FilterScopeSelector extends PureComponent {
   constructor(props) {
     super(props);
 
@@ -104,7 +361,6 @@ export default class FilterScopeSelector extends React.PureComponent {
                 selectedChartId: filterId,
               });
               const expanded = getFilterScopeParentNodes(nodes, 1);
-              // force display filter_box chart as unchecked, but show checkbox as disabled
               const chartIdsInFilterScope = (
                 getChartIdsInFilterScope({
                   filterScope: dashboardFilters[filterId].scopes[columnName],
@@ -447,7 +703,7 @@ export default class FilterScopeSelector extends React.PureComponent {
     });
     return (
       <>
-        <input
+        <Input
           className="filter-text scope-search multi-edit-mode"
           placeholder={t('Search...')}
           type="text"
@@ -495,28 +751,28 @@ export default class FilterScopeSelector extends React.PureComponent {
     const { showSelector } = this.state;
 
     return (
-      <div className="filter-scope-container">
-        <div className="filter-scope-header">
+      <ScopeContainer>
+        <ScopeHeader>
           <h4>{t('Configure filter scopes')}</h4>
           {showSelector && this.renderEditingFiltersName()}
-        </div>
+        </ScopeHeader>
 
-        <div className="filter-scope-body">
+        <ScopeBody className="filter-scope-body">
           {!showSelector ? (
             <div className="warning-message">
               {t('There are no filters in this dashboard.')}
             </div>
           ) : (
-            <div className="filters-scope-selector">
+            <ScopeSelector className="filters-scope-selector">
               <div className={cx('filter-field-pane multi-edit-mode')}>
                 {this.renderFilterFieldList()}
               </div>
               <div className="filter-scope-pane multi-edit-mode">
                 {this.renderFilterScopeTree()}
               </div>
-            </div>
+            </ScopeSelector>
           )}
-        </div>
+        </ScopeBody>
 
         <ActionsContainer>
           <Button buttonSize="small" onClick={this.onClose}>
@@ -532,7 +788,7 @@ export default class FilterScopeSelector extends React.PureComponent {
             </Button>
           )}
         </ActionsContainer>
-      </div>
+      </ScopeContainer>
     );
   }
 }

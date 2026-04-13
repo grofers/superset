@@ -30,14 +30,11 @@ export type TimeColumnConfigKey =
   | '__time_col'
   | '__time_grain'
   | '__time_range'
-  | '__time_origin'
-  | '__granularity';
+  | '__granularity'
+  | '__time_compare';
 
 export type AppliedTimeExtras = Partial<
   Record<TimeColumnConfigKey, keyof QueryObject>
 >;
-
-export type TimeRangeEndpoint = 'unknown' | 'inclusive' | 'exclusive';
-export type TimeRangeEndpoints = [TimeRangeEndpoint, TimeRangeEndpoint];
 
 export default {};

@@ -16,18 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useRef } from 'react';
+import { useRef, ReactNode } from 'react';
+
 import { useDrag, useDrop, DropTargetMonitor } from 'react-dnd';
-import { styled, t, useTheme } from '@superset-ui/core';
-import { InfoTooltipWithTrigger } from '@superset-ui/chart-controls';
-import { Tooltip } from 'src/components/Tooltip';
-import Icons from 'src/components/Icons';
+import { styled, t, useTheme, keyframes, css } from '@superset-ui/core';
+import { InfoTooltip, Icons, Tooltip } from '@superset-ui/core/components';
 import { savedMetricType } from 'src/explore/components/controls/MetricControl/types';
 import AdhocMetric from 'src/explore/components/controls/MetricControl/AdhocMetric';
 import { StyledMetricOption } from '../../optionRenderers';
 
 export const DragContainer = styled.div`
-  margin-bottom: ${({ theme }) => theme.gridUnit}px;
+  margin-bottom: ${({ theme }) => theme.sizeUnit}px;
   :last-child {
     margin-bottom: 0;
   }
@@ -39,11 +38,14 @@ export const OptionControlContainer = styled.div<{
   display: flex;
   align-items: center;
   width: 100%;
-  font-size: ${({ theme }) => theme.typography.sizes.s}px;
-  height: ${({ theme }) => theme.gridUnit * 6}px;
-  background-color: ${({ theme }) => theme.colors.grayscale.light3};
+  font-size: ${({ theme }) => theme.fontSizeSM}px;
+  height: ${({ theme }) => theme.sizeUnit * 6}px;
+  background-color: ${({ theme }) => theme.colorBgLayout};
   border-radius: 3px;
   cursor: ${({ withCaret }) => (withCaret ? 'pointer' : 'default')};
+  :hover {
+    background-color: ${({ theme }) => theme.colorPrimaryBgHover};
+  }
 `;
 export const Label = styled.div`
   ${({ theme }) => `
@@ -53,15 +55,14 @@ export const Label = styled.div`
     text-overflow: ellipsis;
     align-items: center;
     white-space: nowrap;
-    padding-left: ${theme.gridUnit}px;
+    padding-left: ${theme.sizeUnit}px;
     svg {
-      margin-right: ${theme.gridUnit}px;
-      margin-left: ${theme.gridUnit}px;
+      margin-right: ${theme.sizeUnit}px;
     }
     .type-label {
-      margin-right: ${theme.gridUnit * 2}px;
-      margin-left: ${theme.gridUnit}px;
-      font-weight: ${theme.typography.weights.normal};
+      margin-right: ${theme.sizeUnit * 2}px;
+      margin-left: ${theme.sizeUnit}px;
+      font-weight: ${theme.fontWeightNormal};
       width: auto;
     }
     .option-label {
@@ -77,19 +78,19 @@ const LabelText = styled.span`
 
 export const CaretContainer = styled.div`
   height: 100%;
-  border-left: solid 1px ${({ theme }) => theme.colors.grayscale.dark2}0C;
+  border-left: solid 1px ${({ theme }) => theme.colorSplit};
   margin-left: auto;
 `;
 
 export const CloseContainer = styled.div`
-  height: 100%;
-  width: ${({ theme }) => theme.gridUnit * 6}px;
-  border-right: solid 1px ${({ theme }) => theme.colors.grayscale.dark2}0C;
+  height: auto;
+  width: ${({ theme }) => theme.sizeUnit * 6}px;
+  border-right: solid 1px ${({ theme }) => theme.colorBorder};
   cursor: pointer;
 `;
 
-const StyledInfoTooltipWithTrigger = styled(InfoTooltipWithTrigger)`
-  margin: 0 ${({ theme }) => theme.gridUnit}px;
+const StyledInfoTooltip = styled(InfoTooltip)`
+  margin: 0 ${({ theme }) => theme.sizeUnit}px;
 `;
 
 export const HeaderContainer = styled.div`
@@ -99,26 +100,90 @@ export const HeaderContainer = styled.div`
 `;
 
 export const LabelsContainer = styled.div`
-  padding: ${({ theme }) => theme.gridUnit}px;
-  border: solid 1px ${({ theme }) => theme.colors.grayscale.light2};
-  border-radius: ${({ theme }) => theme.gridUnit}px;
+  padding: ${({ theme }) => theme.sizeUnit}px;
+  border: solid 1px ${({ theme }) => theme.colorSplit};
+  border-radius: ${({ theme }) => theme.borderRadius}px;
+`;
+
+const borderPulse = keyframes`
+  0% {
+    right: 100%;
+  }
+  50% {
+    left: 4px;
+  }
+  90% {
+    right: 4px;
+  }
+  100% {
+    left: 100%;
+  }
 `;
 
 export const DndLabelsContainer = styled.div<{
   canDrop?: boolean;
   isOver?: boolean;
+  isDragging?: boolean;
+  isLoading?: boolean;
 }>`
-  padding: ${({ theme }) => theme.gridUnit}px;
-  border: ${({ canDrop, isOver, theme }) => {
-    if (canDrop) {
-      return `dashed 1px ${theme.colors.info.dark1}`;
-    }
-    if (isOver && !canDrop) {
-      return `dashed 1px ${theme.colors.error.dark1}`;
-    }
-    return `solid 1px ${theme.colors.grayscale.light2}`;
-  }};
-  border-radius: ${({ theme }) => theme.gridUnit}px;
+  ${({ theme, isLoading, canDrop, isDragging, isOver }) => `
+  position: relative;
+  padding: ${theme.sizeUnit}px;
+  border: ${
+    !isLoading && isDragging
+      ? `dashed 1px ${canDrop ? theme.colorSplit : theme.colorErrorBgHover}`
+      : `solid 1px ${
+          isLoading && isDragging
+            ? theme.colorWarningBgHover
+            : theme.colorBorder
+        }`
+  };
+  border-radius: ${theme.borderRadius}px;
+  &:before,
+  &:after {
+    content: ' ';
+    position: absolute;
+    border-radius: ${theme.borderRadius}px;
+  }
+  &:before {
+    display: ${isDragging || isLoading ? 'block' : 'none'};
+    background-color: ${canDrop ? theme.colorPrimary : theme.colorErrorBgHover};
+    z-index: 10;
+    opacity: 10%;
+    top: 1px;
+    right: 1px;
+    bottom: 1px;
+    left: 1px;
+  }
+  &:after {
+    display: ${isLoading || (canDrop && isOver) ? 'block' : 'none'};
+    background-color: ${
+      isLoading ? theme.colorFillTertiary : theme.colorPrimary
+    };
+    z-index: 11;
+    opacity: 35%;
+    top: ${-theme.sizeUnit}px;
+    right: ${-theme.sizeUnit}px;
+    bottom: ${-theme.sizeUnit}px;
+    left: ${-theme.sizeUnit}px;
+    cursor: ${isLoading ? 'wait' : 'auto'};
+  }
+  `}
+
+  &:before {
+    ${({ theme, isLoading }) =>
+      isLoading &&
+      css`
+        animation: ${borderPulse} 2s ease-in infinite;
+        background: linear-gradient(currentColor 0 0) 0 100%/0% 3px no-repeat;
+        background-size: 100% ${theme.sizeUnit / 2}px;
+        top: auto;
+        right: ${theme.sizeUnit}px;
+        left: ${theme.sizeUnit}px;
+        bottom: -${theme.sizeUnit / 2}px;
+        height: ${theme.sizeUnit / 2}px;
+      `};
+  }
 `;
 
 export const AddControlLabel = styled.div<{
@@ -127,22 +192,25 @@ export const AddControlLabel = styled.div<{
   display: flex;
   align-items: center;
   width: 100%;
-  height: ${({ theme }) => theme.gridUnit * 6}px;
-  padding-left: ${({ theme }) => theme.gridUnit}px;
-  font-size: ${({ theme }) => theme.typography.sizes.s}px;
-  color: ${({ theme }) => theme.colors.grayscale.light1};
-  border: dashed 1px ${({ theme }) => theme.colors.grayscale.light2};
-  border-radius: ${({ theme }) => theme.gridUnit}px;
+  height: ${({ theme }) => theme.sizeUnit * 6}px;
+  padding-left: ${({ theme }) => theme.sizeUnit}px;
+  font-size: ${({ theme }) => theme.fontSizeSM}px;
+  color: ${({ theme }) => theme.colorTextSecondary};
+  border: dashed 1px ${({ theme }) => theme.colorSplit};
+  border-radius: ${({ theme }) => theme.borderRadius}px;
   cursor: ${({ cancelHover }) => (cancelHover ? 'inherit' : 'pointer')};
 
   :hover {
     background-color: ${({ cancelHover, theme }) =>
-      cancelHover ? 'inherit' : theme.colors.grayscale.light4};
+      cancelHover ? 'inherit' : theme.colorFillSecondary};
   }
 
   :active {
     background-color: ${({ cancelHover, theme }) =>
-      cancelHover ? 'inherit' : theme.colors.grayscale.light3};
+      cancelHover ? 'inherit' : theme.colorFillTertiary};
+  }
+  svg {
+    margin-right: ${({ theme }) => theme.sizeUnit}px;
   }
 `;
 
@@ -150,21 +218,22 @@ export const AddIconButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  height: ${({ theme }) => theme.gridUnit * 4}px;
-  width: ${({ theme }) => theme.gridUnit * 4}px;
+  height: ${({ theme }) => theme.sizeUnit * 4}px;
+  width: ${({ theme }) => theme.sizeUnit * 4}px;
   padding: 0;
-  background-color: ${({ theme }) => theme.colors.primary.dark1};
+  background-color: ${({ theme }) => theme.colorPrimaryText};
   border: none;
   border-radius: 2px;
+  cursor: pointer;
 
   :disabled {
     cursor: not-allowed;
-    background-color: ${({ theme }) => theme.colors.grayscale.light1};
+    background-color: ${({ theme }) => theme.colorBgContainerDisabled};
   }
 `;
 
 interface DragItem {
-  index: number;
+  dragIndex: number;
   type: string;
 }
 
@@ -180,11 +249,12 @@ export const OptionControlLabel = ({
   type,
   index,
   isExtra,
+  datasourceWarningMessage,
   tooltipTitle,
   multi = true,
   ...props
 }: {
-  label: string | React.ReactNode;
+  label: string | ReactNode;
   savedMetric?: savedMetricType;
   adhocMetric?: AdhocMetric;
   onRemove: () => void;
@@ -196,7 +266,8 @@ export const OptionControlLabel = ({
   type: string;
   index: number;
   isExtra?: boolean;
-  tooltipTitle: string;
+  datasourceWarningMessage?: string;
+  tooltipTitle?: string;
   multi?: boolean;
 }) => {
   const theme = useTheme();
@@ -218,7 +289,7 @@ export const OptionControlLabel = ({
       if (!ref.current) {
         return;
       }
-      const dragIndex = item.index;
+      const { dragIndex } = item;
       const hoverIndex = index;
       // Don't replace items with themselves
       if (dragIndex === hoverIndex) {
@@ -253,13 +324,13 @@ export const OptionControlLabel = ({
       // but it's good here for the sake of performance
       // to avoid expensive index searches.
       // eslint-disable-next-line no-param-reassign
-      item.index = hoverIndex;
+      item.dragIndex = hoverIndex;
     },
   });
   const [{ isDragging }, drag] = useDrag({
     item: {
       type,
-      index,
+      dragIndex: index,
       value: savedMetric?.metric_name ? savedMetric : adhocMetric,
     },
     collect: monitor => ({
@@ -280,7 +351,13 @@ export const OptionControlLabel = ({
         labelRef.current.scrollWidth > labelRef.current.clientWidth);
 
     if (savedMetric && hasMetricName) {
-      return <StyledMetricOption metric={savedMetric} labelRef={labelRef} />;
+      return (
+        <StyledMetricOption
+          metric={savedMetric}
+          labelRef={labelRef}
+          shouldShowTooltip={!isDragging}
+        />
+      );
     }
     if (!shouldShowTooltip) {
       return <LabelText ref={labelRef}>{label}</LabelText>;
@@ -297,32 +374,49 @@ export const OptionControlLabel = ({
       withCaret={withCaret}
       data-test="option-label"
       {...props}
+      css={css`
+        text-align: center;
+      `}
     >
       <CloseContainer
         role="button"
         data-test="remove-control-button"
         onClick={onRemove}
       >
-        <Icons.XSmall iconColor={theme.colors.grayscale.light1} />
+        <Icons.CloseOutlined
+          iconSize="m"
+          iconColor={theme.colorIcon}
+          css={css`
+            vertical-align: sub;
+          `}
+        />
       </CloseContainer>
       <Label data-test="control-label">
-        {isFunction && <Icons.FunctionX viewBox="0 0 16 11" iconSize="l" />}
+        {isFunction && <Icons.FunctionOutlined iconSize="m" />}
         {getLabelContent()}
       </Label>
-      {isExtra && (
-        <StyledInfoTooltipWithTrigger
-          icon="exclamation-triangle"
+      {(!!datasourceWarningMessage || isExtra) && (
+        <StyledInfoTooltip
+          type="warning"
           placement="top"
-          bsStyle="warning"
-          tooltip={t(`
+          tooltip={
+            datasourceWarningMessage ||
+            t(`
                 This filter was inherited from the dashboard's context.
                 It won't be saved when saving the chart.
-              `)}
+              `)
+          }
         />
       )}
       {withCaret && (
         <CaretContainer>
-          <Icons.CaretRight iconColor={theme.colors.grayscale.light1} />
+          <Icons.RightOutlined
+            iconSize="m"
+            css={css`
+              margin: ${theme.sizeUnit}px;
+            `}
+            iconColor={theme.colorIcon}
+          />
         </CaretContainer>
       )}
     </OptionControlContainer>

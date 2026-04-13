@@ -17,9 +17,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from flask import current_app
+from flask import current_app as app
 
 from superset.constants import EXAMPLES_DB_UUID
 
@@ -32,17 +32,14 @@ logger = logging.getLogger(__name__)
 
 # TODO: duplicate code with DatabaseDao, below function should be moved or use dao
 def get_or_create_db(
-    database_name: str, sqlalchemy_uri: str, always_create: Optional[bool] = True
+    database_name: str, sqlalchemy_uri: str, always_create: bool | None = True
 ) -> Database:
     # pylint: disable=import-outside-toplevel
     from superset import db
     from superset.models import core as models
 
     database = (
-        db.session.query(models.Database)
-        .filter_by(database_name=database_name)
-        .autoflush(False)
-        .first()
+        db.session.query(models.Database).filter_by(database_name=database_name).first()
     )
 
     # databases with a fixed UUID
@@ -56,24 +53,26 @@ def get_or_create_db(
             database_name=database_name, uuid=uuids.get(database_name)
         )
         db.session.add(database)
-
-    if database:
         database.set_sqlalchemy_uri(sqlalchemy_uri)
-        db.session.commit()
 
+    # todo: it's a bad idea to do an update in a get/create function
+    if database and database.sqlalchemy_uri_decrypted != sqlalchemy_uri:
+        database.set_sqlalchemy_uri(sqlalchemy_uri)
+
+    db.session.flush()
     return database
 
 
 def get_example_database() -> Database:
-    db_uri = (
-        current_app.config.get("SQLALCHEMY_EXAMPLES_URI")
-        or current_app.config["SQLALCHEMY_DATABASE_URI"]
-    )
-    return get_or_create_db("examples", db_uri)
+    # pylint: disable=import-outside-toplevel
+
+    return get_or_create_db("examples", app.config["SQLALCHEMY_EXAMPLES_URI"])
 
 
 def get_main_database() -> Database:
-    db_uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
+    # pylint: disable=import-outside-toplevel
+
+    db_uri = app.config["SQLALCHEMY_DATABASE_URI"]
     return get_or_create_db("main", db_uri)
 
 
@@ -83,6 +82,5 @@ def remove_database(database: Database) -> None:
     # pylint: disable=import-outside-toplevel
     from superset import db
 
-    session = db.session
-    session.delete(database)
-    session.commit()
+    db.session.delete(database)
+    db.session.flush()

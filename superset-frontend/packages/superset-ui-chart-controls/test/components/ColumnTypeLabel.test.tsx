@@ -16,64 +16,49 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { shallow } from 'enzyme';
+import { isValidElement } from 'react';
+import { render, screen } from '@superset-ui/core/spec';
+import '@testing-library/jest-dom';
 import { GenericDataType } from '@superset-ui/core';
 
 import { ColumnTypeLabel, ColumnTypeLabelProps } from '../../src';
 
 describe('ColumnOption', () => {
   const defaultProps = {
-    type: GenericDataType.STRING,
+    type: GenericDataType.String,
   };
 
   const props = { ...defaultProps };
 
-  function getWrapper(overrides: Partial<ColumnTypeLabelProps>) {
-    const wrapper = shallow(<ColumnTypeLabel {...props} {...overrides} />);
-    return wrapper;
+  function renderColumnTypeLabel(overrides: Partial<ColumnTypeLabelProps>) {
+    render(<ColumnTypeLabel {...props} {...overrides} />);
   }
 
   it('is a valid element', () => {
-    expect(React.isValidElement(<ColumnTypeLabel {...defaultProps} />)).toBe(
-      true,
-    );
+    expect(isValidElement(<ColumnTypeLabel {...defaultProps} />)).toBe(true);
   });
   it('string type shows ABC icon', () => {
-    const lbl = getWrapper({ type: GenericDataType.STRING }).find(
-      '.type-label',
-    );
-    expect(lbl).toHaveLength(1);
-    expect(lbl.first().text()).toBe('ABC');
+    renderColumnTypeLabel({ type: GenericDataType.String });
+    expect(screen.getByLabelText('string type icon')).toBeVisible();
   });
   it('int type shows # icon', () => {
-    const lbl = getWrapper({ type: GenericDataType.NUMERIC }).find(
-      '.type-label',
-    );
-    expect(lbl).toHaveLength(1);
-    expect(lbl.first().text()).toBe('#');
+    renderColumnTypeLabel({ type: GenericDataType.Numeric });
+    expect(screen.getByLabelText('numeric type icon')).toBeVisible();
   });
-  it('bool type shows T/F icon', () => {
-    const lbl = getWrapper({ type: GenericDataType.BOOLEAN }).find(
-      '.type-label',
-    );
-    expect(lbl).toHaveLength(1);
-    expect(lbl.first().text()).toBe('T/F');
+  it('bool type shows 1|0 icon', () => {
+    renderColumnTypeLabel({ type: GenericDataType.Boolean });
+    expect(screen.getByLabelText('boolean type icon')).toBeVisible();
   });
   it('expression type shows function icon', () => {
-    const lbl = getWrapper({ type: 'expression' }).find('.type-label');
-    expect(lbl).toHaveLength(1);
-    expect(lbl.first().text()).toBe('ƒ');
+    renderColumnTypeLabel({ type: 'expression' });
+    expect(screen.getByLabelText('function type icon')).toBeVisible();
   });
   it('unknown type shows question mark', () => {
-    const lbl = getWrapper({ type: undefined }).find('.type-label');
-    expect(lbl).toHaveLength(1);
-    expect(lbl.first().text()).toBe('?');
+    renderColumnTypeLabel({ type: undefined });
+    expect(screen.getByLabelText('unknown type icon')).toBeVisible();
   });
   it('datetime type displays', () => {
-    const lbl = getWrapper({ type: GenericDataType.TEMPORAL }).find(
-      '.fa-clock-o',
-    );
-    expect(lbl).toHaveLength(1);
+    renderColumnTypeLabel({ type: GenericDataType.Temporal });
+    expect(screen.getByLabelText('temporal type icon')).toBeVisible();
   });
 });

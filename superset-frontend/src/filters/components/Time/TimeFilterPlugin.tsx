@@ -16,60 +16,80 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { styled, TimeRangeEndpoint } from '@superset-ui/core';
-import React, { useCallback, useEffect } from 'react';
+import {
+  styled,
+  NO_TIME_RANGE,
+  getExtensionsRegistry,
+} from '@superset-ui/core';
+import { useCallback, useEffect } from 'react';
 import DateFilterControl from 'src/explore/components/controls/DateFilterControl';
-import { NO_TIME_RANGE } from 'src/explore/constants';
 import { PluginFilterTimeProps } from './types';
 import { FilterPluginStyle } from '../common';
 
 const TimeFilterStyles = styled(FilterPluginStyle)`
-  overflow-x: auto;
+  display: flex;
+  align-items: center;
+  overflow-x: visible;
+
+  & .ant-tag {
+    margin-right: 0;
+  }
 `;
 
 const ControlContainer = styled.div<{
   validateStatus?: 'error' | 'warning' | 'info';
 }>`
-  padding: 2px;
-  & > span,
-  & > span:hover {
-    border: 2px solid transparent;
-    display: inline-block;
-    border: ${({ theme, validateStatus }) =>
-      validateStatus && `2px solid ${theme.colors[validateStatus]?.base}`};
+  display: flex;
+  height: 100%;
+  max-width: 100%;
+  width: 100%;
+  & > div,
+  & > div:hover {
+    ${({ validateStatus, theme }) => {
+      if (!validateStatus) return '';
+      switch (validateStatus) {
+        case 'error':
+          return `border-color: ${theme.colorError}`;
+        case 'warning':
+          return `border-color: ${theme.colorWarning}`;
+        case 'info':
+          return `border-color: ${theme.colorInfo}`;
+        default:
+          return `border-color: ${theme.colorError}`;
+      }
+    }}
   }
-  &:focus {
-    & > span {
-      border: 2px solid
-        ${({ theme, validateStatus }) =>
-          validateStatus
-            ? theme.colors[validateStatus]?.base
-            : theme.colors.primary.base};
-      outline: 0;
-      box-shadow: 0 0 0 2px
-        ${({ validateStatus }) =>
-          validateStatus
-            ? 'rgba(224, 67, 85, 12%)'
-            : 'rgba(32, 167, 201, 0.2)'};
-    }
+  & > div {
+    width: 100%;
+  }
+
+  &:focus > div {
+    border-color: ${({ theme }) => theme.colorPrimary};
+    box-shadow: ${({ theme }) => `0 0 0 2px ${theme.controlOutline}`};
+    outline: 0;
   }
 `;
-
-const endpoints = ['inclusive', 'exclusive'] as [
-  TimeRangeEndpoint,
-  TimeRangeEndpoint,
-];
 
 export default function TimeFilterPlugin(props: PluginFilterTimeProps) {
   const {
     setDataMask,
+    setHoveredFilter,
+    unsetHoveredFilter,
     setFocusedFilter,
     unsetFocusedFilter,
+    setFilterActive,
     width,
     height,
     filterState,
-    formData: { inputRef },
+    inputRef,
+    isOverflowingFilterBar = false,
   } = props;
+  const extensionsRegistry = getExtensionsRegistry();
+
+  const DateFilterControlExtension = extensionsRegistry.get(
+    'filter.dateFilterControl',
+  );
+  const DateFilterComponent = DateFilterControlExtension ?? DateFilterControl;
 
   const handleTimeRangeChange = useCallback(
     (timeRange?: string): void => {
@@ -93,23 +113,27 @@ export default function TimeFilterPlugin(props: PluginFilterTimeProps) {
   }, [filterState.value]);
 
   return props.formData?.inView ? (
-    // @ts-ignore
     <TimeFilterStyles width={width} height={height}>
       <ControlContainer
-        tabIndex={-1}
         ref={inputRef}
         validateStatus={filterState.validateStatus}
         onFocus={setFocusedFilter}
         onBlur={unsetFocusedFilter}
-        onMouseEnter={setFocusedFilter}
-        onMouseLeave={unsetFocusedFilter}
+        onMouseEnter={setHoveredFilter}
+        onMouseLeave={unsetHoveredFilter}
+        tabIndex={-1}
       >
-        <DateFilterControl
-          endpoints={endpoints}
+        <DateFilterComponent
           value={filterState.value || NO_TIME_RANGE}
-          name="time_range"
+          name={props.formData.nativeFilterId || 'time_range'}
           onChange={handleTimeRangeChange}
-          type={filterState.validateStatus}
+          onOpenPopover={() => setFilterActive(true)}
+          onClosePopover={() => {
+            setFilterActive(false);
+            unsetHoveredFilter();
+            unsetFocusedFilter();
+          }}
+          isOverflowingFilterBar={isOverflowingFilterBar}
         />
       </ControlContainer>
     </TimeFilterStyles>

@@ -15,26 +15,26 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Optional, Type
+from typing import Optional
 
 from flask_babel import lazy_gettext as _
 from marshmallow import ValidationError
-from sqlalchemy.engine.url import make_url
-from sqlalchemy.exc import ArgumentError
 
 from superset import security_manager
+from superset.commands.database.exceptions import DatabaseInvalidError
+from superset.databases.utils import make_url_safe
 from superset.models.core import Database
 
 
 def sqlalchemy_uri_validator(
-    uri: str, exception: Type[ValidationError] = ValidationError
+    uri: str, exception: type[ValidationError] = ValidationError
 ) -> None:
     """
     Check if a user has submitted a valid SQLAlchemy URI
     """
     try:
-        make_url(uri.strip())
-    except (ArgumentError, AttributeError) as ex:
+        make_url_safe(uri.strip())
+    except DatabaseInvalidError as ex:
         raise exception(
             [
                 _(
@@ -51,7 +51,6 @@ def sqlalchemy_uri_validator(
 def schema_allows_file_upload(database: Database, schema: Optional[str]) -> bool:
     if not database.allow_file_upload:
         return False
-    schemas = database.get_schema_access_for_file_upload()
-    if schemas:
+    if schemas := database.get_schema_access_for_file_upload():
         return schema in schemas
     return security_manager.can_access_database(database)

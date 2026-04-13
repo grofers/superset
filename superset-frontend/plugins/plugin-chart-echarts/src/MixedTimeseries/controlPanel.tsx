@@ -16,24 +16,36 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
-import { t } from '@superset-ui/core';
+import { ensureIsArray, t } from '@superset-ui/core';
+import { cloneDeep } from 'lodash';
 import {
+  ControlPanelsContainerProps,
   ControlPanelConfig,
   ControlPanelSectionConfig,
   ControlSetRow,
-  emitFilterControl,
+  ControlSubSectionHeader,
+  CustomControlItem,
+  getStandardizedControls,
   sections,
   sharedControls,
+  DEFAULT_SORT_SERIES_DATA,
+  SORT_SERIES_CHOICES,
 } from '@superset-ui/chart-controls';
 
 import { DEFAULT_FORM_DATA } from './types';
 import { EchartsTimeseriesSeriesType } from '../Timeseries/types';
-import { legendSection, richTooltipSection } from '../controls';
+import {
+  legendSection,
+  minorTicks,
+  richTooltipSection,
+  truncateXAxis,
+  xAxisBounds,
+  xAxisLabelRotation,
+  xAxisLabelInterval,
+} from '../controls';
 
 const {
   area,
-  annotationLayers,
   logAxis,
   markerEnabled,
   markerSize,
@@ -46,8 +58,6 @@ const {
   stack,
   truncateYAxis,
   yAxisBounds,
-  zoomable,
-  xAxisLabelRotation,
   yAxisIndex,
 } = DEFAULT_FORM_DATA;
 
@@ -77,14 +87,6 @@ function createQuerySection(
           config: sharedControls.adhoc_filters,
         },
       ],
-      emitFilterControl.length > 0
-        ? [
-            {
-              ...emitFilterControl[0],
-              name: `emit_filter${controlSuffix}`,
-            },
-          ]
-        : [],
       [
         {
           name: `limit${controlSuffix}`,
@@ -117,6 +119,15 @@ function createQuerySection(
           },
         },
       ],
+      [
+        {
+          name: `truncate_metric${controlSuffix}`,
+          config: {
+            ...sharedControls.truncate_metric,
+            default: sharedControls.truncate_metric.default,
+          },
+        },
+      ],
     ],
   };
 }
@@ -126,7 +137,7 @@ function createCustomizeSection(
   controlSuffix: string,
 ): ControlSetRow[] {
   return [
-    [<h1 className="section-header">{label}</h1>],
+    [<ControlSubSectionHeader>{label}</ControlSubSectionHeader>],
     [
       {
         name: `seriesType${controlSuffix}`,
@@ -136,13 +147,13 @@ function createCustomizeSection(
           renderTrigger: true,
           default: seriesType,
           choices: [
-            [EchartsTimeseriesSeriesType.Line, 'Line'],
-            [EchartsTimeseriesSeriesType.Scatter, 'Scatter'],
-            [EchartsTimeseriesSeriesType.Smooth, 'Smooth Line'],
-            [EchartsTimeseriesSeriesType.Bar, 'Bar'],
-            [EchartsTimeseriesSeriesType.Start, 'Step - start'],
-            [EchartsTimeseriesSeriesType.Middle, 'Step - middle'],
-            [EchartsTimeseriesSeriesType.End, 'Step - end'],
+            [EchartsTimeseriesSeriesType.Line, t('Line')],
+            [EchartsTimeseriesSeriesType.Scatter, t('Scatter')],
+            [EchartsTimeseriesSeriesType.Smooth, t('Smooth Line')],
+            [EchartsTimeseriesSeriesType.Bar, t('Bar')],
+            [EchartsTimeseriesSeriesType.Start, t('Step - start')],
+            [EchartsTimeseriesSeriesType.Middle, t('Step - middle')],
+            [EchartsTimeseriesSeriesType.End, t('Step - end')],
           ],
           description: t('Series chart type (line, bar etc)'),
         },
@@ -185,6 +196,23 @@ function createCustomizeSection(
           description: t(
             'Whether to display the numerical values within the cells',
           ),
+        },
+      },
+    ],
+    [
+      {
+        name: `only_total${controlSuffix}`,
+        config: {
+          type: 'CheckboxControl',
+          label: t('Only Total'),
+          default: true,
+          renderTrigger: true,
+          description: t(
+            'Only show the total value on the stacked chart, and not show on the selected category',
+          ),
+          visibility: ({ controls }: ControlPanelsContainerProps) =>
+            Boolean(controls?.show_value?.value) &&
+            Boolean(controls?.stack?.value),
         },
       },
     ],
@@ -250,77 +278,104 @@ function createCustomizeSection(
         },
       },
     ],
+    [<ControlSubSectionHeader>{t('Series Order')}</ControlSubSectionHeader>],
+    [
+      {
+        name: `sort_series_type${controlSuffix}`,
+        config: {
+          type: 'SelectControl',
+          freeForm: false,
+          label: t('Sort Series By'),
+          choices: SORT_SERIES_CHOICES,
+          default: DEFAULT_SORT_SERIES_DATA.sort_series_type,
+          renderTrigger: true,
+          description: t(
+            'Based on what should series be ordered on the chart and legend',
+          ),
+        },
+      },
+    ],
+    [
+      {
+        name: `sort_series_ascending${controlSuffix}`,
+        config: {
+          type: 'CheckboxControl',
+          label: t('Sort Series Ascending'),
+          default: DEFAULT_SORT_SERIES_DATA.sort_series_ascending,
+          renderTrigger: true,
+          description: t('Sort series in ascending order'),
+        },
+      },
+    ],
   ];
+}
+
+function createAdvancedAnalyticsSection(
+  label: string,
+  controlSuffix: string,
+): ControlPanelSectionConfig {
+  const aaWithSuffix = cloneDeep(sections.advancedAnalyticsControls);
+  aaWithSuffix.label = label;
+  if (!controlSuffix) {
+    return aaWithSuffix;
+  }
+  aaWithSuffix.controlSetRows.forEach(row =>
+    row.forEach((control: CustomControlItem) => {
+      if (control?.name) {
+        // eslint-disable-next-line no-param-reassign
+        control.name = `${control.name}${controlSuffix}`;
+      }
+    }),
+  );
+  return aaWithSuffix;
 }
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
-    sections.legacyTimeseriesTime,
-    createQuerySection(t('Query A'), ''),
-    createQuerySection(t('Query B'), '_b'),
     {
-      label: t('Annotations and Layers'),
-      expanded: false,
-      controlSetRows: [
-        [
-          {
-            name: 'annotation_layers',
-            config: {
-              type: 'AnnotationLayerControl',
-              label: '',
-              default: annotationLayers,
-              description: t('Annotation Layers'),
-            },
-          },
-        ],
-      ],
+      label: t('Shared query fields'),
+      expanded: true,
+      controlSetRows: [['x_axis'], ['time_grain_sqla']],
     },
+    createQuerySection(t('Query A'), ''),
+    createAdvancedAnalyticsSection(t('Advanced analytics Query A'), ''),
+    createQuerySection(t('Query B'), '_b'),
+    createAdvancedAnalyticsSection(t('Advanced analytics Query B'), '_b'),
+    sections.annotationsAndLayersControls,
     sections.titleControls,
     {
       label: t('Chart Options'),
       expanded: true,
       controlSetRows: [
         ['color_scheme'],
+        ['time_shift_color'],
         ...createCustomizeSection(t('Query A'), ''),
         ...createCustomizeSection(t('Query B'), 'B'),
+        ['zoomable'],
+        [minorTicks],
+        ...legendSection,
+        [<ControlSubSectionHeader>{t('X Axis')}</ControlSubSectionHeader>],
+        ['x_axis_time_format'],
+        [xAxisLabelRotation],
+        [xAxisLabelInterval],
+        [<ControlSubSectionHeader>{t('Tooltip')}</ControlSubSectionHeader>],
         [
           {
-            name: 'zoomable',
+            name: 'show_query_identifiers',
             config: {
               type: 'CheckboxControl',
-              label: t('Data Zoom'),
-              default: zoomable,
-              renderTrigger: true,
-              description: t('Enable data zooming controls'),
-            },
-          },
-        ],
-        ...legendSection,
-        [<h1 className="section-header">{t('X Axis')}</h1>],
-        ['x_axis_time_format'],
-        [
-          {
-            name: 'xAxisLabelRotation',
-            config: {
-              type: 'SelectControl',
-              freeForm: true,
-              clearable: false,
-              label: t('Rotate x axis label'),
-              choices: [
-                [0, '0°'],
-                [45, '45°'],
-              ],
-              default: xAxisLabelRotation,
-              renderTrigger: true,
+              label: t('Show query identifiers'),
               description: t(
-                'Input field supports custom rotation. e.g. 30 for 30°',
+                'Add Query A and Query B identifiers to tooltips to help differentiate series',
               ),
+              default: false,
+              renderTrigger: true,
             },
           },
         ],
-        ...richTooltipSection,
+        ...richTooltipSection.slice(1), // Skip the tooltip header since we added our own
         // eslint-disable-next-line react/jsx-key
-        [<h1 className="section-header">{t('Y Axis')}</h1>],
+        [<ControlSubSectionHeader>{t('Y Axis')}</ControlSubSectionHeader>],
         [
           {
             name: 'minorSplitLine',
@@ -333,6 +388,8 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [truncateXAxis],
+        [xAxisBounds],
         [
           {
             name: 'truncateYAxis',
@@ -352,11 +409,11 @@ const config: ControlPanelConfig = {
             name: 'y_axis_bounds',
             config: {
               type: 'BoundsControl',
-              label: t('Y Axis Bounds'),
+              label: t('Primary y-axis Bounds'),
               renderTrigger: true,
               default: yAxisBounds,
               description: t(
-                'Bounds for the Y-axis. When left empty, the bounds are ' +
+                'Bounds for the primary Y-axis. When left empty, the bounds are ' +
                   'dynamically defined based on the min/max of the data. Note that ' +
                   "this feature will only expand the axis range. It won't " +
                   "narrow the data's extent.",
@@ -373,6 +430,7 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        ['currency_format'],
         [
           {
             name: 'logAxis',
@@ -387,10 +445,36 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'y_axis_bounds_secondary',
+            config: {
+              type: 'BoundsControl',
+              label: t('Secondary y-axis Bounds'),
+              renderTrigger: true,
+              default: yAxisBounds,
+              description: t(
+                `Bounds for the secondary Y-axis. Only works when Independent Y-axis
+                bounds are enabled. When left empty, the bounds are dynamically defined
+                based on the min/max of the data. Note that this feature will only expand
+                the axis range. It won't narrow the data's extent.`,
+              ),
+            },
+          },
+        ],
+        [
+          {
             name: `y_axis_format_secondary`,
             config: {
               ...sharedControls.y_axis_format,
               label: t('Secondary y-axis format'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'currency_format_secondary',
+            config: {
+              ...sharedControls.currency_format,
+              label: t('Secondary currency format'),
             },
           },
         ],
@@ -421,6 +505,29 @@ const config: ControlPanelConfig = {
       ],
     },
   ],
+  formDataOverrides: formData => {
+    const groupby = getStandardizedControls().controls.columns.filter(
+      col => !ensureIsArray(formData.groupby_b).includes(col),
+    );
+    getStandardizedControls().controls.columns =
+      getStandardizedControls().controls.columns.filter(
+        col => !groupby.includes(col),
+      );
+
+    const metrics = getStandardizedControls().controls.metrics.filter(
+      metric => !ensureIsArray(formData.metrics_b).includes(metric),
+    );
+    getStandardizedControls().controls.metrics =
+      getStandardizedControls().controls.metrics.filter(
+        col => !metrics.includes(col),
+      );
+
+    return {
+      ...formData,
+      metrics,
+      groupby,
+    };
+  },
 };
 
 export default config;

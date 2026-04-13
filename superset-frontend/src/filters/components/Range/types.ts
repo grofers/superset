@@ -24,10 +24,18 @@ import {
 } from '@superset-ui/core';
 import { RefObject } from 'react';
 import { PluginFilterHooks, PluginFilterStylesProps } from '../types';
+import { FilterBarOrientation } from '../../../dashboard/types';
+
+export enum RangeDisplayMode {
+  Slider = 'slider',
+  Input = 'input',
+  SliderAndInput = 'slider-and-input',
+}
 
 interface PluginFilterSelectCustomizeProps {
   max?: number;
   min?: number;
+  rangeDisplayMode?: RangeDisplayMode;
 }
 
 export type PluginFilterRangeQueryFormData = QueryFormData &
@@ -40,4 +48,6 @@ export type PluginFilterRangeProps = PluginFilterStylesProps & {
   filterState: FilterState;
   behaviors: Behavior[];
   inputRef: RefObject<any>;
+  filterBarOrientation?: FilterBarOrientation;
+  isOverflowingFilterBar?: boolean;
 } & PluginFilterHooks;

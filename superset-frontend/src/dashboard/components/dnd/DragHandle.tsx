@@ -16,34 +16,36 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { LegacyRef } from 'react';
-import cx from 'classnames';
+import { LegacyRef } from 'react';
+import { css, styled } from '@superset-ui/core';
+import { Icons } from '@superset-ui/core/components/Icons';
 
 interface DragHandleProps {
   position: 'left' | 'top';
-  innerRef: LegacyRef<HTMLDivElement> | undefined;
-  dotCount: number;
+  innerRef?: LegacyRef<HTMLDivElement> | undefined;
 }
 
+const DragHandleContainer = styled.div<{ position: 'left' | 'top' }>`
+  ${({ theme, position }) => css`
+    height: ${theme.sizeUnit * 5}px;
+    overflow: hidden;
+    cursor: move;
+    ${position === 'top' &&
+    css`
+      transform: rotate(90deg);
+    `}
+    & path {
+      fill: ${theme.colorIcon};
+    }
+  `}
+`;
 export default function DragHandle({
   position = 'left',
   innerRef = null,
-  dotCount = 8,
 }: DragHandleProps) {
   return (
-    <div
-      ref={innerRef}
-      className={cx(
-        'drag-handle',
-        position === 'left' && 'drag-handle--left',
-        position === 'top' && 'drag-handle--top',
-      )}
-    >
-      {Array(dotCount)
-        .fill(null)
-        .map((_, i) => (
-          <div key={`handle-dot-${i}`} className="drag-handle-dot" />
-        ))}
-    </div>
+    <DragHandleContainer ref={innerRef} position={position}>
+      <Icons.Drag iconSize="xl" />
+    </DragHandleContainer>
   );
 }

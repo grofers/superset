@@ -16,35 +16,47 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
+import { RefObject } from 'react';
 import { useDrag } from 'react-dnd';
-import { Metric, styled } from '@superset-ui/core';
+import { css, Metric, styled, useTheme } from '@superset-ui/core';
+import { ColumnMeta } from '@superset-ui/chart-controls';
 import { DndItemType } from 'src/explore/components/DndItemType';
 import {
   StyledColumnOption,
   StyledMetricOption,
 } from 'src/explore/components/optionRenderers';
-import { ColumnMeta } from '@superset-ui/chart-controls';
+import { Icons } from '@superset-ui/core/components/Icons';
+
 import { DatasourcePanelDndItem } from '../types';
 
 const DatasourceItemContainer = styled.div`
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: ${({ theme }) => theme.gridUnit * 6}px;
-  cursor: pointer;
-
-  > div {
+  ${({ theme }) => css`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     width: 100%;
-  }
+    height: ${theme.sizeUnit * 6}px;
+    padding: 0 ${theme.sizeUnit}px;
 
-  :hover {
-    background-color: ${({ theme }) => theme.colors.grayscale.light2};
-  }
+    // hack to make the drag preview image corners rounded
+    transform: translate(0, 0);
+    color: ${theme.colorText};
+    background-color: ${theme.colorBgLayout};
+    border-radius: 4px;
+
+    &:hover {
+      background-color: ${theme.colorPrimaryBgHover};
+    }
+
+    > div {
+      min-width: 0;
+      margin-right: ${theme.sizeUnit * 2}px;
+    }
+  `}
 `;
 
 interface DatasourcePanelDragOptionProps extends DatasourcePanelDndItem {
-  labelRef?: React.RefObject<any>;
+  labelRef?: RefObject<any>;
   showTooltip?: boolean;
 }
 
@@ -56,6 +68,7 @@ export default function DatasourcePanelDragOption(
   props: DatasourcePanelDragOptionProps,
 ) {
   const { labelRef, showTooltip, type, value } = props;
+  const theme = useTheme();
   const [{ isDragging }, drag] = useDrag({
     item: {
       value: props.value,
@@ -79,6 +92,15 @@ export default function DatasourcePanelDragOption(
       ) : (
         <StyledMetricOption metric={value as MetricOption} {...optionProps} />
       )}
+      <Icons.Drag
+        iconSize="xl"
+        css={css`
+          color: ${theme.colorFill};
+          &hover {
+            color: ${theme.colorIcon};
+          }
+        `}
+      />
     </DatasourceItemContainer>
   );
 }

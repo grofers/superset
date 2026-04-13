@@ -16,26 +16,27 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
 import {
+  ensureIsArray,
+  isAdhocColumn,
+  isPhysicalColumn,
   QueryFormMetric,
-  smartDateFormatter,
+  SMART_DATE_ID,
   t,
   validateNonEmpty,
 } from '@superset-ui/core';
 import {
   ControlPanelConfig,
   D3_TIME_FORMAT_OPTIONS,
-  formatSelectOptions,
-  sections,
+  Dataset,
+  getStandardizedControls,
   sharedControls,
-  emitFilterControl,
+  D3_FORMAT_DOCS,
 } from '@superset-ui/chart-controls';
 import { MetricsLayoutEnum } from '../types';
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
-    { ...sections.legacyTimeseriesTime, expanded: false },
     {
       label: t('Query'),
       expanded: true,
@@ -62,10 +63,42 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'time_grain_sqla',
+            config: {
+              ...sharedControls.time_grain_sqla,
+              visibility: ({ controls }) => {
+                const dttmLookup = Object.fromEntries(
+                  ensureIsArray(controls?.groupbyColumns?.options).map(
+                    option => [option.column_name, option.is_dttm],
+                  ),
+                );
+
+                return [
+                  ...ensureIsArray(controls?.groupbyColumns.value),
+                  ...ensureIsArray(controls?.groupbyRows.value),
+                ]
+                  .map(selection => {
+                    if (isAdhocColumn(selection)) {
+                      return true;
+                    }
+                    if (isPhysicalColumn(selection)) {
+                      return !!dttmLookup[selection];
+                    }
+                    return false;
+                  })
+                  .some(Boolean);
+              },
+            },
+          },
+          'temporal_columns_lookup',
+        ],
+        [
+          {
             name: 'metrics',
             config: {
               ...sharedControls.metrics,
               validators: [validateNonEmpty],
+              rerender: ['conditional_formatting'],
             },
           },
         ],
@@ -88,7 +121,6 @@ const config: ControlPanelConfig = {
           },
         ],
         ['adhoc_filters'],
-        emitFilterControl,
         ['series_limit'],
         [
           {
@@ -138,26 +170,29 @@ const config: ControlPanelConfig = {
               type: 'SelectControl',
               label: t('Aggregation function'),
               clearable: false,
-              choices: formatSelectOptions([
-                'Count',
-                'Count Unique Values',
-                'List Unique Values',
-                'Sum',
-                'Average',
-                'Median',
-                'Sample Variance',
-                'Sample Standard Deviation',
-                'Minimum',
-                'Maximum',
-                'First',
-                'Last',
-                'Sum as Fraction of Total',
-                'Sum as Fraction of Rows',
-                'Sum as Fraction of Columns',
-                'Count as Fraction of Total',
-                'Count as Fraction of Rows',
-                'Count as Fraction of Columns',
-              ]),
+              choices: [
+                ['Count', t('Count')],
+                ['Count Unique Values', t('Count Unique Values')],
+                ['List Unique Values', t('List Unique Values')],
+                ['Sum', t('Sum')],
+                ['Average', t('Average')],
+                ['Median', t('Median')],
+                ['Sample Variance', t('Sample Variance')],
+                ['Sample Standard Deviation', t('Sample Standard Deviation')],
+                ['Minimum', t('Minimum')],
+                ['Maximum', t('Maximum')],
+                ['First', t('First')],
+                ['Last', t('Last')],
+                ['Sum as Fraction of Total', t('Sum as Fraction of Total')],
+                ['Sum as Fraction of Rows', t('Sum as Fraction of Rows')],
+                ['Sum as Fraction of Columns', t('Sum as Fraction of Columns')],
+                ['Count as Fraction of Total', t('Count as Fraction of Total')],
+                ['Count as Fraction of Rows', t('Count as Fraction of Rows')],
+                [
+                  'Count as Fraction of Columns',
+                  t('Count as Fraction of Columns'),
+                ],
+              ],
               default: 'Sum',
               description: t(
                 'Aggregate function to apply when pivoting and computing the total rows and columns',
@@ -180,6 +215,18 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'rowSubTotals',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show rows subtotal'),
+              default: false,
+              renderTrigger: true,
+              description: t('Display row level subtotal'),
+            },
+          },
+        ],
+        [
+          {
             name: 'colTotals',
             config: {
               type: 'CheckboxControl',
@@ -187,6 +234,30 @@ const config: ControlPanelConfig = {
               default: false,
               renderTrigger: true,
               description: t('Display column level total'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'isTotalAtTop',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show columns total at top'),
+              default: false,
+              renderTrigger: true,
+              description: t('Display column level total'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'colSubTotals',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show columns subtotal'),
+              default: false,
+              renderTrigger: true,
+              description: t('Display column level subtotal'),
             },
           },
         ],
@@ -217,6 +288,34 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'showRowPercentile',
+            config: {
+              type: 'CheckboxControl',
+              label: t('SHOW ROWS PERCENTILE W.R.T. ROWS TOTAL'),
+              default: false,
+              renderTrigger: true,
+              description: t(
+                'Display row values in percentile w.r.t. rows total value.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'showColPercentile',
+            config: {
+              type: 'CheckboxControl',
+              label: t('SHOW COLUMNS PERCENTILE W.R.T. COLUMNS TOTAL'),
+              default: false,
+              renderTrigger: true,
+              description: t(
+                'Display columns values in percentile w.r.t. columns total value.',
+              ),
+            },
+          },
+        ],
       ],
     },
     {
@@ -234,12 +333,48 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'col_value_formatting',
+            config: {
+              type: 'ConditionalFormattingControl',
+              renderTrigger: true,
+              label: t('Metric Value Formatting'),
+              description: D3_FORMAT_DOCS,
+              hasOperator: false,
+              isD3ValueFormatting: true,
+              mapStateToProps(explore, _, chart) {
+                const values =
+                  (explore?.controls?.metrics?.value as QueryFormMetric[]) ??
+                  [];
+                const verboseMap = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? (explore?.datasource as Dataset)?.verbose_map
+                  : explore?.datasource?.columns ?? {};
+                const chartStatus = chart?.chartStatus;
+                const metricColumn = values.map(value => {
+                  if (typeof value === 'string') {
+                    return { value, label: verboseMap[value] ?? value };
+                  }
+                  return { value: value.label, label: value.label };
+                });
+                return {
+                  removeIrrelevantConditions: chartStatus === 'success',
+                  columnOptions: metricColumn,
+                  verboseMap,
+                };
+              },
+            },
+          },
+        ],
+        ['currency_format'],
+        [
+          {
             name: 'date_format',
             config: {
               type: 'SelectControl',
               freeForm: true,
               label: t('Date format'),
-              default: smartDateFormatter.id,
+              default: SMART_DATE_ID,
               renderTrigger: true,
               choices: D3_TIME_FORMAT_OPTIONS,
               description: t('D3 time format for datetime columns'),
@@ -259,6 +394,7 @@ const config: ControlPanelConfig = {
                 ['key_z_to_a', t('key z-a')],
                 ['value_a_to_z', t('value ascending')],
                 ['value_z_to_a', t('value descending')],
+                ['none', t('Default Order')],
               ],
               renderTrigger: true,
               description: (
@@ -287,6 +423,7 @@ const config: ControlPanelConfig = {
                 ['key_z_to_a', t('key z-a')],
                 ['value_a_to_z', t('value ascending')],
                 ['value_z_to_a', t('value descending')],
+                ['none', t('Default Order')],
               ],
               renderTrigger: true,
               description: (
@@ -344,18 +481,29 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               label: t('Conditional formatting'),
               description: t('Apply conditional color formatting to metrics'),
-              mapStateToProps(explore) {
+              mapStateToProps(explore, _, chart) {
                 const values =
                   (explore?.controls?.metrics?.value as QueryFormMetric[]) ??
                   [];
-                const verboseMap = explore?.datasource?.verbose_map ?? {};
+                const verboseMap = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? (explore?.datasource as Dataset)?.verbose_map
+                  : explore?.datasource?.columns ?? {};
+                const chartStatus = chart?.chartStatus;
                 const metricColumn = values.map(value => {
                   if (typeof value === 'string') {
-                    return { value, label: verboseMap[value] ?? value };
+                    return {
+                      value,
+                      label: Array.isArray(verboseMap)
+                        ? value
+                        : verboseMap[value],
+                    };
                   }
                   return { value: value.label, label: value.label };
                 });
                 return {
+                  removeIrrelevantConditions: chartStatus === 'success',
                   columnOptions: metricColumn,
                   verboseMap,
                 };
@@ -363,9 +511,141 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'conditionalCellFormatter',
+            config: {
+              type: 'SelectControl',
+              label: t('Conditional Formatting Present On'),
+              default: false,
+              choices: [
+                // [value, label]
+                [false, t('Cell')],
+                [true, t('Text')],
+              ],
+              renderTrigger: true,
+              description: t(
+                'Add Conditional Color Formatting on either Cell background or Text',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'prefix_formatting',
+            config: {
+              type: 'ConditionalFormattingControl',
+              renderTrigger: true,
+              label: t('Add Prefix'),
+              description: t('Apply Prefix to columns'),
+              hasOperator: false,
+              mapStateToProps(explore, _, chart) {
+                const values =
+                  (explore?.controls?.metrics?.value as QueryFormMetric[]) ??
+                  [];
+                const verboseMap = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? (explore?.datasource as Dataset)?.verbose_map
+                  : explore?.datasource?.columns ?? {};
+                const chartStatus = chart?.chartStatus;
+                const metricColumn = values.map(value => {
+                  if (typeof value === 'string') {
+                    return { value, label: verboseMap[value] ?? value };
+                  }
+                  return { value: value.label, label: value.label };
+                });
+                return {
+                  removeIrrelevantConditions: chartStatus === 'success',
+                  columnOptions: metricColumn,
+                  verboseMap,
+                };
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'suffix_formatting',
+            config: {
+              type: 'ConditionalFormattingControl',
+              renderTrigger: true,
+              label: t('Add Suffix'),
+              description: t('Apply Suffix to columns'),
+              hasOperator: false,
+              mapStateToProps(explore, _, chart) {
+                const values =
+                  (explore?.controls?.metrics?.value as QueryFormMetric[]) ??
+                  [];
+                const verboseMap = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? (explore?.datasource as Dataset)?.verbose_map
+                  : explore?.datasource?.columns ?? {};
+                const chartStatus = chart?.chartStatus;
+                const metricColumn = values.map(value => {
+                  if (typeof value === 'string') {
+                    return { value, label: verboseMap[value] ?? value };
+                  }
+                  return { value: value.label, label: value.label };
+                });
+                return {
+                  removeIrrelevantConditions: chartStatus === 'success',
+                  columnOptions: metricColumn,
+                  verboseMap,
+                };
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'addBorder',
+            config: {
+              type: 'SelectControl',
+              label: t('Add Border'),
+              default: false,
+              choices: [
+                // [value, label]
+                [false, t('None')],
+                [true, t('1px solid black')],
+              ],
+              renderTrigger: true,
+              description: t("Add border to Table's header"),
+            },
+          },
+        ],
+        [
+          {
+            name: 'allow_render_html',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Render columns in HTML format'),
+              renderTrigger: true,
+              default: true,
+              description: t(
+                'Renders table cells as HTML when applicable. For example, HTML <a> tags will be rendered as hyperlinks.',
+              ),
+            },
+          },
+        ],
       ],
     },
   ],
+  formDataOverrides: formData => {
+    const groupbyColumns = getStandardizedControls().controls.columns.filter(
+      col => !ensureIsArray(formData.groupbyRows).includes(col),
+    );
+    getStandardizedControls().controls.columns =
+      getStandardizedControls().controls.columns.filter(
+        col => !groupbyColumns.includes(col),
+      );
+    return {
+      ...formData,
+      metrics: getStandardizedControls().popAllMetrics(),
+      groupbyColumns,
+    };
+  },
 };
 
 export default config;
