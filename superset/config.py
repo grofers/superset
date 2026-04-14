@@ -1203,6 +1203,15 @@ DASHBOARD_TEMPLATE_ID = None
 # as such `create_engine(url, **params)`
 DB_CONNECTION_MUTATOR = None
 
+# A set of disallowed SQL functions per engine. This is used to restrict the use of
+# unsafe SQL functions in SQL Lab and Charts. The keys of the dictionary are the engine
+# names, and the values are sets of disallowed functions.
+DISALLOWED_SQL_FUNCTIONS: dict[str, set[str]] = {
+    "postgresql": {"version", "query_to_xml", "inet_server_addr", "inet_client_addr"},
+    "clickhouse": {"url"},
+    "mysql": {"version"},
+}
+
 
 # A function that intercepts the SQL to be executed and can alter it.
 # The use case is can be around adding some sort of comment header
@@ -1396,7 +1405,7 @@ TEST_DATABASE_CONNECTION_TIMEOUT = timedelta(seconds=30)
 CONTENT_SECURITY_POLICY_WARNING = True
 
 # Do you want Talisman enabled?
-TALISMAN_ENABLED = utils.cast_to_boolean(os.environ.get("TALISMAN_ENABLED", True))
+TALISMAN_ENABLED = utils.cast_to_boolean(os.environ.get("TALISMAN_ENABLED", False))
 
 # If you want Talisman, how do you want it configured??
 TALISMAN_CONFIG = {
@@ -1415,6 +1424,7 @@ TALISMAN_CONFIG = {
             "'self'",
             "https://api.mapbox.com",
             "https://events.mapbox.com",
+            "ws://127.0.0.1:8080"
         ],
         "object-src": "'none'",
         "style-src": [
@@ -1444,6 +1454,7 @@ TALISMAN_DEV_CONFIG = {
             "'self'",
             "https://api.mapbox.com",
             "https://events.mapbox.com",
+            "ws://127.0.0.1:8080/"
         ],
         "object-src": "'none'",
         "style-src": [

@@ -49,8 +49,8 @@ RUN tar -xvf *.tar.gz
 WORKDIR apache-superset-$VERSION
 
 RUN cd superset-frontend \
-    && npm ci \
-    && npm run build \
+    && pnpm i \
+    && pnpm run build \
     && rm -rf node_modules
 
 

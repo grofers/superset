@@ -36,6 +36,29 @@ import {
 const middlewares = [thunk];
 const mockStore = configureMockStore(middlewares);
 
+describe('getUpToDateQuery', () => {
+  test('should return the up to date query editor state', () => {
+    const outOfUpdatedQueryEditor = {
+      ...defaultQueryEditor,
+      schema: null,
+      sql: 'SELECT ...',
+    };
+    const queryEditor = {
+      ...defaultQueryEditor,
+      sql: 'SELECT * FROM table',
+    };
+    const state = {
+      sqlLab: {
+        queryEditors: [queryEditor],
+        unsavedQueryEditor: {},
+      },
+    };
+    expect(actions.getUpToDateQuery(state, outOfUpdatedQueryEditor)).toEqual(
+      queryEditor,
+    );
+  });
+});
+
 describe('async actions', () => {
   const mockBigNumber = '9223372036854775807';
   const queryEditor = {
@@ -675,7 +698,13 @@ describe('async actions', () => {
         it('updates the tab state in the backend', () => {
           expect.assertions(2);
 
-          const store = mockStore(initialState);
+          const store = mockStore({
+            ...initialState,
+            sqlLab: {
+              ...initialState.sqlLab,
+              queryEditors: [queryEditor],
+            },
+          });
           const request = actions.queryEditorSetAndSaveSql(queryEditor, sql);
           return request(store.dispatch, store.getState).then(() => {
             expect(store.getActions()).toEqual(expectedActions);
@@ -691,7 +720,13 @@ describe('async actions', () => {
               feature => !(feature === 'SQLLAB_BACKEND_PERSISTENCE'),
             );
 
-          const store = mockStore(initialState);
+          const store = mockStore({
+            ...initialState,
+            sqlLab: {
+              ...initialState.sqlLab,
+              queryEditors: [queryEditor],
+            },
+          });
           const request = actions.queryEditorSetAndSaveSql(queryEditor, sql);
           request(store.dispatch, store.getState);
 
@@ -883,7 +918,7 @@ describe('async actions', () => {
       it('updates the table schema state in the backend', () => {
         expect.assertions(2);
 
-        const table = { id: 1 };
+        const table = { id: 1, initialized: true };
         const store = mockStore({});
         const expectedActions = [
           {
@@ -900,7 +935,10 @@ describe('async actions', () => {
       it('deletes multiple tables and updates the table schema state in the backend', () => {
         expect.assertions(2);
 
-        const tables = [{ id: 1 }, { id: 2 }];
+        const tables = [
+          { id: 1, initialized: true },
+          { id: 2, initialized: true },
+        ];
         const store = mockStore({});
         const expectedActions = [
           {
@@ -911,6 +949,23 @@ describe('async actions', () => {
         return store.dispatch(actions.removeTables(tables)).then(() => {
           expect(store.getActions()).toEqual(expectedActions);
           expect(fetchMock.calls(updateTableSchemaEndpoint)).toHaveLength(2);
+        });
+      });
+
+      it('only updates the initialized table schema state in the backend', () => {
+        expect.assertions(2);
+
+        const tables = [{ id: 1 }, { id: 2, initialized: true }];
+        const store = mockStore({});
+        const expectedActions = [
+          {
+            type: actions.REMOVE_TABLES,
+            tables,
+          },
+        ];
+        return store.dispatch(actions.removeTables(tables)).then(() => {
+          expect(store.getActions()).toEqual(expectedActions);
+          expect(fetchMock.calls(updateTableSchemaEndpoint)).toHaveLength(1);
         });
       });
     });

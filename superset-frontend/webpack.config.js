@@ -106,7 +106,7 @@ const plugins = [
         entrypoints: entryFiles,
       };
     },
-    // Also write manifest.json to disk when running `npm run dev`.
+    // Also write manifest.json to disk when running `pnpm run dev`.
     // This is required for Flask to work.
     writeToFileEmit: isDevMode && !isDevServer,
   }),
@@ -155,18 +155,18 @@ if (!isDevMode) {
     }),
   );
 
-  plugins.push(
-    // runs type checking on a separate process to speed up the build
-    new ForkTsCheckerWebpackPlugin({
-      eslint: {
-        files: './{src,packages,plugins}/**/*.{ts,tsx,js,jsx}',
-        memoryLimit: 4096,
-        options: {
-          ignorePath: './.eslintignore',
-        },
-      },
-    }),
-  );
+  // plugins.push(
+  //   // runs type checking on a separate process to speed up the build
+  //   new ForkTsCheckerWebpackPlugin({
+  //     eslint: {
+  //       files: './{src,packages,plugins}/**/*.{ts,tsx,js,jsx}',
+  //       memoryLimit: 4096,
+  //       options: {
+  //         ignorePath: './.eslintignore',
+  //       },
+  //     },
+  //   }),
+  // );
 }
 
 const PREAMBLE = [path.join(APP_DIR, '/src/preamble.ts')];
@@ -191,7 +191,7 @@ const babelLoader = {
     // disable gzip compression for cache files
     // faster when there are millions of small files
     cacheCompression: false,
-    plugins: ['emotion'],
+    plugins: ['@emotion/babel-plugin'],
     presets: [
       [
         '@emotion/babel-preset-css-prop',
@@ -285,7 +285,7 @@ const config = {
       //  AntD version conflict has been resolved
       antd: path.resolve(path.join(APP_DIR, './node_modules/antd')),
       react: path.resolve(path.join(APP_DIR, './node_modules/react')),
-      // TODO: remove Handlebars alias once Handlebars NPM package has been updated to
+      // TODO: remove Handlebars alias once Handlebars pnpm package has been updated to
       // correctly support webpack import (https://github.com/handlebars-lang/handlebars.js/issues/953)
       handlebars: 'handlebars/dist/handlebars.js',
     },
@@ -345,6 +345,10 @@ const config = {
         ],
         use: [babelLoader],
       },
+      {
+        test: /ace-builds.*\/worker-.*$/,
+        type: 'asset/resource',
+      },
       // react-hot-loader use "ProxyFacade", which is a wrapper for react Component
       // see https://github.com/gaearon/react-hot-loader/issues/1311
       // TODO: refactor recurseReactClone
@@ -399,7 +403,7 @@ const config = {
         },
         type: 'asset',
         generator: {
-          filename: '[name].[contenthash:8].[ext]',
+          filename: '[name].[contenthash:8][ext]',
         },
       },
       {
@@ -427,7 +431,7 @@ const config = {
         test: /\.(jpg|gif)$/,
         type: 'asset/resource',
         generator: {
-          filename: '[name].[contenthash:8].[ext]',
+          filename: '[name].[contenthash:8][ext]',
         },
       },
       /* for font-awesome */
@@ -471,12 +475,28 @@ const config = {
 
 // find all the symlinked plugins and use their source code for imports
 Object.entries(packageConfig.dependencies).forEach(([pkg, relativeDir]) => {
-  const srcPath = path.join(APP_DIR, `./node_modules/${pkg}/src`);
-  const dir = relativeDir.replace('file:', '');
+  let dir = relativeDir.replace('file:', '');
 
-  if (/^@superset-ui/.test(pkg) && fs.existsSync(srcPath)) {
-    console.log(`[Superset Plugin] Use symlink source for ${pkg} @ ${dir}`);
-    config.resolve.alias[pkg] = path.resolve(APP_DIR, `${dir}/src`);
+  if (/^@superset-ui/.test(pkg)) {
+    if (relativeDir.startsWith('workspace:')) {
+      const pkgName = pkg.split('/')[1];
+      const candidates = [
+        `packages/superset-ui-${pkgName}`,
+        `plugins/${pkgName}`,
+        `packages/${pkgName}`,
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(path.join(APP_DIR, candidate))) {
+          dir = candidate;
+          break;
+        }
+      }
+    }
+
+    if (fs.existsSync(path.join(APP_DIR, `${dir}/src`))) {
+      console.log(`[Superset Plugin] Use symlink source for ${pkg} @ ${dir}`);
+      config.resolve.alias[pkg] = path.resolve(APP_DIR, `${dir}/src`);
+    }
   }
 });
 console.log(''); // pure cosmetic new line
@@ -516,14 +536,14 @@ if (isDevMode) {
 
 // Bundle analyzer is disabled by default
 // Pass flag --analyzeBundle=true to enable
-// e.g. npm run build -- --analyzeBundle=true
+// e.g. pnpm run build -- --analyzeBundle=true
 if (analyzeBundle) {
   config.plugins.push(new BundleAnalyzerPlugin({ analyzerPort }));
 }
 
 // Speed measurement is disabled by default
 // Pass flag --measure=true to enable
-// e.g. npm run build -- --measure=true
+// e.g. pnpm run build -- --measure=true
 const smp = new SpeedMeasurePlugin({
   disable: !measure,
 });

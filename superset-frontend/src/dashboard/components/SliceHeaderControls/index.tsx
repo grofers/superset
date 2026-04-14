@@ -140,6 +140,7 @@ export interface SliceHeaderControlsProps {
   isDescriptionExpanded?: boolean;
   formData: QueryFormData;
   exploreUrl: string;
+  mergedPivotTables?: string[][];
 
   forceRefresh: (sliceId: number, dashboardId: number) => void;
   logExploreChart?: (sliceId: number) => void;
@@ -369,7 +370,9 @@ const SliceHeaderControls = (props: SliceHeaderControlsPropsWithRouter) => {
     addDangerToast = () => {},
     supersetCanShare = false,
     isCached = [],
+    mergedPivotTables = [],
   } = props;
+  const config = useSelector((state: any) => state?.common?.conf);
   const isTable = slice.viz_type === 'table';
   const cachedWhen = (cachedDttm || []).map(itemCachedDttm =>
     moment.utc(itemCachedDttm).fromNow(),
@@ -433,15 +436,20 @@ const SliceHeaderControls = (props: SliceHeaderControlsPropsWithRouter) => {
         </Menu.Item>
       )}
 
-      {canExplore && (
-        <Menu.Item key={MENU_KEYS.EXPLORE_CHART}>
-          <Link to={props.exploreUrl}>
-            <Tooltip title={getSliceHeaderTooltip(props.slice.slice_name)}>
-              {t('Edit chart')}
-            </Tooltip>
-          </Link>
-        </Menu.Item>
-      )}
+      {canExplore &&
+        (mergedPivotTables.flat()?.includes(componentId) ? (
+          <Menu.Item key={MENU_KEYS.EXPLORE_CHART} disabled>
+            <Tooltip title="Un-merge charts to Edit">{t('Edit chart')}</Tooltip>
+          </Menu.Item>
+        ) : (
+          <Menu.Item key={MENU_KEYS.EXPLORE_CHART}>
+            <Link to={props.exploreUrl}>
+              <Tooltip title={getSliceHeaderTooltip(props.slice.slice_name)}>
+                {t('Edit chart')}
+              </Tooltip>
+            </Link>
+          </Menu.Item>
+        ))}
 
       {canEditCrossFilters && (
         <>
@@ -453,7 +461,10 @@ const SliceHeaderControls = (props: SliceHeaderControlsPropsWithRouter) => {
       )}
 
       {(canExplore || canViewQuery) && (
-        <Menu.Item key={MENU_KEYS.VIEW_QUERY}>
+        <Menu.Item
+          key={MENU_KEYS.VIEW_QUERY}
+          disabled={mergedPivotTables.flat()?.includes(componentId)}
+        >
           <ModalTrigger
             triggerNode={
               <span data-test="view-query-menu-item">{t('View query')}</span>
@@ -513,7 +524,7 @@ const SliceHeaderControls = (props: SliceHeaderControlsPropsWithRouter) => {
         </Menu.SubMenu>
       )}
 
-      {props.supersetCanCSV && (
+      {props.supersetCanCSV && !!config?.SHOW_CHART_DOWNLOAD_TO_CSV && (
         <Menu.SubMenu title={t('Download')}>
           <Menu.Item
             key={MENU_KEYS.EXPORT_CSV}

@@ -17,6 +17,7 @@
 # pylint: disable=invalid-name, redefined-outer-name, too-many-lines
 
 from typing import Optional
+from unittest.mock import Mock
 
 import pytest
 import sqlparse
@@ -25,10 +26,15 @@ from sqlalchemy import text
 from sqlparse.sql import Identifier, Token, TokenList
 from sqlparse.tokens import Name
 
-from superset.exceptions import QueryClauseValidationException
+from superset.exceptions import (
+    QueryClauseValidationException,
+    SupersetSecurityException,
+)
 from superset.sql_parse import (
     add_table_name,
+    check_sql_functions_exist,
     extract_table_references,
+    extract_tables_from_jinja_sql,
     get_rls_for_table,
     has_table_query,
     insert_rls_as_subquery,
@@ -265,9 +271,35 @@ def test_extract_tables_illdefined() -> None:
     """
     Test that ill-defined tables return an empty set.
     """
-    assert extract_tables("SELECT * FROM schemaname.") == set()
-    assert extract_tables("SELECT * FROM catalogname.schemaname.") == set()
-    assert extract_tables("SELECT * FROM catalogname..") == set()
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        extract_tables("SELECT * FROM schemaname.")
+    assert (
+        str(excinfo.value)
+        == "You may have an error in your SQL statement. Error parsing near '.' at line 1:25"
+    )
+
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        extract_tables("SELECT * FROM catalogname.schemaname.")
+    assert (
+        str(excinfo.value)
+        == "You may have an error in your SQL statement. Error parsing near '.' at line 1:37"
+    )
+
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        extract_tables("SELECT * FROM catalogname..")
+    assert (
+        str(excinfo.value)
+        == "You may have an error in your SQL statement. Error parsing near '.' at line 1:27"
+    )
+
+    with pytest.raises(SupersetSecurityException) as excinfo:
+        extract_tables('SELECT * FROM "tbname')
+    assert (
+        str(excinfo.value)
+        == "You may have an error in your SQL statement. Error tokenizing 'SELECT * FROM \"tbnam'"
+    )
+
+    # odd edge case that works
     assert extract_tables("SELECT * FROM catalogname..tbname") == {
         Table(table="tbname", schema=None, catalog="catalogname")
     }
@@ -558,6 +590,10 @@ def test_extract_tables_multistatement() -> None:
         Table("t1"),
         Table("t2"),
     }
+    assert extract_tables(
+        "ADD JAR file:///hive.jar; SELECT * FROM t1;",
+        engine="hive",
+    ) == {Table("t1")}
 
 
 def test_extract_tables_complex() -> None:
@@ -1257,6 +1293,31 @@ def test_strip_comments_from_sql() -> None:
     )
 
 
+def test_check_sql_functions_exist() -> None:
+    """
+    Test that comments are stripped out correctly.
+    """
+    assert not (
+        check_sql_functions_exist("select a, b from version", {"version"}, "postgresql")
+    )
+
+    assert check_sql_functions_exist("select version()", {"version"}, "postgresql")
+
+    assert check_sql_functions_exist(
+        "select version from version()", {"version"}, "postgresql"
+    )
+
+    assert check_sql_functions_exist(
+        "select 1, a.version from (select version from version()) as a",
+        {"version"},
+        "postgresql",
+    )
+
+    assert check_sql_functions_exist(
+        "select 1, a.version from (select version()) as a", {"version"}, "postgresql"
+    )
+
+
 def test_sanitize_clause_valid():
     # regular clauses
     assert sanitize_clause("col = 1") == "col = 1"
@@ -1815,10 +1876,7 @@ def test_extract_table_references(mocker: MockerFixture) -> None:
     # test falling back to sqlparse
     logger = mocker.patch("superset.sql_parse.logger")
     sql = "SELECT * FROM table UNION ALL SELECT * FROM other_table"
-    assert extract_table_references(
-        sql,
-        "trino",
-    ) == {
+    assert extract_table_references(sql, "trino") == {
         Table(table="table", schema=None, catalog=None),
         Table(table="other_table", schema=None, catalog=None),
     }
@@ -1848,3 +1906,55 @@ WITH t AS (
 )
 SELECT * FROM t"""
     ).is_select()
+    assert not ParsedQuery("").is_select()
+    assert not ParsedQuery("USE foo").is_select()
+    assert ParsedQuery("USE foo; SELECT * FROM bar").is_select()
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "hive",
+        "presto",
+        "trino",
+    ],
+)
+@pytest.mark.parametrize(
+    "macro,expected",
+    [
+        (
+            "latest_partition('foo.bar')",
+            {Table(table="bar", schema="foo")},
+        ),
+        (
+            "latest_partition(' foo.bar ')",  # Non-atypical user error which works
+            {Table(table="bar", schema="foo")},
+        ),
+        (
+            "latest_partition('foo.%s'|format('bar'))",
+            {Table(table="bar", schema="foo")},
+        ),
+        (
+            "latest_sub_partition('foo.bar', baz='qux')",
+            {Table(table="bar", schema="foo")},
+        ),
+        (
+            "latest_partition('foo.%s'|format(str('bar')))",
+            set(),
+        ),
+        (
+            "latest_partition('foo.{}'.format('bar'))",
+            set(),
+        ),
+    ],
+)
+def test_extract_tables_from_jinja_sql(
+    engine: str, macro: str, expected: set[Table]
+) -> None:
+    assert (
+        extract_tables_from_jinja_sql(
+            sql=f"'{{{{ {engine}.{macro} }}}}'",
+            database=Mock(),
+        )
+        == expected
+    )

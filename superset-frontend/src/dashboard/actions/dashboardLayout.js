@@ -290,3 +290,11 @@ export const redoLayoutAction = setUnsavedChangesAfterAction(
 
 // Update component parents list ----------------------------------------------
 export const UPDATE_COMPONENTS_PARENTS_LIST = 'UPDATE_COMPONENTS_PARENTS_LIST';
+
+
+// Merge Pivot tables -----------------------------------------------
+export const MERGE_PIVOT_TABLES = 'MERGE_PIVOT_TABLES';
+
+export function mergePivotTables(pivotTables) {
+  return { type: MERGE_PIVOT_TABLES, pivotTables };
+}

@@ -31,7 +31,7 @@ import {
   useComponentDidMount,
   usePrevious,
 } from '@superset-ui/core';
-import { debounce, pick } from 'lodash';
+import { debounce, omit, pick } from 'lodash';
 import { Resizable } from 're-resizable';
 import { usePluginContext } from 'src/components/DynamicPlugins';
 import { Global } from '@emotion/react';
@@ -43,6 +43,7 @@ import {
   LocalStorageKeys,
 } from 'src/utils/localStorageHelpers';
 import { RESERVED_CHART_URL_PARAMS, URL_PARAMS } from 'src/constants';
+import { QUERY_MODE_REQUISITES } from 'src/explore/constants';
 import { areObjectsEqual } from 'src/reduxUtils';
 import * as logActions from 'src/logger/actions';
 import {
@@ -68,6 +69,7 @@ import ConnectedControlPanelsContainer from '../ControlPanelsContainer';
 import SaveModal from '../SaveModal';
 import DataSourcePanel from '../DatasourcePanel';
 import ConnectedExploreChartHeader from '../ExploreChartHeader';
+import ExploreContainer from '../ExploreContainer';
 
 const propTypes = {
   ...ExploreChartPanel.propTypes,
@@ -89,13 +91,6 @@ const propTypes = {
   saveAction: PropTypes.string,
   isSaveModalVisible: PropTypes.bool,
 };
-
-const ExploreContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-`;
 
 const ExplorePanelContainer = styled.div`
   ${({ theme }) => css`
@@ -235,6 +230,20 @@ const updateHistory = debounce(
   1000,
 );
 
+const defaultSidebarsWidth = {
+  controls_width: 320,
+  datasource_width: 300,
+};
+
+function getSidebarWidths(key) {
+  return getItem(key, defaultSidebarsWidth[key]);
+}
+
+function setSidebarWidths(key, dimension) {
+  const newDimension = Number(getSidebarWidths(key)) + dimension.width;
+  setItem(key, newDimension);
+}
+
 function ExploreViewContainer(props) {
   const dynamicPluginContext = usePluginContext();
   const dynamicPlugin = dynamicPluginContext.dynamicPlugins[props.vizType];
@@ -249,15 +258,12 @@ function ExploreViewContainer(props) {
   );
 
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [shouldForceUpdate, setShouldForceUpdate] = useState(-1);
+  const [width, setWidth] = useState(
+    getSidebarWidths(LocalStorageKeys.DatasourceWidth),
+  );
   const tabId = useTabId();
 
   const theme = useTheme();
-
-  const defaultSidebarsWidth = {
-    controls_width: 320,
-    datasource_width: 300,
-  };
 
   const addHistory = useCallback(
     async ({ isReplace = false, title } = {}) => {
@@ -540,15 +546,6 @@ function ExploreViewContainer(props) {
     );
   }
 
-  function getSidebarWidths(key) {
-    return getItem(key, defaultSidebarsWidth[key]);
-  }
-
-  function setSidebarWidths(key, dimension) {
-    const newDimension = Number(getSidebarWidths(key)) + dimension.width;
-    setItem(key, newDimension);
-  }
-
   if (props.standalone) {
     return renderChartContainer();
   }
@@ -599,7 +596,7 @@ function ExploreViewContainer(props) {
         />
         <Resizable
           onResizeStop={(evt, direction, ref, d) => {
-            setShouldForceUpdate(d?.width);
+            setWidth(ref.getBoundingClientRect().width);
             setSidebarWidths(LocalStorageKeys.DatasourceWidth, d);
           }}
           defaultSize={{
@@ -633,7 +630,7 @@ function ExploreViewContainer(props) {
             datasource={props.datasource}
             controls={props.controls}
             actions={props.actions}
-            shouldForceUpdate={shouldForceUpdate}
+            width={width}
             user={props.user}
           />
         </Resizable>
@@ -708,6 +705,11 @@ function ExploreViewContainer(props) {
 
 ExploreViewContainer.propTypes = propTypes;
 
+const retainQueryModeRequirements = hiddenFormData =>
+  Object.keys(hiddenFormData ?? {}).filter(
+    key => !QUERY_MODE_REQUISITES.has(key),
+  );
+
 function mapStateToProps(state) {
   const {
     explore,
@@ -719,8 +721,12 @@ function mapStateToProps(state) {
     user,
     saveModal,
   } = state;
-  const { controls, slice, datasource, metadata } = explore;
-  const form_data = getFormDataFromControls(controls);
+  const { controls, slice, datasource, metadata, hiddenFormData } = explore;
+  const hasQueryMode = !!controls.query_mode?.value;
+  const fieldsToOmit = hasQueryMode
+    ? retainQueryModeRequirements(hiddenFormData)
+    : Object.keys(hiddenFormData ?? {});
+  const form_data = omit(getFormDataFromControls(controls), fieldsToOmit);
   const slice_id = form_data.slice_id ?? slice?.slice_id ?? 0; // 0 - unsaved chart
   form_data.extra_form_data = mergeExtraFormData(
     { ...form_data.extra_form_data },

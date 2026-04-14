@@ -30,7 +30,11 @@ import {
   ContextMenuFilters,
   Currency,
 } from '@superset-ui/core';
-import { ColorFormatters } from '@superset-ui/chart-controls';
+import {
+  ColD3Formatting,
+  ColorFormatters,
+  PrefixSuffixFormatters,
+} from '@superset-ui/chart-controls';
 
 export interface PivotTableStylesProps {
   height: number;
@@ -63,6 +67,7 @@ interface PivotTableCustomizeProps {
   rowSubtotalPosition: boolean;
   colSubtotalPosition: boolean;
   colTotals: boolean;
+  isTotalAtTop: boolean;
   colSubTotals: boolean;
   rowTotals: boolean;
   rowSubTotals: boolean;
@@ -87,6 +92,13 @@ interface PivotTableCustomizeProps {
   timeGrainSqla?: TimeGranularity;
   time_grain_sqla?: TimeGranularity;
   granularity_sqla?: string;
+  prefixFormatting?: PrefixSuffixFormatters;
+  suffixFormatting?: PrefixSuffixFormatters;
+  addBorder?: boolean;
+  conditionalCellFormatter?: boolean;
+  colValueFormatting?: ColD3Formatting;
+  showRowPercentile?: boolean;
+  showColPercentile?: boolean;
 }
 
 export type PivotTableQueryFormData = QueryFormData &

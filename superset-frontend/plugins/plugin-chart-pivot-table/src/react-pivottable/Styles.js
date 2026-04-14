@@ -56,6 +56,10 @@ export const Styles = styled.div`
       bottom: 0;
     }
 
+    table.pvtTable tbody tr.pvtRowTotals.top {
+      position: static;
+    }
+
     table.pvtTable thead tr:last-of-type th,
     table.pvtTable thead tr:first-of-type th.pvtTotalLabel,
     table.pvtTable thead tr:nth-last-of-type(2) th.pvtColLabel,
@@ -130,6 +134,28 @@ export const Styles = styled.div`
 
     .toggle-wrapper > .toggle-val {
       white-space: normal;
+    }
+
+    .head-wrapper {
+      display: flex;
+      gap: ${theme.gridUnit}px;
+      align-items: center;
+    }
+
+    .icon-wrapper {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .sort-icon {
+      font-size: 10px;
+      color: ${theme.colors.grayscale.light2};
+    }
+
+    .sort-icon.sm {
+      font-size: 8px;
     }
 
     .toggle {

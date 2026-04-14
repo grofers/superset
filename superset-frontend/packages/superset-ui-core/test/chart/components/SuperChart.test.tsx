@@ -28,7 +28,7 @@ import {
   supersetTheme,
   ThemeProvider,
 } from '@superset-ui/core';
-import { mount as enzymeMount } from 'enzyme';
+import { mount as enzymeMount, ReactWrapper } from 'enzyme';
 import { WrapperProps } from '../../../src/chart/components/SuperChart';
 import NoResultsComponent from '../../../src/chart/components/NoResultsComponent';
 
@@ -45,7 +45,7 @@ const DEFAULT_QUERIES_DATA = [
 ];
 
 function expectDimension(
-  renderedWrapper: Cheerio,
+  renderedWrapper: ReturnType<ReactWrapper['render']>,
   width: number,
   height: number,
 ) {

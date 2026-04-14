@@ -29,6 +29,7 @@ from superset.connectors.sqla.models import SqlaTable
 from superset.extensions import cache_manager, db, event_logger, stats_logger_manager
 from superset.models.cache import CacheKey
 from superset.views.base_api import BaseSupersetModelRestApi, statsd_metrics
+from superset.utils.cache import delete_many
 
 logger = logging.getLogger(__name__)
 
@@ -76,30 +77,48 @@ class CacheRestApi(BaseSupersetModelRestApi):
               $ref: '#/components/responses/500'
         """
         try:
-            datasources = CacheInvalidationRequestSchema().load(request.json)
+            payload = CacheInvalidationRequestSchema().load(request.json)
         except KeyError:
             return self.response_400(message="Request is incorrect")
         except ValidationError as error:
             return self.response_400(message=str(error))
-        datasource_uids = set(datasources.get("datasource_uids", []))
-        for ds in datasources.get("datasources", []):
-            ds_obj = SqlaTable.get_datasource_by_name(
-                datasource_name=ds.get("datasource_name"),
-                schema=ds.get("schema"),
-                database_name=ds.get("database_name"),
+        datasource_uids = set(payload.get("datasource_uids", []))
+        if payload.get('cache_type', 'cache') in ('cache', 'data_cache'):
+            for ds in payload.get("payload", []):
+                ds_obj = SqlaTable.get_datasource_by_name(
+                    datasource_name=ds.get("datasource_name"),
+                    schema=ds.get("schema"),
+                    database_name=ds.get("database_name"),
+                )
+
+                if ds_obj:
+                    datasource_uids.add(ds_obj.uid)
+
+            cache_key_objs = (
+                db.session.query(CacheKey)
+                .filter(CacheKey.datasource_uid.in_(datasource_uids))
+                .all()
             )
+            cache_keys = [c.cache_key for c in cache_key_objs]
+        else:
+            cache_keys = payload.get('cache_keys', [])
+        all_keys_deleted = delete_many(cache_manager.cache, *cache_keys)
+        if cache_keys:
+            cache_type = payload.get("cache_type")
+            cache_mapping = {
+                'cache': cache_manager.cache,
+                'data_cache': cache_manager.data_cache,
+                'thumbnail_cache': cache_manager.thumbnail_cache,
+                'filter_state_cache': cache_manager.filter_state_cache,
+                'explore_form_data_cache': cache_manager.explore_form_data_cache,
+            }
+            cache = cache_mapping.get(cache_type)
+            if cache:
+                c_all_keys_deleted = delete_many(cache, *cache_keys)
+            else:
+                c_all_keys_deleted = None
 
-            if ds_obj:
-                datasource_uids.add(ds_obj.uid)
-
-        cache_key_objs = (
-            db.session.query(CacheKey)
-            .filter(CacheKey.datasource_uid.in_(datasource_uids))
-            .all()
-        )
-        cache_keys = [c.cache_key for c in cache_key_objs]
-        if cache_key_objs:
-            all_keys_deleted = cache_manager.cache.delete_many(*cache_keys)
+            logger.info("Keys Deleted %s", c_all_keys_deleted)
 
             if not all_keys_deleted:
                 # expected behavior as keys may expire and cache is not a

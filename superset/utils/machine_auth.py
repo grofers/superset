@@ -126,6 +126,7 @@ class MachineAuthProvider:
             login_user(user)
             # A mock response object to get the cookie information from
             response = Response()
+            current_app.process_response(response)
             current_app.session_interface.save_session(current_app, session, response)
 
         cookies = {}

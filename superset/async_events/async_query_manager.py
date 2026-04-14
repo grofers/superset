@@ -213,17 +213,21 @@ class AsyncQueryManager:
     ) -> dict[str, Any]:
         # pylint: disable=import-outside-toplevel
         from superset import security_manager
+        queue_name = form_data.pop("queue_name", "celery")
 
         # if it's guest user, we want to pass the guest token to the celery task
         # chart data cache key is calculated based on the current user
         # this way we can keep the cache key consistent between sync and async command
         # so that it can be looked up consistently
         job_metadata = self.init_job(channel_id, user_id)
-        self._load_chart_data_into_cache_job.delay(
-            {**job_metadata, "guest_token": guest_user.guest_token}
-            if (guest_user := security_manager.get_current_guest_user_if_guest())
-            else job_metadata,
-            form_data,
+        self._load_chart_data_into_cache_job.apply_async(
+            args=[
+                {**job_metadata, "guest_token": guest_user.guest_token}
+                if (guest_user := security_manager.get_current_guest_user_if_guest())
+                else job_metadata,
+                form_data],
+            kwargs={},
+            queue=queue_name
         )
         return job_metadata
 

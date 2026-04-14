@@ -12,28 +12,32 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM node:16-alpine as build
+FROM public.ecr.aws/zomato/node:18.18.2-multiarch as build
 
 WORKDIR /home/superset-websocket
 
 COPY . ./
 
-RUN npm ci && \
-  npm run build
+RUN pnpm install --frozen-lockfile && \
+  pnpm run build
 
 
-FROM node:16-alpine
+FROM public.ecr.aws/zomato/node:18.18.2-multiarch
 
 ENV NODE_ENV=production
 WORKDIR /home/superset-websocket
 
 COPY --from=build /home/superset-websocket/dist ./dist
+COPY --from=tianon/gosu /gosu /usr/local/bin/
 COPY package*.json ./
 
+
 # Only install production dependencies
-RUN npm ci --omit=dev
+RUN pnpm install --frozen-lockfile --prod
+RUN apk add --no-cache jq bash
 
-# Don't run as root!
-USER node
+COPY generate_config.sh ./
+RUN chmod +x generate_config.sh
 
-CMD [ "npm", "start" ]
+# Use ENTRYPOINT to ensure the script runs and then pnpm start
+ENTRYPOINT ["/bin/sh", "-c", "/home/superset-websocket/generate_config.sh"]

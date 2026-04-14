@@ -125,6 +125,17 @@ const defaultTheme = {
       light1: '#B3DEFE',
       light2: '#EFF8FE',
     },
+    custom: {
+      marine: '#57cc99',
+      citron: '#B6C61A',
+      tomato: '#F75A3B',
+      brick:  '#B22222',
+      sunset: '#FF5733',
+      emerald: '#2ECC71',
+      carmine: '#E74C3C',
+      dodger: '#1E90FF'
+    },
+
   },
   opacity: {
     light: '10%',

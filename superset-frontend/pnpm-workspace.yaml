@@ -1,0 +1,5 @@
+minimumReleaseAge: 43200
+packages:
+  - 'packages/*'
+  - 'plugins/*'
+  - 'src/setup/*'

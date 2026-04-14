@@ -31,11 +31,35 @@ function getTotalChildWidth({ id, components }) {
   if (!component) return 0;
 
   let width = 0;
+  const { mergedPivotTables = [] } = components;
 
-  (component.children || []).forEach(childId => {
-    const child = components[childId] || {};
-    width += (child.meta || {}).width || 0;
-  });
+  const isFirstChild = childId => {
+    mergedPivotTables?.forEach(mergedTable => {
+      if (mergedTable?.[0] === childId) {
+        return true;
+      }
+    });
+    return false;
+  };
+
+  if (mergedPivotTables.length > 0) {
+    (component.children || []).forEach(childId => {
+      if (
+        mergedPivotTables.flat()?.includes(childId) &&
+        !isFirstChild(childId)
+      ) {
+        return;
+      } else {
+        const child = components[childId] || {};
+        width += (child.meta || {}).width || 0;
+      }
+    });
+  } else {
+    (component.children || []).forEach(childId => {
+      const child = components[childId] || {};
+      width += (child.meta || {}).width || 0;
+    });
+  }
 
   return width;
 }

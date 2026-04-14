@@ -66,6 +66,7 @@ function mapStateToProps({
   charts,
   dataMask,
   user,
+  common,
 }) {
   return {
     dashboardInfo,
@@ -98,6 +99,7 @@ function mapStateToProps({
     slug: dashboardInfo.slug,
     metadata: dashboardInfo.metadata,
     reports,
+    common,
   };
 }
 

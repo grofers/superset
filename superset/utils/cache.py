@@ -33,6 +33,8 @@ from superset.models.cache import CacheKey
 from superset.utils.core import json_int_dttm_ser
 from superset.utils.hashing import md5_sha_from_dict
 
+from sqlalchemy.exc import SQLAlchemyError
+
 if TYPE_CHECKING:
     from superset.stats_logger import BaseStatsLogger
 
@@ -74,6 +76,11 @@ def set_and_log_cache(
                 datasource_uid=datasource_uid,
             )
             db.session.add(ck)
+            try:
+                db.session.commit()
+            except SQLAlchemyError as ex:
+                db.session.rollback()
+                logger.info(f"Commit to db failed -> {ex}")
     except Exception as ex:  # pylint: disable=broad-except
         # cache.set call can fail if the backend is down or if
         # the key is too large or whatever other reasons
@@ -250,3 +257,17 @@ def etag_cache(
         return wrapper
 
     return decorator
+
+def delete_many(cache: Cache = cache_manager.cache, *keys):
+    """Deletes multiple keys at once.
+
+    :param keys: The function accepts multiple keys as positional
+                    arguments.
+    :returns: A list containing all sucessfuly deleted keys
+    :rtype: boolean
+    """
+    deleted_keys = []
+    for key in keys:
+        if cache.delete(key):
+            deleted_keys.append(key)
+    return deleted_keys

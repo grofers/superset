@@ -38,15 +38,25 @@ fi
 #
 # playwright is an optional package - run only if it is installed
 #
-if command -v playwright > /dev/null 2>&1; then
-  playwright install-deps
-  playwright install chromium
-fi
+#if command -v playwright > /dev/null 2>&1; then
+#  playwright install-deps
+#  playwright install chromium
+#fi
+
+concurrency="${2:-10}"
 
 case "${1}" in
   worker)
-    echo "Starting Celery worker..."
-    celery --app=superset.tasks.celery_app:app worker -O fair -l INFO
+    echo "Starting Celery worker with concurrency ${concurrency}..."
+    celery --app=superset.tasks.celery_app:app worker -O fair -l INFO -c ${concurrency}
+    ;;
+  priority-worker)
+    echo "Starting Priority Celery worker with concurrency ${concurrency}..."
+    celery --app=superset.tasks.celery_app:app worker -Q celery-priority -O fair -l INFO -c ${concurrency}
+    ;;
+  low-priority-worker)
+    echo "Starting Low-Priority Celery worker with concurrency ${concurrency}..."
+    celery --app=superset.tasks.celery_app:app worker -Q celery-low-priority -O fair -l INFO -c ${concurrency}
     ;;
   beat)
     echo "Starting Celery beat..."

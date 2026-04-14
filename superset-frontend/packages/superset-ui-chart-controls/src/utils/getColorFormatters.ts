@@ -23,6 +23,7 @@ import {
   Comparator,
   ConditionalFormattingConfig,
   MultipleValueComparators,
+  OperationType,
 } from '../types';
 
 export const round = (num: number, precision = 0) =>
@@ -53,9 +54,31 @@ export const getOpacity = (
   );
 };
 
+function findPercentile(data: number[], percentile: number) {
+  // Sort the data in ascending order
+  data.sort((a, b) => a - b);
+
+  // Calculate the index for the percentile
+  const index = (percentile / 100) * (data.length - 1);
+
+  // If the index is an integer, return the value at that index
+  // If not, interpolate between the values at the surrounding indices
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.ceil(index);
+  const weight = index - lowerIndex;
+
+  if (lowerIndex === upperIndex) {
+    return data[lowerIndex];
+  } else {
+    return data[lowerIndex] * (1 - weight) + data[upperIndex] * weight;
+  }
+}
+
 export const getColorFunction = (
   {
     operator,
+    operationType,
+    cellType,
     targetValue,
     targetValueLeft,
     targetValueRight,
@@ -64,6 +87,11 @@ export const getColorFunction = (
   columnValues: number[],
   alpha?: boolean,
 ) => {
+  if (operationType === OperationType.PERCENTILE) {
+    const percentileVal = findPercentile(columnValues, targetValue || 0);
+    targetValue = percentileVal;
+  }
+
   let minOpacity = MIN_OPACITY_BOUNDED;
   const maxOpacity = MAX_OPACITY;
 
@@ -173,14 +201,20 @@ export const getColorFunction = (
       break;
   }
 
-  return (value: number) => {
+  return (value: number, isForText?: boolean) => {
     const compareResult = comparatorFunction(value, columnValues);
     if (compareResult === false) return undefined;
     const { cutoffValue, extremeValue } = compareResult;
     if (alpha === undefined || alpha) {
+      let minOpac = minOpacity;
+      if (isForText) {
+        minOpac = 0.8;
+      }
       return addAlpha(
         colorScheme,
-        getOpacity(value, cutoffValue, extremeValue, minOpacity, maxOpacity),
+        cellType === 'solid'
+          ? 1
+          : getOpacity(value, cutoffValue, extremeValue, minOpac, maxOpacity),
       );
     }
     return colorScheme;

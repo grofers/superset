@@ -32,6 +32,7 @@ import {
   sharedControls,
   Dataset,
   getStandardizedControls,
+  D3_FORMAT_DOCS,
 } from '@superset-ui/chart-controls';
 import { MetricsLayoutEnum } from '../types';
 
@@ -239,6 +240,18 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'isTotalAtTop',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show columns total at top'),
+              default: false,
+              renderTrigger: true,
+              description: t('Display column level total'),
+            },
+          },
+        ],
+        [
+          {
             name: 'colSubTotals',
             config: {
               type: 'CheckboxControl',
@@ -276,6 +289,34 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'showRowPercentile',
+            config: {
+              type: 'CheckboxControl',
+              label: t('SHOW ROWS PERCENTILE W.R.T. ROWS TOTAL'),
+              default: false,
+              renderTrigger: true,
+              description: t(
+                'Display row values in percentile w.r.t. rows total value.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'showColPercentile',
+            config: {
+              type: 'CheckboxControl',
+              label: t('SHOW COLUMNS PERCENTILE W.R.T. COLUMNS TOTAL'),
+              default: false,
+              renderTrigger: true,
+              description: t(
+                'Display columns values in percentile w.r.t. columns total value.',
+              ),
+            },
+          },
+        ],
       ],
     },
     {
@@ -288,6 +329,41 @@ const config: ControlPanelConfig = {
             config: {
               ...sharedControls.y_axis_format,
               label: t('Value format'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'col_value_formatting',
+            config: {
+              type: 'ConditionalFormattingControl',
+              renderTrigger: true,
+              label: t('Metric Value Formatting'),
+              description: D3_FORMAT_DOCS,
+              hasOperator: false,
+              isD3ValueFormatting: true,
+              mapStateToProps(explore, _, chart) {
+                const values =
+                  (explore?.controls?.metrics?.value as QueryFormMetric[]) ??
+                  [];
+                const verboseMap = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? (explore?.datasource as Dataset)?.verbose_map
+                  : explore?.datasource?.columns ?? {};
+                const chartStatus = chart?.chartStatus;
+                const metricColumn = values.map(value => {
+                  if (typeof value === 'string') {
+                    return { value, label: verboseMap[value] ?? value };
+                  }
+                  return { value: value.label, label: value.label };
+                });
+                return {
+                  removeIrrelevantConditions: chartStatus === 'success',
+                  columnOptions: metricColumn,
+                  verboseMap,
+                };
+              },
             },
           },
         ],
@@ -319,6 +395,7 @@ const config: ControlPanelConfig = {
                 ['key_z_to_a', t('key z-a')],
                 ['value_a_to_z', t('value ascending')],
                 ['value_z_to_a', t('value descending')],
+                ['none', t('Default Order')],
               ],
               renderTrigger: true,
               description: (
@@ -347,6 +424,7 @@ const config: ControlPanelConfig = {
                 ['key_z_to_a', t('key z-a')],
                 ['value_a_to_z', t('value ascending')],
                 ['value_z_to_a', t('value descending')],
+                ['none', t('Default Order')],
               ],
               renderTrigger: true,
               description: (
@@ -426,6 +504,110 @@ const config: ControlPanelConfig = {
                   verboseMap,
                 };
               },
+            },
+          },
+        ],
+        [
+          {
+            name: 'conditionalCellFormatter',
+            config: {
+              type: 'SelectControl',
+              label: t('Conditional Formatting Present On'),
+              default: false,
+              choices: [
+                // [value, label]
+                [false, t('Cell')],
+                [true, t('Text')],
+              ],
+              renderTrigger: true,
+              description: t(
+                'Add Conditional Color Formatting on either Cell background or Text',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'prefix_formatting',
+            config: {
+              type: 'ConditionalFormattingControl',
+              renderTrigger: true,
+              label: t('Add Prefix'),
+              description: t('Apply Prefix to columns'),
+              hasOperator: false,
+              mapStateToProps(explore, _, chart) {
+                const values =
+                  (explore?.controls?.metrics?.value as QueryFormMetric[]) ??
+                  [];
+                const verboseMap = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? (explore?.datasource as Dataset)?.verbose_map
+                  : explore?.datasource?.columns ?? {};
+                const chartStatus = chart?.chartStatus;
+                const metricColumn = values.map(value => {
+                  if (typeof value === 'string') {
+                    return { value, label: verboseMap[value] ?? value };
+                  }
+                  return { value: value.label, label: value.label };
+                });
+                return {
+                  removeIrrelevantConditions: chartStatus === 'success',
+                  columnOptions: metricColumn,
+                  verboseMap,
+                };
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'suffix_formatting',
+            config: {
+              type: 'ConditionalFormattingControl',
+              renderTrigger: true,
+              label: t('Add Suffix'),
+              description: t('Apply Suffix to columns'),
+              hasOperator: false,
+              mapStateToProps(explore, _, chart) {
+                const values =
+                  (explore?.controls?.metrics?.value as QueryFormMetric[]) ??
+                  [];
+                const verboseMap = explore?.datasource?.hasOwnProperty(
+                  'verbose_map',
+                )
+                  ? (explore?.datasource as Dataset)?.verbose_map
+                  : explore?.datasource?.columns ?? {};
+                const chartStatus = chart?.chartStatus;
+                const metricColumn = values.map(value => {
+                  if (typeof value === 'string') {
+                    return { value, label: verboseMap[value] ?? value };
+                  }
+                  return { value: value.label, label: value.label };
+                });
+                return {
+                  removeIrrelevantConditions: chartStatus === 'success',
+                  columnOptions: metricColumn,
+                  verboseMap,
+                };
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'addBorder',
+            config: {
+              type: 'SelectControl',
+              label: t('Add Border'),
+              default: false,
+              choices: [
+                // [value, label]
+                [false, t('None')],
+                [true, t('1px solid black')],
+              ],
+              renderTrigger: true,
+              description: t("Add border to Table's header"),
             },
           },
         ],

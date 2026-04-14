@@ -18,7 +18,7 @@
  */
 
 import React from 'react';
-import { t } from '@superset-ui/core';
+import { getNumberFormatter, t } from '@superset-ui/core';
 import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
@@ -34,13 +34,31 @@ const parseLabel = value => {
   return String(value);
 };
 
-function displayHeaderCell(
+function SortIcon({ toggleTo, icon, handleSort, sm }) {
+  return (
+    <div
+      role="button"
+      tabIndex="0"
+      className={`sort-icon ${sm ? 'sm' : ''}`}
+      onClick={e => {
+        e.stopPropagation();
+        handleSort(toggleTo);
+      }}
+    >
+      {icon}
+    </div>
+  );
+}
+
+function displayHeaderCell({
   needToggle,
   ArrowIcon,
   onArrowClick,
   value,
   namesMapping,
-) {
+  sortedOrder,
+  handleSort,
+}) {
   const name = namesMapping[value] || value;
   return needToggle ? (
     <span className="toggle-wrapper">
@@ -55,8 +73,40 @@ function displayHeaderCell(
       <span className="toggle-val">{parseLabel(name)}</span>
     </span>
   ) : (
-    parseLabel(name)
+    <div className="head-wrapper">
+      {parseLabel(name)}
+      {handleSort && (
+        <div className="icons-wrapper">
+          {sortedOrder ? (
+            <SortIcon
+              toggleTo={sortedOrder === 'desc' ? 'asc' : null}
+              icon={sortedOrder === 'asc' ? '▲' : '▼'}
+              handleSort={handleSort}
+            />
+          ) : (
+            <>
+              <SortIcon toggleTo="desc" sm icon="▲" handleSort={handleSort} />
+              <SortIcon toggleTo="desc" sm icon="▼" handleSort={handleSort} />
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
+}
+
+function getCellStyles(
+  isSubtotal,
+  conditionalCellFormatter,
+  backgroundColor,
+  cellColorFormattersPresent,
+) {
+  if (isSubtotal) return { fontWeight: 'bold' };
+
+  if (conditionalCellFormatter && cellColorFormattersPresent) {
+    return { color: backgroundColor, fontWeight: '800' };
+  }
+  return { backgroundColor };
 }
 
 export class TableRenderer extends React.Component {
@@ -66,7 +116,10 @@ export class TableRenderer extends React.Component {
     // We need state to record which entries are collapsed and which aren't.
     // This is an object with flat-keys indicating if the corresponding rows
     // should be collapsed.
-    this.state = { collapsedRows: {}, collapsedCols: {} };
+    this.state = {
+      collapsedRows: {},
+      collapsedCols: {},
+    };
 
     this.clickHeaderHandler = this.clickHeaderHandler.bind(this);
     this.clickHandler = this.clickHandler.bind(this);
@@ -86,6 +139,7 @@ export class TableRenderer extends React.Component {
     };
     const rowTotals = tableOptions.rowTotals || colAttrs.length === 0;
     const colTotals = tableOptions.colTotals || rowAttrs.length === 0;
+    const isTotalAtTop = tableOptions.isTotalAtTop || false;
 
     const namesMapping = props.namesMapping || {};
     const subtotalOptions = {
@@ -116,6 +170,16 @@ export class TableRenderer extends React.Component {
     });
     const rowKeys = pivotData.getRowKeys();
     const colKeys = pivotData.getColKeys();
+
+    const colKey = this.props.sortedOnCol;
+    const sortedOrder = this.props.sortedColOrder;
+    if (colKey && sortedOrder) {
+      rowKeys.sort((a, b) => {
+        const aVal = pivotData.getAggregator(a, colKey).value();
+        const bVal = pivotData.getAggregator(b, colKey).value();
+        return sortedOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      });
+    }
 
     // Also pre-calculate all the callbacks for cells, etc... This is nice to have to
     // avoid re-calculations of the call-backs on cell expansions, etc...
@@ -170,6 +234,7 @@ export class TableRenderer extends React.Component {
       rowKeys,
       rowTotals,
       colTotals,
+      isTotalAtTop,
       arrowCollapsed: subtotalOptions.arrowCollapsed,
       arrowExpanded: subtotalOptions.arrowExpanded,
       colSubtotalDisplay,
@@ -357,7 +422,12 @@ export class TableRenderer extends React.Component {
       omittedHighlightHeaderGroups = [],
       highlightedHeaderCells,
       dateFormatters,
+      addBorder,
     } = this.props.tableOptions;
+
+    let borderStyle = addBorder
+      ? { border: '1px solid black', textAlign: 'center' }
+      : { textAlign: 'center' };
 
     const spaceCell =
       attrIdx === 0 && rowAttrs.length !== 0 ? (
@@ -366,6 +436,7 @@ export class TableRenderer extends React.Component {
           colSpan={rowAttrs.length}
           rowSpan={colAttrs.length}
           aria-hidden="true"
+          style={borderStyle}
         />
       ) : null;
 
@@ -381,14 +452,14 @@ export class TableRenderer extends React.Component {
       subArrow = attrIdx + 1 < maxColVisible ? arrowExpanded : arrowCollapsed;
     }
     const attrNameCell = (
-      <th key="label" className="pvtAxisLabel">
-        {displayHeaderCell(
+      <th key="label" className="pvtAxisLabel" style={borderStyle}>
+        {displayHeaderCell({
           needToggle,
-          subArrow,
-          arrowClickHandle,
-          attrName,
+          ArrowIcon: subArrow,
+          onArrowClick: arrowClickHandle,
+          value: attrName,
           namesMapping,
-        )}
+        })}
       </th>
     );
 
@@ -443,16 +514,24 @@ export class TableRenderer extends React.Component {
               this.props.tableOptions.clickColumnHeaderCallback,
             )}
             onContextMenu={handleContextMenu}
+            style={borderStyle}
           >
-            {displayHeaderCell(
+            {displayHeaderCell({
               needToggle,
-              this.state.collapsedCols[flatColKey]
+              ArrowIcon: this.state.collapsedCols[flatColKey]
                 ? arrowCollapsed
                 : arrowExpanded,
               onArrowClick,
-              headerCellFormattedValue,
+              value: headerCellFormattedValue,
               namesMapping,
-            )}
+              sortedOrder: this.props.sortedColOrder,
+              handleSort: this.props.sortingEnabled
+                ? order => {
+                    this.props.setSortedOnCol(colKey);
+                    this.props.setSortedColOrder(order);
+                  }
+                : null,
+            })}
           </th>,
         );
       } else if (attrIdx === colKey.length) {
@@ -471,6 +550,7 @@ export class TableRenderer extends React.Component {
               this.props.tableOptions.clickColumnHeaderCallback,
               true,
             )}
+            style={borderStyle}
           >
             {t('Subtotal')}
           </th>,
@@ -521,6 +601,10 @@ export class TableRenderer extends React.Component {
       pivotData,
       namesMapping,
     } = pivotSettings;
+
+    const { addBorder } = this.props.tableOptions;
+    let borderStyle = addBorder ? { border: '1px solid black' } : {};
+
     return (
       <tr key="rowHdr">
         {rowAttrs.map((r, i) => {
@@ -536,14 +620,18 @@ export class TableRenderer extends React.Component {
             subArrow = i + 1 < maxRowVisible ? arrowExpanded : arrowCollapsed;
           }
           return (
-            <th className="pvtAxisLabel" key={`rowAttr-${i}`}>
-              {displayHeaderCell(
-                needLabelToggle,
-                subArrow,
-                arrowClickHandle,
-                r,
+            <th
+              className="pvtAxisLabel"
+              key={`rowAttr-${i}`}
+              style={borderStyle}
+            >
+              {displayHeaderCell({
+                needToggle: needLabelToggle,
+                ArrowIcon: subArrow,
+                onArrowClick: arrowClickHandle,
+                value: r,
                 namesMapping,
-              )}
+              })}
             </th>
           );
         })}
@@ -559,6 +647,7 @@ export class TableRenderer extends React.Component {
             false,
             true,
           )}
+          style={borderStyle}
         >
           {colAttrs.length === 0
             ? t('Total (%(aggregatorName)s)', {
@@ -594,8 +683,17 @@ export class TableRenderer extends React.Component {
       highlightedHeaderCells,
       cellColorFormatters,
       dateFormatters,
+      prefixFormatting,
+      suffixFormatting,
+      addBorder,
+      conditionalCellFormatter,
+      colValueFormatting,
+      showRowPercentile,
+      showColPercentile,
     } = this.props.tableOptions;
     const flatRowKey = flatKey(rowKey);
+
+    let borderStyle = addBorder ? { border: '1px solid black' } : {};
 
     const colIncrSpan = colAttrs.length !== 0 ? 1 : 0;
     const attrValueCells = rowKey.map((r, i) => {
@@ -645,16 +743,17 @@ export class TableRenderer extends React.Component {
               this.props.tableOptions.clickRowHeaderCallback,
             )}
             onContextMenu={handleContextMenu}
+            style={borderStyle}
           >
-            {displayHeaderCell(
-              needRowToggle,
-              this.state.collapsedRows[flatRowKey]
+            {displayHeaderCell({
+              needToggle: needRowToggle,
+              ArrowIcon: this.state.collapsedRows[flatRowKey]
                 ? arrowCollapsed
                 : arrowExpanded,
               onArrowClick,
-              headerCellFormattedValue,
+              value: headerCellFormattedValue,
               namesMapping,
-            )}
+            })}
           </th>
         );
       }
@@ -676,6 +775,7 @@ export class TableRenderer extends React.Component {
             this.props.tableOptions.clickRowHeaderCallback,
             true,
           )}
+          style={borderStyle}
         >
           {t('Subtotal')}
         </th>
@@ -688,18 +788,23 @@ export class TableRenderer extends React.Component {
       const aggValue = agg.value();
 
       const keys = [...rowKey, ...colKey];
+      let cellColorFormattersPresent = false;
       let backgroundColor;
       if (cellColorFormatters) {
         Object.values(cellColorFormatters).forEach(cellColorFormatter => {
           if (Array.isArray(cellColorFormatter)) {
             keys.forEach(key => {
               if (backgroundColor) {
+                cellColorFormattersPresent = true;
                 return;
               }
               cellColorFormatter
                 .filter(formatter => formatter.column === key)
                 .forEach(formatter => {
-                  const formatterResult = formatter.getColorFromValue(aggValue);
+                  cellColorFormattersPresent = true;
+                  const formatterResult = conditionalCellFormatter
+                    ? formatter.getColorFromValue(aggValue, true)
+                    : formatter.getColorFromValue(aggValue);
                   if (formatterResult) {
                     backgroundColor = formatterResult;
                   }
@@ -709,20 +814,102 @@ export class TableRenderer extends React.Component {
         });
       }
 
-      const style = agg.isSubtotal
-        ? { fontWeight: 'bold' }
-        : { backgroundColor };
+      let prefix;
+      if (prefixFormatting) {
+        prefixFormatting.forEach(prefixFormatter => {
+          keys.forEach(key => {
+            if (prefix) {
+              return;
+            }
+            if (prefixFormatter.column === key) {
+              if (prefixFormatter.addSymbols) {
+                prefix = prefixFormatter.addSymbols;
+              }
+            }
+          });
+        });
+      }
+
+      let suffix;
+      if (suffixFormatting) {
+        suffixFormatting.forEach(suffixFormatter => {
+          keys.forEach(key => {
+            if (suffix) {
+              return;
+            }
+            if (suffixFormatter.column === key) {
+              if (suffixFormatter.addSymbols) {
+                suffix = suffixFormatter.addSymbols;
+              }
+            }
+          });
+        });
+      }
+
+      const style = getCellStyles(
+        agg.isSubtotal,
+        conditionalCellFormatter,
+        backgroundColor,
+        cellColorFormattersPresent,
+      );
+
+      let formatFunc;
+      if (colValueFormatting) {
+        colValueFormatting.forEach(colValueFormatter => {
+          keys.forEach(key => {
+            if (formatFunc) {
+              return;
+            }
+            if (colValueFormatter.column === key) {
+              if (colValueFormatter.d3ValueFormatting) {
+                formatFunc = getNumberFormatter(
+                  colValueFormatter.d3ValueFormatting,
+                );
+              }
+            }
+          });
+        });
+      }
+
+      let finalValue = aggValue;
+
+      if (showRowPercentile) {
+        //* row level percentile...
+        const totalAgg = pivotData.getAggregator(rowKey, []).value();
+        finalValue = parseFloat(aggValue / totalAgg) * 100;
+      }
+
+      if (showColPercentile) {
+        //* column level percentile...
+        const totalAgg = pivotData.getAggregator([], colKey).value();
+        finalValue = parseFloat(aggValue / totalAgg) * 100;
+      }
+
+      if (formatFunc) {
+        finalValue = formatFunc(finalValue);
+      }
+
+      finalValue = agg.format(finalValue);
+
+      if (showRowPercentile || showColPercentile) {
+        finalValue = `${finalValue}%`;
+      }
+
+      if (finalValue && prefix) finalValue = `${prefix}${finalValue}`;
+      if (finalValue && suffix) finalValue = `${finalValue}${suffix}`;
 
       return (
         <td
           role="gridcell"
-          className="pvtVal"
+          className={
+            conditionalCellFormatter ? 'pvtVal formattedCell' : 'pvtVal'
+          }
           key={`pvtVal-${flatColKey}`}
           onClick={rowClickHandlers[flatColKey]}
           onContextMenu={e => this.props.onContextMenu(e, colKey, rowKey)}
           style={style}
         >
-          {agg.format(aggValue)}
+          {finalValue}
         </td>
       );
     });
@@ -754,7 +941,7 @@ export class TableRenderer extends React.Component {
     return <tr key={`keyRow-${flatRowKey}`}>{rowCells}</tr>;
   }
 
-  renderTotalsRow(pivotSettings) {
+  renderTotalsRow(pivotSettings, isTop) {
     // Render the final totals rows that has the totals for all the columns.
 
     const {
@@ -827,7 +1014,7 @@ export class TableRenderer extends React.Component {
     const totalCells = [totalLabelCell, ...totalValueCells, grandTotalCell];
 
     return (
-      <tr key="total" className="pvtRowTotals">
+      <tr key="total" className={`pvtRowTotals ${isTop ? 'top' : ''}`}>
         {totalCells}
       </tr>
     );
@@ -862,6 +1049,7 @@ export class TableRenderer extends React.Component {
       rowKeys,
       colKeys,
       colTotals,
+      isTotalAtTop,
       rowSubtotalDisplay,
       colSubtotalDisplay,
     } = this.cachedBasePivotSettings;
@@ -881,6 +1069,8 @@ export class TableRenderer extends React.Component {
       colSubtotalDisplay,
     );
 
+    const { addBorder } = this.props.tableOptions;
+
     const pivotSettings = {
       visibleRowKeys,
       maxRowVisible: Math.max(...visibleRowKeys.map(k => k.length)),
@@ -893,7 +1083,11 @@ export class TableRenderer extends React.Component {
 
     return (
       <Styles isDashboardEditMode={this.isDashboardEditMode()}>
-        <table className="pvtTable" role="grid">
+        <table
+          className="pvtTable"
+          role="grid"
+          style={addBorder ? { borderCollapse: 'collapse' } : {}}
+        >
           <thead>
             {colAttrs.map((c, j) =>
               this.renderColHeaderRow(c, j, pivotSettings),
@@ -901,10 +1095,13 @@ export class TableRenderer extends React.Component {
             {rowAttrs.length !== 0 && this.renderRowHeaderRow(pivotSettings)}
           </thead>
           <tbody>
+            {colTotals &&
+              isTotalAtTop &&
+              this.renderTotalsRow(pivotSettings, true)}
             {visibleRowKeys.map((r, i) =>
               this.renderTableRow(r, i, pivotSettings),
             )}
-            {colTotals && this.renderTotalsRow(pivotSettings)}
+            {colTotals && !isTotalAtTop && this.renderTotalsRow(pivotSettings)}
           </tbody>
         </table>
       </Styles>

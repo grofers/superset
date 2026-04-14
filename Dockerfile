@@ -22,30 +22,45 @@ ARG PY_VER=3.9-slim-bookworm
 
 # if BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
-FROM --platform=${BUILDPLATFORM} node:16-bookworm-slim AS superset-node
+FROM --platform=${BUILDPLATFORM} public.ecr.aws/zomato/node:18.18.2-multiarch AS superset-node
 
-ARG NPM_BUILD_CMD="build"
 
-RUN apt-get update -qq \
-    && apt-get install -yqq --no-install-recommends \
+ARG PNPM_BUILD_CMD="build"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
         build-essential \
-        python3
+        python3 \
+        curl \
+        iputils-ping \
+        procps && \
+    rm -rf /var/lib/apt/lists/*
 
-ENV BUILD_CMD=${NPM_BUILD_CMD} \
+ENV BUILD_CMD=${PNPM_BUILD_CMD} \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-# NPM ci first, as to NOT invalidate previous steps except for when package.json changes
+# pnpm install first, as to NOT invalidate previous steps except for when package.json changes
 WORKDIR /app/superset-frontend
 
 RUN --mount=type=bind,target=/frontend-mem-nag.sh,src=./docker/frontend-mem-nag.sh \
     /frontend-mem-nag.sh
 
-RUN --mount=type=bind,target=./package.json,src=./superset-frontend/package.json \
-    --mount=type=bind,target=./package-lock.json,src=./superset-frontend/package-lock.json \
-    npm ci
+COPY ./superset-frontend/package.json ./superset-frontend/pnpm-lock.yaml ./superset-frontend/pnpm-workspace.yaml ./superset-frontend/.npmrc ./superset-frontend/.pnpmfile.cjs ./
+COPY ./superset-frontend/packages ./packages
+COPY ./superset-frontend/plugins ./plugins
+COPY ./superset-frontend/tools ./tools
+COPY ./superset-frontend/.eslintrc.js ./superset-frontend/.eslintignore ./superset-frontend/prettier.config.js ./superset-frontend/.prettierignore ./superset-frontend/tsconfig.json ./superset-frontend/babel.config.js ./
+
+# Install the correct pnpm version specified in package.json
+# Explicitly use pnpm@10.26.2 to ensure version 10.x is installed
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate && \
+    echo "Active pnpm version: $(pnpm --version)"
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=pnpm_store \
+  pnpm install --frozen-lockfile --shamefully-hoist
 
 COPY ./superset-frontend ./
 # This seems to be the most expensive step
-RUN npm run ${BUILD_CMD}
+RUN pnpm run ${BUILD_CMD}
 
 ######################################################################
 # Final lean image...
@@ -59,7 +74,14 @@ ENV LANG=C.UTF-8 \
     FLASK_APP="superset.app:create_app()" \
     PYTHONPATH="/app/pythonpath" \
     SUPERSET_HOME="/app/superset_home" \
-    SUPERSET_PORT=8088
+    SUPERSET_PORT=8088 \
+    PIP_DEFAULT_TIMEOUT=100 \
+    # Allow statements and log messages to immediately appear
+    PYTHONUNBUFFERED=1 \
+    # disable a pip version check to reduce run-time & log-spam
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # cache is useless in docker image, so disable to reduce image size
+    PIP_NO_CACHE_DIR=1
 
 RUN mkdir -p ${PYTHONPATH} superset/static superset-frontend apache_superset.egg-info requirements \
     && useradd --user-group -d ${SUPERSET_HOME} -m --no-log-init --shell /bin/bash superset \
@@ -106,8 +128,8 @@ CMD ["/usr/bin/run-server.sh"]
 # Dev image...
 ######################################################################
 FROM lean AS dev
-ARG GECKODRIVER_VERSION=v0.33.0 \
-    FIREFOX_VERSION=117.0.1
+ARG GECKODRIVER_VERSION=v0.33.0
+ARG FIREFOX_VERSION=117.0.1
 
 USER root
 
@@ -120,19 +142,39 @@ RUN apt-get update -qq \
         libasound2 \
         libxtst6 \
         wget \
+        libdrm2 \
+        libgbm1 \
     # Install GeckoDriver WebDriver
     && wget -q https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz -O - | tar xfz - -C /usr/local/bin \
-    # Install Firefox
-    && wget -q https://download-installer.cdn.mozilla.net/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/en-US/firefox-${FIREFOX_VERSION}.tar.bz2 -O - | tar xfj - -C /opt \
-    && ln -s /opt/firefox/firefox /usr/local/bin/firefox \
+    # Install Firefox using package manager
+    && apt-get update \
+    && apt-get install -y --no-install-recommends firefox-esr \
+    && ln -s /usr/bin/firefox-esr /usr/local/bin/firefox \
     && apt-get autoremove -yqq --purge wget && rm -rf /var/[log,tmp]/* /tmp/* /var/lib/apt/lists/*
+
 # Cache everything for dev purposes...
 RUN --mount=type=bind,target=./requirements/base.txt,src=./requirements/base.txt \
     --mount=type=bind,target=./requirements/docker.txt,src=./requirements/docker.txt \
     --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements/docker.txt
+# custom packages
+
+COPY --chown=root custom_requirements.txt requirements/requirements_custom.txt
+RUN pip install --no-cache -r requirements/requirements_custom.txt
+
+COPY /docker/install_dep.sh /app/docker/
+RUN chmod +x /app/docker/install_dep.sh
+
+COPY --chown=superset ./superset_config.py /app/
+COPY --chown=superset ./custom_sso_security_manager.py /app/
+COPY --chown=superset ./docker/docker-bootstrap.sh /app/docker/
+COPY --chown=superset ./docker/docker-init.sh /app/docker/
+
+RUN playwright install-deps && \
+    playwright install chromium
 
 USER superset
+RUN /app/docker/install_dep.sh
 ######################################################################
 # CI image...
 ######################################################################

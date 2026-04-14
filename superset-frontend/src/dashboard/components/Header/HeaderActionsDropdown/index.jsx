@@ -16,10 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React from 'react';
+import React, { PureComponent } from 'react';
 import PropTypes from 'prop-types';
 import { isEmpty } from 'lodash';
-import { SupersetClient, t } from '@superset-ui/core';
+import { connect } from 'react-redux';
+import { t } from '@superset-ui/core';
 import { Menu } from 'src/components/Menu';
 import { URL_PARAMS } from 'src/constants';
 import ShareMenuItems from 'src/dashboard/components/menu/ShareMenuItems';
@@ -45,6 +46,7 @@ const propTypes = {
   customCss: PropTypes.string,
   colorNamespace: PropTypes.string,
   colorScheme: PropTypes.string,
+  directPathToChild: PropTypes.array,
   onChange: PropTypes.func.isRequired,
   updateCss: PropTypes.func.isRequired,
   forceRefreshAllCharts: PropTypes.func.isRequired,
@@ -90,7 +92,11 @@ const MENU_KEYS = {
   MANAGE_EMAIL_REPORT: 'manage-email-report',
 };
 
-class HeaderActionsDropdown extends React.PureComponent {
+const mapStateToProps = state => ({
+  directPathToChild: state.dashboardState.directPathToChild,
+});
+
+export class HeaderActionsDropdown extends PureComponent {
   static discardChanges() {
     window.location.reload();
   }
@@ -99,7 +105,6 @@ class HeaderActionsDropdown extends React.PureComponent {
     super(props);
     this.state = {
       css: props.customCss,
-      cssTemplates: [],
       showReportSubMenu: null,
     };
 
@@ -107,23 +112,6 @@ class HeaderActionsDropdown extends React.PureComponent {
     this.changeRefreshInterval = this.changeRefreshInterval.bind(this);
     this.handleMenuClick = this.handleMenuClick.bind(this);
     this.setShowReportSubMenu = this.setShowReportSubMenu.bind(this);
-  }
-
-  UNSAFE_componentWillMount() {
-    SupersetClient.get({ endpoint: '/csstemplateasyncmodelview/api/read' })
-      .then(({ json }) => {
-        const cssTemplates = json.result.map(row => ({
-          value: row.template_name,
-          css: row.css,
-          label: row.template_name,
-        }));
-        this.setState({ cssTemplates });
-      })
-      .catch(() => {
-        this.props.addDangerToast(
-          t('An error occurred while fetching available CSS templates'),
-        );
-      });
   }
 
   UNSAFE_componentWillReceiveProps(nextProps) {
@@ -204,6 +192,8 @@ class HeaderActionsDropdown extends React.PureComponent {
       addDangerToast,
       setIsDropdownVisible,
       isDropdownVisible,
+      directPathToChild,
+      config,
       ...rest
     } = this.props;
 
@@ -221,6 +211,8 @@ class HeaderActionsDropdown extends React.PureComponent {
 
     const refreshIntervalOptions =
       dashboardInfo.common?.conf?.DASHBOARD_AUTO_REFRESH_INTERVALS;
+
+    const dashboardComponentId = [...(directPathToChild || [])].pop();
 
     return (
       <Menu selectable={false} data-test="header-actions-menu" {...rest}>
@@ -257,8 +249,8 @@ class HeaderActionsDropdown extends React.PureComponent {
             <CssEditor
               triggerNode={<span>{t('Edit CSS')}</span>}
               initialCss={this.state.css}
-              templates={this.state.cssTemplates}
               onChange={this.changeCss}
+              addDangerToast={addDangerToast}
             />
           </Menu.Item>
         )}
@@ -288,19 +280,21 @@ class HeaderActionsDropdown extends React.PureComponent {
             />
           </Menu.Item>
         )}
-        <Menu.SubMenu
-          key={MENU_KEYS.DOWNLOAD_DASHBOARD}
-          disabled={isLoading}
-          title={t('Download')}
-          logEvent={this.props.logEvent}
-        >
-          <DownloadMenuItems
-            pdfMenuItemTitle={t('Export to PDF')}
-            imageMenuItemTitle={t('Download as Image')}
-            dashboardTitle={dashboardTitle}
-            addDangerToast={addDangerToast}
-          />
-        </Menu.SubMenu>
+        {config?.SHOW_DOWNLOAD_DASHBOARD && (
+          <Menu.SubMenu
+            key={MENU_KEYS.DOWNLOAD_DASHBOARD}
+            disabled={isLoading}
+            title={t('Download')}
+            logEvent={this.props.logEvent}
+          >
+            <DownloadMenuItems
+              pdfMenuItemTitle={t('Export to PDF')}
+              imageMenuItemTitle={t('Download as Image')}
+              dashboardTitle={dashboardTitle}
+              addDangerToast={addDangerToast}
+            />
+          </Menu.SubMenu>
+        )}
         {userCanShare && (
           <Menu.SubMenu
             key={MENU_KEYS.SHARE_DASHBOARD}
@@ -317,6 +311,7 @@ class HeaderActionsDropdown extends React.PureComponent {
               addSuccessToast={addSuccessToast}
               addDangerToast={addDangerToast}
               dashboardId={dashboardId}
+              dashboardComponentId={dashboardComponentId}
             />
           </Menu.SubMenu>
         )}
@@ -385,4 +380,4 @@ class HeaderActionsDropdown extends React.PureComponent {
 HeaderActionsDropdown.propTypes = propTypes;
 HeaderActionsDropdown.defaultProps = defaultProps;
 
-export default HeaderActionsDropdown;
+export default connect(mapStateToProps)(HeaderActionsDropdown);

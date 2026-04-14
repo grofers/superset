@@ -87,6 +87,7 @@ from superset.utils import core as utils
 from superset.utils.core import (
     GenericDataType,
     get_column_name,
+    get_non_base_axis_columns,
     get_user_id,
     is_adhoc_column,
     MediumText,
@@ -552,7 +553,6 @@ class AuditMixinNullable(AuditMixin):
 
 
 class QueryResult:  # pylint: disable=too-few-public-methods
-
     """Object returned by the query interface"""
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -580,6 +580,7 @@ class QueryResult:  # pylint: disable=too-few-public-methods
         self.errors = errors or []
         self.from_dttm = from_dttm
         self.to_dttm = to_dttm
+        self.sql_rowcount = len(self.df.index) if not self.df.empty else 0
 
 
 class ExtraJSONMixin:
@@ -1376,9 +1377,13 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
             qry = qry.where(self.get_fetch_values_predicate(template_processor=tp))
 
         with self.database.get_sqla_engine_with_context() as engine:
-            sql = qry.compile(engine, compile_kwargs={"literal_binds": True})
+            sql = str(qry.compile(engine, compile_kwargs={"literal_binds": True}))
             sql = self._apply_cte(sql, cte)
             sql = self.mutate_query_from_config(sql)
+
+            # pylint: disable=protected-access
+            if engine.dialect.identifier_preparer._double_percents:
+                sql = sql.replace("%%", "%")
 
             df = pd.read_sql_query(sql=sql, con=engine)
             # replace NaN with None to ensure it can be serialized to JSON
@@ -2066,7 +2071,7 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
                     "filter": filter,
                     "orderby": orderby,
                     "extras": extras,
-                    "columns": columns,
+                    "columns": get_non_base_axis_columns(columns),
                     "order_desc": True,
                 }
 

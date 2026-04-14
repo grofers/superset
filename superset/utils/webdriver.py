@@ -133,8 +133,23 @@ class WebDriverPlaywright(WebDriverProxy):
 
         return error_messages
 
+    @staticmethod
+    def is_displayed(element_handle):
+        # Check if the element or any of its parents have display: none
+        return element_handle.evaluate(
+            """(element) => {
+                while (element) {
+                    if (window.getComputedStyle(element).display === 'none') {
+                        return false;
+                    }
+                    element = element.parentElement;
+                }
+                return true;
+            }"""
+        )
+
     def get_screenshot(  # pylint: disable=too-many-locals, too-many-statements
-        self, url: str, element_name: str, user: User
+        self, url: str, element_name: str, user: User, clipping_window: WindowSize | None = None,
     ) -> bytes | None:
         with sync_playwright() as playwright:
             browser_args = current_app.config["WEBDRIVER_OPTION_ARGS"]
@@ -155,6 +170,9 @@ class WebDriverPlaywright(WebDriverProxy):
             )
             self.auth(user, context)
             page = context.new_page()
+            # For Debugging any errors
+            # page.on("request", lambda request: print(">>", request.method, request.url))
+            # page.on("response", lambda response: print("<<", response.status, response.url))
             try:
                 page.goto(
                     url,
@@ -187,10 +205,13 @@ class WebDriverPlaywright(WebDriverProxy):
                 try:
                     # chart containers didn't render
                     logger.debug("Wait for chart containers to draw at url: %s", url)
-                    slice_container_locator = page.locator(".slice_container")
+                    slice_container_locator = page.locator(".chart-container")
                     slice_container_locator.first.wait_for()
                     for slice_container_elem in slice_container_locator.all():
-                        slice_container_elem.wait_for()
+                        if WebDriverPlaywright.is_displayed(slice_container_elem):
+                            slice_container_elem.wait_for()
+                        else:
+                            logger.info("Skipping hidden chart container")
                 except PlaywrightTimeout as ex:
                     logger.exception(
                         "Timed out waiting for chart containers to draw at url %s",
@@ -231,7 +252,18 @@ class WebDriverPlaywright(WebDriverProxy):
                             url,
                             unexpected_errors,
                         )
-                img = element.screenshot()
+                neg_width = 0
+                neg_height = 0
+                if clipping_window:
+                    neg_width = clipping_window[0]
+                    neg_height = clipping_window[1]
+                bounding_box = element.bounding_box()
+                img = page.screenshot(clip={
+                    "x": bounding_box["x"],
+                    "y": bounding_box["y"],
+                    "width": bounding_box["width"] - neg_width,
+                    "height": bounding_box["height"] - neg_height
+                })
             except PlaywrightTimeout:
                 # raise again for the finally block, but handled above
                 pass
@@ -377,7 +409,7 @@ class WebDriverSelenium(WebDriverProxy):
                 logger.debug("Wait for chart containers to draw at url: %s", url)
                 WebDriverWait(driver, self._screenshot_locate_wait).until(
                     EC.visibility_of_all_elements_located(
-                        (By.CLASS_NAME, "slice_container")
+                        (By.CLASS_NAME, "chart-container")
                     )
                 )
             except TimeoutException as ex:

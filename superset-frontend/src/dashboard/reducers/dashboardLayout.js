@@ -41,6 +41,7 @@ import {
   CREATE_TOP_LEVEL_TABS,
   DELETE_TOP_LEVEL_TABS,
   DASHBOARD_TITLE_CHANGED,
+  MERGE_PIVOT_TABLES,
 } from '../actions/dashboardLayout';
 
 import { HYDRATE_DASHBOARD } from '../actions/hydrate';
@@ -302,6 +303,13 @@ const actionHandlers = {
           text: action.text,
         },
       },
+    };
+  },
+
+  [MERGE_PIVOT_TABLES](state, action) {
+    return {
+      ...state,
+      mergedPivotTables: action.pivotTables,
     };
   },
 };

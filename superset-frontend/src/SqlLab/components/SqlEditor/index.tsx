@@ -54,7 +54,7 @@ import Mousetrap from 'mousetrap';
 import Button from 'src/components/Button';
 import Timer from 'src/components/Timer';
 import ResizableSidebar from 'src/components/ResizableSidebar';
-import { AntdDropdown, AntdSwitch } from 'src/components';
+import { AntdDropdown, AntdSwitch, Skeleton } from 'src/components';
 import { Input } from 'src/components/Input';
 import { Menu } from 'src/components/Menu';
 import Icons from 'src/components/Icons';
@@ -77,6 +77,7 @@ import {
   setActiveSouthPaneTab,
   updateSavedQuery,
   formatQuery,
+  switchQueryEditor,
 } from 'src/SqlLab/actions/sqlLab';
 import {
   STATE_TYPE_MAP,
@@ -97,6 +98,17 @@ import {
 } from 'src/utils/localStorageHelpers';
 import { EmptyStateBig } from 'src/components/EmptyState';
 import getBootstrapData from 'src/utils/getBootstrapData';
+import useLogAction from 'src/logger/useLogAction';
+import {
+  LOG_ACTIONS_SQLLAB_CREATE_TABLE_AS,
+  LOG_ACTIONS_SQLLAB_CREATE_VIEW_AS,
+  LOG_ACTIONS_SQLLAB_ESTIMATE_QUERY_COST,
+  LOG_ACTIONS_SQLLAB_FORMAT_SQL,
+  LOG_ACTIONS_SQLLAB_LOAD_TAB_STATE,
+  LOG_ACTIONS_SQLLAB_RUN_QUERY,
+  LOG_ACTIONS_SQLLAB_STOP_QUERY,
+  Logger,
+} from 'src/logger/LogUtils';
 import TemplateParamsEditor from '../TemplateParamsEditor';
 import SouthPane from '../SouthPane';
 import SaveQuery, { QueryPayload } from '../SaveQuery';
@@ -270,6 +282,7 @@ const SqlEditor: React.FC<Props> = ({
       };
     }, shallowEqual);
 
+  const logAction = useLogAction({ queryEditorId: queryEditor.id });
   const isActive = currentQueryEditorId === queryEditor.id;
   const [height, setHeight] = useState(0);
   const [autorun, setAutorun] = useState(queryEditor.autorun);
@@ -285,7 +298,10 @@ const SqlEditor: React.FC<Props> = ({
   );
   const [showCreateAsModal, setShowCreateAsModal] = useState(false);
   const [createAs, setCreateAs] = useState('');
-  const [showEmptyState, setShowEmptyState] = useState(false);
+  const showEmptyState = useMemo(
+    () => !database || isEmpty(database),
+    [database],
+  );
 
   const sqlEditorRef = useRef<HTMLDivElement>(null);
   const northPaneRef = useRef<HTMLDivElement>(null);
@@ -313,9 +329,15 @@ const SqlEditor: React.FC<Props> = ({
     [ctas, database, defaultQueryLimit, dispatch, queryEditor],
   );
 
-  const formatCurrentQuery = useCallback(() => {
-    dispatch(formatQuery(queryEditor));
-  }, [dispatch, queryEditor]);
+  const formatCurrentQuery = useCallback(
+    (useShortcut?: boolean) => {
+      logAction(LOG_ACTIONS_SQLLAB_FORMAT_SQL, {
+        shortcut: Boolean(useShortcut),
+      });
+      dispatch(formatQuery(queryEditor));
+    },
+    [dispatch, queryEditor, logAction],
+  );
 
   const stopQuery = useCallback(() => {
     if (latestQuery && ['running', 'pending'].indexOf(latestQuery.state) >= 0) {
@@ -354,6 +376,7 @@ const SqlEditor: React.FC<Props> = ({
         descr: KEY_MAP[KeyboardShortcut.CtrlR],
         func: () => {
           if (queryEditor.sql.trim() !== '') {
+            logAction(LOG_ACTIONS_SQLLAB_RUN_QUERY, { shortcut: true });
             startQuery();
           }
         },
@@ -364,6 +387,7 @@ const SqlEditor: React.FC<Props> = ({
         descr: KEY_MAP[KeyboardShortcut.CtrlEnter],
         func: () => {
           if (queryEditor.sql.trim() !== '') {
+            logAction(LOG_ACTIONS_SQLLAB_RUN_QUERY, { shortcut: true });
             startQuery();
           }
         },
@@ -380,6 +404,7 @@ const SqlEditor: React.FC<Props> = ({
               descr: KEY_MAP[KeyboardShortcut.CtrlT],
             }),
         func: () => {
+          Logger.markTimeOrigin();
           dispatch(addNewQueryEditor());
         },
       },
@@ -394,14 +419,17 @@ const SqlEditor: React.FC<Props> = ({
               key: KeyboardShortcut.CtrlE,
               descr: KEY_MAP[KeyboardShortcut.CtrlE],
             }),
-        func: stopQuery,
+        func: () => {
+          logAction(LOG_ACTIONS_SQLLAB_STOP_QUERY, { shortcut: true });
+          stopQuery();
+        },
       },
       {
         name: 'formatQuery',
         key: KeyboardShortcut.CtrlShiftF,
         descr: KEY_MAP[KeyboardShortcut.CtrlShiftF],
         func: () => {
-          formatCurrentQuery();
+          formatCurrentQuery(true);
         },
       },
     ];
@@ -425,20 +453,22 @@ const SqlEditor: React.FC<Props> = ({
           const cursorPosition = editor.getCursorPosition();
           const totalLine = session.getLength();
           const currentRow = editor.getFirstVisibleRow();
-          let end = editor.find(';', {
+          const foundEnd = editor.find(';', {
             backwards: false,
             skipCurrent: true,
-          })?.end;
+          });
+          let end = foundEnd ? foundEnd.end : undefined;
           if (!end || end.row < cursorPosition.row) {
             end = {
               row: totalLine + 1,
               column: 0,
             };
           }
-          let start = editor.find(';', {
+          const foundStart = editor.find(';', {
             backwards: true,
             skipCurrent: true,
-          })?.end;
+          });
+          let start = foundStart ? foundStart.end : undefined;
           let currentLine = start?.row;
           if (
             !currentLine ||
@@ -494,6 +524,23 @@ const SqlEditor: React.FC<Props> = ({
     }
   });
 
+  const shouldLoadQueryEditor =
+    isFeatureEnabled(FeatureFlag.SqllabBackendPersistence) &&
+    !queryEditor.loaded;
+
+  const loadQueryEditor = useEffectEvent(() => {
+    const duration = Logger.getTimestamp();
+    logAction(LOG_ACTIONS_SQLLAB_LOAD_TAB_STATE, {
+      duration,
+      queryEditorId: queryEditor.id,
+      inLocalStorage: Boolean(queryEditor.inLocalStorage),
+      hasLoaded: !shouldLoadQueryEditor,
+    });
+    if (shouldLoadQueryEditor) {
+      dispatch(switchQueryEditor(queryEditor, displayLimit));
+    }
+  });
+
   useEffect(() => {
     // We need to measure the height of the sql editor post render to figure the height of
     // the south pane so it gets rendered properly
@@ -503,6 +550,7 @@ const SqlEditor: React.FC<Props> = ({
       WINDOW_RESIZE_THROTTLE_MS,
     );
     if (isActive) {
+      loadQueryEditor();
       window.addEventListener('resize', handleWindowResizeWithThrottle);
       window.addEventListener('beforeunload', onBeforeUnload);
     }
@@ -512,13 +560,7 @@ const SqlEditor: React.FC<Props> = ({
       window.removeEventListener('beforeunload', onBeforeUnload);
     };
     // TODO: Remove useEffectEvent deps once https://github.com/facebook/react/pull/25881 is released
-  }, [onBeforeUnload, isActive]);
-
-  useEffect(() => {
-    if (!database || isEmpty(database)) {
-      setShowEmptyState(true);
-    }
-  }, [database]);
+  }, [onBeforeUnload, loadQueryEditor, isActive]);
 
   useEffect(() => {
     // setup hotkeys
@@ -585,6 +627,7 @@ const SqlEditor: React.FC<Props> = ({
   });
 
   const getQueryCostEstimate = () => {
+    logAction(LOG_ACTIONS_SQLLAB_ESTIMATE_QUERY_COST, { shortcut: false });
     if (database) {
       dispatch(estimateQueryCost(queryEditor));
     }
@@ -638,7 +681,9 @@ const SqlEditor: React.FC<Props> = ({
             />
           </Menu.Item>
         )}
-        <Menu.Item onClick={formatCurrentQuery}>{t('Format SQL')}</Menu.Item>
+        <Menu.Item onClick={() => formatCurrentQuery()}>
+          {t('Format SQL')}
+        </Menu.Item>
         {!isEmpty(scheduledQueriesConf) && (
           <Menu.Item>
             <ScheduleQueryButton
@@ -676,6 +721,9 @@ const SqlEditor: React.FC<Props> = ({
         {allowCTAS && (
           <Menu.Item
             onClick={() => {
+              logAction(LOG_ACTIONS_SQLLAB_CREATE_TABLE_AS, {
+                shortcut: false,
+              });
               setShowCreateAsModal(true);
               setCreateAs(CtasEnum.Table);
             }}
@@ -687,6 +735,9 @@ const SqlEditor: React.FC<Props> = ({
         {allowCVAS && (
           <Menu.Item
             onClick={() => {
+              logAction(LOG_ACTIONS_SQLLAB_CREATE_VIEW_AS, {
+                shortcut: false,
+              });
               setShowCreateAsModal(true);
               setCreateAs(CtasEnum.View);
             }}
@@ -841,13 +892,22 @@ const SqlEditor: React.FC<Props> = ({
               <SqlEditorLeftBar
                 database={database}
                 queryEditorId={queryEditor.id}
-                setEmptyState={bool => setShowEmptyState(bool)}
               />
             </StyledSidebar>
           )}
         </ResizableSidebar>
       </CSSTransition>
-      {showEmptyState ? (
+      {shouldLoadQueryEditor ? (
+        <div
+          data-test="sqlEditor-loading"
+          css={css`
+            flex: 1;
+            padding: ${theme.gridUnit * 4}px;
+          `}
+        >
+          <Skeleton active />
+        </div>
+      ) : showEmptyState ? (
         <EmptyStateBig
           image="vector.svg"
           title={t('Select a database to write a query')}

@@ -122,6 +122,7 @@ export const useExploreAdditionalActionsMenu = (
   onOpenPropertiesModal,
   ownState,
   dashboards,
+  config,
   ...rest
 ) => {
   const theme = useTheme();
@@ -310,7 +311,7 @@ export const useExploreAdditionalActionsMenu = (
             </Menu.Item>
           )}
           <Menu.SubMenu
-            title={t('Dashboards added to')}
+            title={t('On dashboards')}
             key={MENU_KEYS.DASHBOARDS_ADDED_TO}
           >
             <DashboardsSubMenu
@@ -320,6 +321,7 @@ export const useExploreAdditionalActionsMenu = (
           </Menu.SubMenu>
           <Menu.Divider />
         </>
+        {config?.SHOW_DOWNLOAD_EXPLORE && (
         <Menu.SubMenu title={t('Download')} key={MENU_KEYS.DOWNLOAD_SUBMENU}>
           {VIZ_TYPES_PIVOTABLE.includes(latestQueryFormData.viz_type) ? (
             <>
@@ -366,6 +368,7 @@ export const useExploreAdditionalActionsMenu = (
             {t('Export to Excel')}
           </Menu.Item>
         </Menu.SubMenu>
+        )}
         <Menu.SubMenu title={t('Share')} key={MENU_KEYS.SHARE_SUBMENU}>
           <Menu.Item key={MENU_KEYS.COPY_PERMALINK}>
             {t('Copy permalink to clipboard')}

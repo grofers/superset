@@ -38,6 +38,7 @@ import {
 import getFormDataWithExtraFilters from 'src/dashboard/util/charts/getFormDataWithExtraFilters';
 import Chart from 'src/dashboard/components/gridComponents/Chart';
 import { PLACEHOLDER_DATASOURCE } from 'src/dashboard/constants';
+import { cloneDeep, isEmpty } from 'lodash';
 
 const EMPTY_OBJECT = {};
 
@@ -51,18 +52,121 @@ function mapStateToProps(
     sliceEntities,
     nativeFilters,
     common,
+    dashboardLayout,
   },
   ownProps,
 ) {
-  const { id, extraControls, setControlValue } = ownProps;
-  const chart = chartQueries[id] || EMPTY_OBJECT;
+  const { id, extraControls, setControlValue, componentId } = ownProps;
+
+  const { mergedPivotTables = [] } = dashboardLayout.present || {};
+
+  let mutationNeeded = false;
+  let mutatedChart = cloneDeep(chartQueries[id]);
+
+  const mergedTables = mergedPivotTables.find(arr => arr.includes(componentId));
+
+  let mergedCharts = mergedTables?.map(
+    chart => dashboardLayout.present?.[chart]?.meta?.chartId,
+  );
+
+  if (
+    !isEmpty(mergedTables) &&
+    dashboardLayout.present?.[mergedTables[0]] &&
+    mergedCharts.includes(id)
+  ) {
+    mutationNeeded = true;
+
+    let colNames = [];
+    let combinedData = [];
+    let combinedMap = new Map();
+    let mutated_label_map = {};
+    let mergedColTypes = [];
+    let colNameSet = new Set();
+    let colTypeDict = {};
+    let indexNames = [];
+
+    mergedTables.forEach(table => {
+      const chartId = dashboardLayout.present?.[table]?.meta?.chartId;
+      const {
+        colnames = [],
+        data = [],
+        label_map = {},
+        coltypes = [],
+        indexnames = [],
+      } = chartQueries[chartId].queriesResponse?.[0] || {};
+
+      mutated_label_map = { ...mutated_label_map, ...label_map };
+
+      colnames.forEach(col => {
+        if (!colNames.includes(col)) {
+          colNames.push(col);
+          indexNames = [...indexNames, indexNames.length];
+        }
+      });
+
+      let tableMetricRows = [];
+      data.forEach(item => {
+        const item_id = item[colNames[0]];
+        if (combinedMap.has(item_id)) {
+          // Merge existing item in combinedMap
+          let existingItem = combinedMap.get(item_id);
+          combinedMap.set(item_id, { ...existingItem, ...item });
+        } else {
+          // Add new item to combinedMap
+          combinedMap.set(item_id, item);
+        }
+      });
+
+      // Convert map back to array
+      combinedData = Array.from(combinedMap.values());
+
+      colNames.forEach((colName, i) => {
+        if (!colNameSet.has(colName)) {
+          colNameSet.add(colName);
+          colTypeDict[colName] = coltypes[i] || 0;
+        }
+      });
+    });
+
+    mergedColTypes = colNames.map(colName => colTypeDict[colName]);
+
+    ((mutatedChart.queriesResponse || [])[0] || {}).data = combinedData;
+    ((mutatedChart.queriesResponse || [])[0] || {}).colnames = colNames;
+    ((mutatedChart.queriesResponse || [])[0] || {}).label_map =
+      mutated_label_map;
+    ((mutatedChart.queriesResponse || [])[0] || {}).coltypes =
+      mergedColTypes || [];
+    ((mutatedChart.queriesResponse || [])[0] || {}).indexnames =
+      indexNames || [];
+    ((mutatedChart.queriesResponse || [])[0] || {}).rowcount =
+      indexNames.length;
+    ((mutatedChart.queriesResponse || [])[0] || {}).sql_rowcount =
+      indexNames.length;
+
+//     let mergedMetrics = mergedCharts?.map(
+//       chart => chartQueries?.[chart]?.form_data?.metrics,
+//     );
+//     mergedMetrics = mergedMetrics.flat();
+
+   // mutatedChart.form_data.metrics = mergedMetrics;
+
+    //* check to maintain the order...
+    mutatedChart.form_data.colOrder = 'none';
+    mutatedChart.form_data.rowOrder = 'none';
+  }
+
+  const chart = mutationNeeded
+    ? mutatedChart || EMPTY_OBJECT
+    : chartQueries[id] || EMPTY_OBJECT;
+  mutationNeeded = false;
+
   const datasource =
     (chart && chart.form_data && datasources[chart.form_data.datasource]) ||
     PLACEHOLDER_DATASOURCE;
   const { colorScheme, colorNamespace, datasetsStatus } = dashboardState;
   const labelColors = dashboardInfo?.metadata?.label_colors || {};
   const sharedLabelColors = dashboardInfo?.metadata?.shared_label_colors || {};
-  // note: this method caches filters if possible to prevent render cascades
+
   const formData = getFormDataWithExtraFilters({
     chart,
     chartConfiguration: dashboardInfo.metadata?.chart_configuration,
@@ -101,6 +205,7 @@ function mapStateToProps(
     setControlValue,
     datasetsStatus,
     emitCrossFilters: !!dashboardInfo.crossFiltersEnabled,
+    mergedPivotTables,
   };
 }
 

@@ -30,6 +30,7 @@ import {
   isAdhocColumn,
   isFeatureEnabled,
   isPhysicalColumn,
+  JsonObject,
   NumberFormatter,
   styled,
   t,
@@ -43,6 +44,8 @@ import {
   PivotTableStylesProps,
   SelectedFiltersType,
 } from './types';
+import { useSelector } from 'react-redux';
+import { RootState } from 'src/dashboard/types';
 
 const Styles = styled.div<PivotTableStylesProps>`
   ${({ height, width, margin }) => `
@@ -138,6 +141,7 @@ export default function PivotTableChart(props: PivotTableProps) {
     rowSubtotalPosition,
     colSubtotalPosition,
     colTotals,
+    isTotalAtTop,
     colSubTotals,
     rowTotals,
     rowSubTotals,
@@ -154,9 +158,21 @@ export default function PivotTableChart(props: PivotTableProps) {
     dateFormatters,
     onContextMenu,
     timeGrainSqla,
+    prefixFormatting,
+    suffixFormatting,
+    addBorder,
+    conditionalCellFormatter,
+    colValueFormatting,
+    showRowPercentile,
+    showColPercentile,
   } = props;
-
+  const dashboardMetaData = useSelector<RootState, JsonObject>(
+    state => state.dashboardInfo?.metadata,
+  );
   const theme = useTheme();
+  const [sortedOnCol, setSortedOnCol] = React.useState<string | null>(null);
+  const [sortedColOrder, setSortedColOrder] = React.useState<string | null>();
+
   const defaultFormatter = useMemo(
     () =>
       currencyFormat?.symbol
@@ -434,6 +450,7 @@ export default function PivotTableChart(props: PivotTableProps) {
       clickRowHeaderCallback: toggleFilter,
       clickColumnHeaderCallback: toggleFilter,
       colTotals,
+      isTotalAtTop,
       colSubTotals,
       rowTotals,
       rowSubTotals,
@@ -445,17 +462,32 @@ export default function PivotTableChart(props: PivotTableProps) {
       omittedHighlightHeaderGroups: [METRIC_KEY],
       cellColorFormatters: { [METRIC_KEY]: metricColorFormatters },
       dateFormatters,
+      prefixFormatting,
+      suffixFormatting,
+      addBorder,
+      conditionalCellFormatter,
+      colValueFormatting,
+      showRowPercentile,
+      showColPercentile,
     }),
     [
+      toggleFilter,
       colTotals,
+      isTotalAtTop,
       colSubTotals,
-      dateFormatters,
-      emitCrossFilters,
-      metricColorFormatters,
       rowTotals,
       rowSubTotals,
+      emitCrossFilters,
       selectedFilters,
-      toggleFilter,
+      metricColorFormatters,
+      dateFormatters,
+      prefixFormatting,
+      suffixFormatting,
+      addBorder,
+      conditionalCellFormatter,
+      colValueFormatting,
+      showRowPercentile,
+      showColPercentile,
     ],
   );
 
@@ -555,6 +587,11 @@ export default function PivotTableChart(props: PivotTableProps) {
           subtotalOptions={subtotalOptions}
           namesMapping={verboseMap}
           onContextMenu={handleContextMenu}
+          setSortedColOrder={setSortedColOrder}
+          setSortedOnCol={setSortedOnCol}
+          sortedColOrder={sortedColOrder}
+          sortedOnCol={sortedOnCol}
+          sortingEnabled={dashboardMetaData?.pivot_sorting_enabled}
         />
       </PivotTableWrapper>
     </Styles>

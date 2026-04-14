@@ -83,6 +83,7 @@ const propTypes = {
   datasetsStatus: PropTypes.oneOf(['loading', 'error', 'complete']),
   isInView: PropTypes.bool,
   emitCrossFilters: PropTypes.bool,
+  mergedPivotTables: PropTypes.array,
 };
 
 const defaultProps = {
@@ -403,6 +404,7 @@ class Chart extends React.Component {
       isInView,
       emitCrossFilters,
       logEvent,
+      mergedPivotTables,
     } = this.props;
 
     const { width } = this.state;
@@ -463,6 +465,7 @@ class Chart extends React.Component {
           formData={formData}
           width={width}
           height={this.getHeaderHeight()}
+          mergedPivotTables={mergedPivotTables}
         />
 
         {/*

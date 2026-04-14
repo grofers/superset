@@ -143,6 +143,7 @@ export function transformSeries(
   colorScaleKey: string,
   opts: {
     area?: boolean;
+    connectNulls?: boolean;
     filterState?: FilterState;
     seriesContexts?: { [key: string]: ForecastSeriesEnum[] };
     markerEnabled?: boolean;
@@ -150,6 +151,7 @@ export function transformSeries(
     areaOpacity?: number;
     seriesType?: EchartsTimeseriesSeriesType;
     stack?: StackType;
+    stackIdSuffix?: string;
     yAxisIndex?: number;
     showValue?: boolean;
     onlyTotal?: boolean;
@@ -169,6 +171,7 @@ export function transformSeries(
   const { name } = series;
   const {
     area,
+    connectNulls,
     filterState,
     seriesContexts = {},
     markerEnabled,
@@ -176,6 +179,7 @@ export function transformSeries(
     areaOpacity = 1,
     seriesType,
     stack,
+    stackIdSuffix,
     yAxisIndex = 0,
     showValue,
     onlyTotal,
@@ -220,6 +224,9 @@ export function transformSeries(
     stackId = 'obs';
   } else if (stack && isTrend) {
     stackId = forecastSeries.type;
+  }
+  if (stackId && stackIdSuffix) {
+    stackId += stackIdSuffix;
   }
   let plotType;
   if (
@@ -266,6 +273,7 @@ export function transformSeries(
       : { ...opts.lineStyle, opacity };
   return {
     ...series,
+    connectNulls,
     queryIndex,
     yAxisIndex,
     name: forecastSeries.name,
@@ -561,6 +569,7 @@ export function getPadding(
     ? TIMESERIES_CONSTANTS.yAxisLabelTopOffset
     : 0;
   const xAxisOffset = addXAxisTitleOffset ? Number(xAxisTitleMargin) || 0 : 0;
+
   return getChartPadding(
     showLegend,
     legendOrientation,
@@ -570,9 +579,10 @@ export function getPadding(
         yAxisTitlePosition && yAxisTitlePosition === 'Top'
           ? TIMESERIES_CONSTANTS.gridOffsetTop + (Number(yAxisTitleMargin) || 0)
           : TIMESERIES_CONSTANTS.gridOffsetTop + yAxisOffset,
-      bottom: zoomable
-        ? TIMESERIES_CONSTANTS.gridOffsetBottomZoomable + xAxisOffset
-        : TIMESERIES_CONSTANTS.gridOffsetBottom + xAxisOffset,
+      bottom:
+        zoomable && !isHorizontal
+          ? TIMESERIES_CONSTANTS.gridOffsetBottomZoomable + xAxisOffset
+          : TIMESERIES_CONSTANTS.gridOffsetBottom + xAxisOffset,
       left:
         yAxisTitlePosition === 'Left'
           ? TIMESERIES_CONSTANTS.gridOffsetLeft +

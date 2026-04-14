@@ -14,13 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-x-superset-image: &superset-image apachesuperset.docker.scarf.sh/apache/superset:${TAG:-latest-dev}
+x-superset-image: &superset-image superset:v4_prod
 x-superset-user: &superset-user root
 x-superset-depends-on: &superset-depends-on
   - db
   - redis
-x-superset-volumes: &superset-volumes
-  # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
+x-superset-volumes:
+  &superset-volumes # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
   - ./docker:/app/docker
   - ./superset:/app/superset
   - ./superset-frontend:/app/superset-frontend
@@ -63,7 +63,7 @@ services:
     env_file: docker/.env
     image: *superset-image
     container_name: superset_app
-    command: ["/app/docker/docker-bootstrap.sh", "app"]
+    command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
     restart: unless-stopped
     ports:
       - 8088:8088
@@ -74,11 +74,12 @@ services:
     volumes: *superset-volumes
     environment:
       CYPRESS_CONFIG: "${CYPRESS_CONFIG}"
+      GLOBAL_ASYNC_QUERIES_JWT_SECRET: "8d4931910ce2b9d011ad5728444a14b0a40937890d33a6e427359e3bd7beaaf3"
 
   superset-websocket:
     container_name: superset_websocket
     build: ./superset-websocket
-    image: superset-websocket
+    image: v4_prod_websocket
     ports:
       - 8080:8080
     extra_hosts:
@@ -119,7 +120,7 @@ services:
       disable: true
 
   superset-node:
-    image: node:16
+    image: public.ecr.aws/zomato/node:18.18.2-multiarch
     container_name: superset_node
     command: ["/app/docker/docker-frontend.sh"]
     env_file: docker/.env
@@ -140,7 +141,11 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD-SHELL", "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME"]
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME",
+        ]
     # Bump memory limit if processing selenium / thumbnails on superset-worker
     # mem_limit: 2038m
     # mem_reservation: 128M
@@ -173,7 +178,24 @@ services:
     user: *superset-user
     volumes: *superset-volumes
     healthcheck:
-      test: ["CMD-SHELL", "celery inspect ping -A superset.tasks.celery_app:app -d celery@$$HOSTNAME"]
+      test:
+        [
+          "CMD-SHELL",
+          "celery inspect ping -A superset.tasks.celery_app:app -d celery@$$HOSTNAME",
+        ]
+
+  flower:
+    image: *superset-image
+    env_file: docker/.env
+    command: ["celery", "--app=superset.tasks.celery_app:app", "flower"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CELERY_BROKER_URL: "redis://redis:6379/7"
+    ports:
+      - 5555:5555
+    depends_on:
+      - redis
 
 volumes:
   superset_home:

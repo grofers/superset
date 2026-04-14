@@ -21,13 +21,26 @@ import { ReactNode } from 'react';
 import { PopoverProps } from 'antd/lib/popover';
 import { Comparator, ControlComponentProps } from '@superset-ui/chart-controls';
 
+export enum OPERATOR_TYPE {
+  ABSOLUTE = 'absolute',
+  PERCENTILE = 'percentile',
+}
+
+export enum CellTypes {
+  SOLID = 'solid',
+  GRADIENT = 'gradient',
+}
+
 export type ConditionalFormattingConfig = {
   operator?: Comparator;
+  operatorType?: OPERATOR_TYPE;
   targetValue?: number;
   targetValueLeft?: number;
   targetValueRight?: number;
   column?: string;
   colorScheme?: string;
+  addSymbols?: string;
+  d3ValueFormatting?: string;
 };
 
 export type ConditionalFormattingControlProps = ControlComponentProps<
@@ -38,6 +51,8 @@ export type ConditionalFormattingControlProps = ControlComponentProps<
   verboseMap: Record<string, string>;
   label: string;
   description: string;
+  hasOperator: boolean;
+  isD3ValueFormatting?: boolean;
 };
 
 export type FormattingPopoverProps = PopoverProps & {
@@ -46,4 +61,6 @@ export type FormattingPopoverProps = PopoverProps & {
   config?: ConditionalFormattingConfig;
   title: string;
   children: ReactNode;
+  hasOperator: boolean;
+  isD3ValueFormatting?: boolean;
 };

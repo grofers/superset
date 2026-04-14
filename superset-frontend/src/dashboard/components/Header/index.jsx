@@ -41,7 +41,7 @@ import { AntdButton } from 'src/components/';
 import { findPermission } from 'src/utils/findPermission';
 import { Tooltip } from 'src/components/Tooltip';
 import { safeStringify } from 'src/utils/safeStringify';
-import HeaderActionsDropdown from 'src/dashboard/components/Header/HeaderActionsDropdown';
+import ConnectedHeaderActionsDropdown from 'src/dashboard/components/Header/HeaderActionsDropdown';
 import PublishedStatus from 'src/dashboard/components/PublishedStatus';
 import UndoRedoKeyListeners from 'src/dashboard/components/UndoRedoKeyListeners';
 import PropertiesModal from 'src/dashboard/components/PropertiesModal';
@@ -464,6 +464,7 @@ class Header extends React.PureComponent {
       setRefreshFrequency,
       lastModifiedTime,
       logEvent,
+      charts,
     } = this.props;
 
     const userCanEdit =
@@ -643,7 +644,8 @@ class Header extends React.PureComponent {
             onVisibleChange: this.setIsDropdownVisible,
           }}
           additionalActionsMenu={
-            <HeaderActionsDropdown
+            <ConnectedHeaderActionsDropdown
+              config={this.props.common?.conf}
               addSuccessToast={this.props.addSuccessToast}
               addDangerToast={this.props.addDangerToast}
               dashboardId={dashboardInfo.id}
@@ -693,6 +695,7 @@ class Header extends React.PureComponent {
             colorScheme={this.props.colorScheme}
             onSubmit={handleOnPropertiesChange}
             onlyApply
+            charts={charts}
           />
         )}
 

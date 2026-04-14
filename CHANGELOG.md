@@ -37,3 +37,6 @@ under the License.
 - [3.0.3](./CHANGELOG/3.0.3.md)
 - [3.0.4](./CHANGELOG/3.0.4.md)
 - [3.1.0](./CHANGELOG/3.1.0.md)
+- [4.0.0](./CHANGELOG/4.0.0.md)
+- [4.0.1](./CHANGELOG/4.0.1.md)
+- [4.0.2](./CHANGELOG/4.0.2.md)

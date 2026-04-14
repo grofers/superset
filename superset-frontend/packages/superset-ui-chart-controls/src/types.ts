@@ -280,6 +280,7 @@ export type SelectControlType =
   | 'AdhocFilterControl'
   | 'FilterBoxItemControl';
 
+// via react-select/src/filters
 export interface FilterOption<T extends SelectOption> {
   label: string;
   value: string;
@@ -376,6 +377,10 @@ export interface ControlPanelSectionConfig {
   expanded?: boolean;
   tabOverride?: TabOverride;
   controlSetRows: ControlSetRow[];
+  visibility?: (
+    props: ControlPanelsContainerProps,
+    controlData: AnyDict,
+  ) => boolean;
 }
 
 export interface StandardizedControls {
@@ -434,6 +439,16 @@ export enum Comparator {
   BetweenOrRightEqual = '< x ≤',
 }
 
+export enum OperationType {
+  ABSOLUTE = 'absolute',
+  PERCENTILE = 'percentile',
+}
+
+export enum CellTypes {
+  GRADIENT = 'gradient',
+  SOLID = 'solid',
+}
+
 export const MultipleValueComparators = [
   Comparator.Between,
   Comparator.BetweenOrEqual,
@@ -443,6 +458,8 @@ export const MultipleValueComparators = [
 
 export type ConditionalFormattingConfig = {
   operator?: Comparator;
+  operationType?: OperationType;
+  cellType?: CellTypes;
   targetValue?: number;
   targetValueLeft?: number;
   targetValueRight?: number;
@@ -559,3 +576,13 @@ export type ControlFormItemSpec<T extends ControlType = ControlType> = {
                 defaultValue?: Currency;
               }
             : {});
+
+export type PrefixSuffixFormatters = {
+  column: string;
+  addSymbols: string;
+}[];
+
+export type ColD3Formatting = {
+  column: string;
+  d3ValueFormatting: string;
+}[];

@@ -51,6 +51,8 @@ import {
   OBJECT_TYPES,
 } from 'src/features/tags/tags';
 import { loadTags } from 'src/components/Tags/utils';
+import { useDispatch } from 'react-redux';
+import { mergePivotTables } from 'src/dashboard/actions/dashboardLayout';
 
 const StyledFormItem = styled(FormItem)`
   margin-bottom: 0;
@@ -72,6 +74,7 @@ type PropertiesModalProps = {
   addSuccessToast: (message: string) => void;
   addDangerToast: (message: string) => void;
   onlyApply?: boolean;
+  charts: Object;
 };
 
 type Roles = { id: number; name: string }[];
@@ -89,6 +92,26 @@ type DashboardInfo = {
   certificationDetails: string;
   isManagedExternally: boolean;
 };
+type Option = {
+  label: string;
+  value: string;
+};
+
+type LatestQueryFormData = {
+  viz_type: string[];
+};
+
+type ChartData = {
+  latestQueryFormData?: LatestQueryFormData;
+};
+
+type ChartsMap = {
+  [key: string]: ChartData;
+};
+
+type MergedTablesDataState = {
+  [key: string]: string;
+};
 
 const PropertiesModal = ({
   addSuccessToast,
@@ -101,6 +124,7 @@ const PropertiesModal = ({
   onlyApply = false,
   onSubmit = () => {},
   show = false,
+  charts = {},
 }: PropertiesModalProps) => {
   const [form] = AntdForm.useForm();
   const [isLoading, setIsLoading] = useState(false);
@@ -113,6 +137,35 @@ const PropertiesModal = ({
   const saveLabel = onlyApply ? t('Apply') : t('Save');
   const [tags, setTags] = useState<TagType[]>([]);
   const categoricalSchemeRegistry = getCategoricalSchemeRegistry();
+
+  const dispatch = useDispatch();
+
+  const { position_data = {} } = currentDashboardInfo || {};
+
+  const tableIdOptions: MergedTablesDataState = Object.keys(position_data)
+    ?.map((objKey: string) => {
+      if (!objKey.startsWith('CHART')) return undefined;
+      const chartId = position_data[objKey]?.meta?.chartId as
+        | string
+        | undefined;
+      if (
+        chartId &&
+        !(charts as ChartsMap)[
+          chartId
+        ]?.latestQueryFormData?.viz_type?.includes('pivot_table')
+      ) {
+        return undefined;
+      }
+
+      return {
+        label: position_data?.[objKey]?.meta?.sliceName,
+        value: objKey,
+      } as Option;
+    })
+    .reduce((acc, option) => {
+      if (option?.label && option?.value) acc[option.label] = option.value;
+      return acc;
+    }, {} as MergedTablesDataState);
 
   const tagsAsSelectValues = useMemo(() => {
     const selectTags = tags.map(tag => ({
@@ -157,9 +210,10 @@ const PropertiesModal = ({
           .filter((item: { extra: { active: boolean } }) =>
             item.extra.active !== undefined ? item.extra.active : true,
           )
-          .map((item: { value: number; text: string }) => ({
+          .map((item: { value: number; text: string; extra: { email: string } }) => ({
             value: item.value,
             label: item.text,
+            email: item.extra.email,
           })),
         totalCount: response.json.count,
       }));
@@ -438,8 +492,23 @@ const PropertiesModal = ({
       certificationDetails,
       ...moreOnSubmitProps,
     };
+
     if (onlyApply) {
       onSubmit(onSubmitProps);
+
+      const mergeCharts = JSON.parse(jsonMetadata)?.merge_charts;
+      if (mergeCharts) {
+        dispatch(
+          mergePivotTables(
+            (mergeCharts || []).map((charts: string[]) =>
+              charts.map((chart_title: string) => tableIdOptions[chart_title]),
+            ),
+          ),
+        );
+      } else {
+        dispatch(mergePivotTables([]));
+      }
+
       onHide();
       addSuccessToast(t('Dashboard properties updated'));
     } else {
@@ -479,6 +548,7 @@ const PropertiesModal = ({
               allowClear
               ariaLabel={t('Owners')}
               disabled={isLoading}
+              filterOption={() =>true}
               mode="multiple"
               onChange={handleOnChangeOwners}
               options={(input, page, pageSize) =>
@@ -527,6 +597,11 @@ const PropertiesModal = ({
                 allowNewOptions
                 ariaLabel={t('Owners')}
                 disabled={isLoading}
+                filterOption={(input, option) => 
+                  !input || 
+                  (option?.email?.toLowerCase().includes(input.toLowerCase()) || 
+                  option?.label?.toString().toLowerCase().includes(input.toLowerCase()))
+                }
                 mode="multiple"
                 onChange={handleOnChangeOwners}
                 options={(input, page, pageSize) =>
@@ -624,7 +699,6 @@ const PropertiesModal = ({
   const handleChangeTags = (values: { label: string; value: number }[]) => {
     // triggered whenever a new tag is selected or a tag was deselected
     // on new tag selected, add the tag
-
     const uniqueTags = [...new Set(values.map(v => v.label))];
     setTags([...uniqueTags.map(t => ({ name: t }))]);
   };
